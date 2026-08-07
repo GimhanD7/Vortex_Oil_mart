@@ -1,202 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ThemeToggle } from "@/components/ThemeToggle";
 
-type Product = {
-  id: number;
-  name: string;
-  price: number;
-  stock_quantity: number;
-};
+type Product={id:number;name:string;price:number;stock_quantity:number;category?:string;sku?:string;visual?:string};
+type CartItem=Product&{cartQuantity:number};
+const samples:Product[]=[
+  {id:101,name:"Shell Helix ULTRA 5W-40",price:2650,stock_quantity:12,category:"Engine Oils",sku:"OIL-001",visual:"🛢️"},{id:102,name:"Castrol EDGE 5W-30",price:2450,stock_quantity:9,category:"Engine Oils",sku:"OIL-002",visual:"🧴"},{id:103,name:"Mobil 1 ESP 5W-30",price:2600,stock_quantity:14,category:"Engine Oils",sku:"OIL-003",visual:"🛢️"},{id:104,name:"Gulf Maxpro 15W-40",price:1350,stock_quantity:8,category:"Lubricants",sku:"OIL-004",visual:"🧴"},{id:105,name:"Bosch Oil Filter",price:350,stock_quantity:18,category:"Filters",sku:"FIL-001",visual:"⚙️"},{id:106,name:"Mann Air Filter",price:650,stock_quantity:7,category:"Filters",sku:"FIL-002",visual:"▤"},{id:107,name:"Brake Pad Set (Front)",price:1250,stock_quantity:11,category:"Brake System",sku:"BRK-001",visual:"▰"},{id:108,name:"Amaron Go 5824 Battery",price:4850,stock_quantity:5,category:"Batteries",sku:"BAT-001",visual:"🔋"},{id:109,name:"NGK Spark Plug",price:180,stock_quantity:20,category:"Spark Plugs",sku:"SPK-001",visual:"♢"},{id:110,name:"Shell Helix HX7 10W-40",price:2150,stock_quantity:10,category:"Engine Oils",sku:"OIL-005",visual:"🛢️"},{id:111,name:"Liqui Moly 10W-40 4L",price:2350,stock_quantity:6,category:"Lubricants",sku:"OIL-006",visual:"🧴"},{id:112,name:"Brake Disc (Front)",price:1750,stock_quantity:7,category:"Brake System",sku:"BRK-002",visual:"◉"},
+];
+const categories=["All Items","Engine Oils","Lubricants","Filters","Brake System","Batteries","Spark Plugs"];
 
-type CartItem = Product & { cartQuantity: number };
-
-export default function UserDashboard() {
-  const router = useRouter();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [checkingOut, setCheckingOut] = useState(false);
-
-  const fetchProducts = async () => {
-    try {
-      const res = await fetch("/api/products");
-      const data = await res.json();
-      setProducts(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Failed to fetch products");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  const addToCart = (product: Product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
-        if (existing.cartQuantity >= product.stock_quantity) return prev; // Cannot add more than stock
-        return prev.map(item => item.id === product.id ? { ...item, cartQuantity: item.cartQuantity + 1 } : item);
-      }
-      return [...prev, { ...product, cartQuantity: 1 }];
-    });
-  };
-
-  const removeFromCart = (productId: number) => {
-    setCart(prev => prev.filter(item => item.id !== productId));
-  };
-
-  const cartTotal = cart.reduce((total, item) => total + (Number(item.price) * item.cartQuantity), 0);
-
-  const handleCheckout = async () => {
-    if (cart.length === 0) return;
-    setCheckingOut(true);
-    try {
-      // Assuming logged in user ID is 2 for now, ideally we get this from a session/context
-      const cashier_id = 2; 
-      const items = cart.map(item => ({ product_id: item.id, quantity: item.cartQuantity }));
-      
-      const res = await fetch("/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cashier_id, items })
-      });
-
-      if (res.ok) {
-        alert("Sale processed successfully!");
-        setCart([]);
-        fetchProducts(); // Refresh stock
-      } else {
-        alert("Error processing sale");
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setCheckingOut(false);
-    }
-  };
-
-  return (
-    <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-base)" }}>
-      {/* Sidebar / POS Menu */}
-      <aside style={{ width: "300px", backgroundColor: "var(--bg-surface)", borderRight: "1px solid var(--border-subtle)", padding: "1.5rem", display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
-          <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "var(--accent-secondary)" }}>POS System</h2>
-          <ThemeToggle />
-        </div>
-        
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {products.map(product => (
-            <div 
-              key={product.id} 
-              onClick={() => product.stock_quantity > 0 && addToCart(product)}
-              className="glass-panel" 
-              style={{ 
-                padding: "1rem", 
-                cursor: product.stock_quantity > 0 ? "pointer" : "not-allowed",
-                opacity: product.stock_quantity > 0 ? 1 : 0.5,
-                transition: "transform 0.1s",
-                border: "1px solid var(--border-strong)"
-              }}
-              onMouseOver={(e) => product.stock_quantity > 0 && (e.currentTarget.style.transform = "scale(1.02)")}
-              onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
-            >
-              <h4 style={{ fontWeight: "bold", marginBottom: "0.25rem", color: "var(--text-primary)" }}>{product.name}</h4>
-              <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-secondary)", fontSize: "0.875rem" }}>
-                <span>${parseFloat(product.price as unknown as string).toFixed(2)}</span>
-                <span>Stock: {product.stock_quantity}</span>
-              </div>
-            </div>
-          ))}
-          {loading && <p>Loading products...</p>}
-        </div>
-
-        <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border-subtle)" }}>
-           <button 
-            onClick={() => router.push("/")}
-            className="btn-primary" 
-            style={{ width: "100%", backgroundColor: "transparent", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", background: "none" }}
-          >
-            Logout
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content / Cart */}
-      <main style={{ flex: 1, padding: "2rem", display: "flex", flexDirection: "column", backgroundColor: "var(--bg-base)" }}>
-        <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
-          <h1 style={{ fontSize: "2rem", fontWeight: "700" }}>Current Transaction</h1>
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-            <span style={{ color: "var(--text-muted)" }}>Cashier</span>
-            <div style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "var(--accent-secondary)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", color: "#fff" }}>
-              C
-            </div>
-          </div>
-        </header>
-
-        <div className="glass-panel" style={{ flex: 1, padding: "2rem", display: "flex", flexDirection: "column" }}>
-          
-          <div style={{ flex: 1, overflowY: "auto", borderBottom: "1px solid var(--border-strong)", marginBottom: "1.5rem" }}>
-            {cart.length === 0 ? (
-              <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: "var(--text-muted)" }}>
-                <h2>Select products to start transaction</h2>
-              </div>
-            ) : (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>Qty</th>
-                    <th>Price</th>
-                    <th>Total</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cart.map(item => (
-                    <tr key={item.id}>
-                      <td style={{ fontWeight: "bold", color: "var(--text-primary)" }}>{item.name}</td>
-                      <td>{item.cartQuantity}</td>
-                      <td>${parseFloat(item.price as unknown as string).toFixed(2)}</td>
-                      <td>${(Number(item.price) * item.cartQuantity).toFixed(2)}</td>
-                      <td style={{ textAlign: "right" }}>
-                        <button onClick={() => removeFromCart(item.id)} className="text-danger" style={{ background: "none", border: "none", cursor: "pointer", fontWeight: "bold" }}>X</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <p style={{ color: "var(--text-secondary)", fontSize: "1.25rem" }}>Total Amount:</p>
-              <h2 className="text-success" style={{ fontSize: "3rem", fontWeight: "bold" }}>${cartTotal.toFixed(2)}</h2>
-            </div>
-            <button 
-              onClick={handleCheckout}
-              disabled={cart.length === 0 || checkingOut}
-              className="btn-primary" 
-              style={{ 
-                padding: "1.5rem 3rem", 
-                fontSize: "1.5rem", 
-                background: cart.length > 0 ? "linear-gradient(135deg, var(--accent-secondary), #db2777)" : "var(--bg-surface-elevated)",
-                opacity: cart.length > 0 ? 1 : 0.5,
-                cursor: cart.length > 0 ? "pointer" : "not-allowed",
-                color: cart.length > 0 ? "#fff" : "var(--text-secondary)"
-              }}>
-                {checkingOut ? "Processing..." : "Checkout"}
-            </button>
-          </div>
-
-        </div>
-      </main>
-    </div>
-  );
+export default function PosBilling(){
+ const router=useRouter(); const [products,setProducts]=useState<Product[]>(samples); const [cart,setCart]=useState<CartItem[]>(samples.slice(0,1).concat(samples[4],samples[6]).map(x=>({...x,cartQuantity:1})));
+ const [query,setQuery]=useState(""); const [category,setCategory]=useState("Engine Oils"); const [payment,setPayment]=useState("Cash"); const [checking,setChecking]=useState(false); const [notice,setNotice]=useState("");
+ useEffect(()=>{fetch("/api/products").then(r=>r.json()).then(d=>{if(Array.isArray(d)&&d.length){const live=d.map((p:Product,i:number)=>({...p,category:p.category||samples[i%samples.length].category,sku:p.sku||`SKU-${String(p.id).padStart(3,"0")}`,visual:samples[i%samples.length].visual}));setProducts(live);setCart(live.slice(0,3).map((p:Product)=>({...p,cartQuantity:1})))}}).catch(()=>{})},[]);
+ const shown=useMemo(()=>products.filter(p=>(category==="All Items"||p.category===category)&&(!query||`${p.name} ${p.sku}`.toLowerCase().includes(query.toLowerCase()))),[products,category,query]);
+ const subtotal=cart.reduce((s,x)=>s+Number(x.price)*x.cartQuantity,0),tax=subtotal*.18,total=subtotal+tax;
+ const add=(p:Product)=>setCart(c=>{const found=c.find(x=>x.id===p.id);return found?c.map(x=>x.id===p.id?{...x,cartQuantity:Math.min(x.cartQuantity+1,p.stock_quantity)}:x):[...c,{...p,cartQuantity:1}]});
+ const qty=(id:number,n:number)=>setCart(c=>c.map(x=>x.id===id?{...x,cartQuantity:Math.max(1,Math.min(x.stock_quantity,n))}:x));
+ const checkout=async()=>{if(!cart.length)return;setChecking(true);setNotice("");try{const r=await fetch("/api/sales",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cashier_id:2,items:cart.map(x=>({product_id:x.id,quantity:x.cartQuantity}))})});if(r.ok){setNotice("Sale completed and invoice created");setCart([])}else setNotice("Could not complete sale. Please check stock.")}catch{setNotice("Unable to connect to sales service")}finally{setChecking(false)}};
+ return <div className="pos-shell">
+  <aside className="pos-sidebar"><div className="pos-logo"><span>◒</span><div><b>OIL <em>MART</em> <i>POS</i></b><small>Oil &amp; Spare Parts Store</small></div></div><nav>{[["🛒","POS Billing"],["⌂","Dashboard"],["◇","Products"],["▣","Inventory"],["♙","Customers"],["▤","Sales"],["□","Purchases"],["▧","Reports"],["♙","Users"],["⚙","Settings"]].map(([i,l],n)=><button className={n===0?"active":""} key={l} onClick={()=>l==="Dashboard"&&router.push("/admin/dashboard")}><span>{i}</span>{l}</button>)}</nav><div className="pos-side-bottom"><button>ⓘ　Help &amp; Support</button><button onClick={()=>router.push("/")}>↪　Logout</button></div></aside>
+  <div className="pos-workspace"><header className="pos-topbar"><button className="pos-menu">☰</button><h1>POS Billing <span>Cashier Mode</span></h1><div className="pos-top-actions"><button>Shift #CSH-001　⌄</button><button>07 Aug 2026, 10:30 AM　 <i/> Online</button><div className="cashier"><span>R</span><p><b>Cashier</b><small>Rahul Sharma</small></p>⌄</div><button>▣</button></div></header>
+   <main className="pos-main"><section className="catalog"><div className="product-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Scan Barcode / Search by SKU, Part No., Product Name..."/><button>▣</button></div><div className="category-tabs">{categories.map(c=><button className={category===c?"active":""} onClick={()=>setCategory(c)} key={c}>{c==="Engine Oils"&&"♨　"}{c}</button>)}<button>More　⌄</button></div>
+    <div className="product-grid">{shown.map((p,i)=><article key={p.id} onClick={()=>add(p)}><button className="favorite">☆</button><div className={`product-visual pv${i%6}`}>{p.visual||"🛢️"}</div><h3>{p.name}</h3><small>{p.category==="Engine Oils"?"4L":""}</small><p>SKU: {p.sku}</p><strong>Rs. {Number(p.price).toLocaleString("en-IN",{minimumFractionDigits:2})}</strong></article>)}{!shown.length&&<div className="no-products">No matching products found.</div>}</div>
+    <div className="catalog-pagination"><span>Showing 1 to {shown.length} of {products.length} items</span><p><button>‹</button>{[1,2,3,4,5].map(n=><button className={n===1?"active":""} key={n}>{n}</button>)}<i>…</i><button>27</button><button>›</button></p></div><div className="customer-bar"><div><span>♙</span><p><small>Customer</small><select><option>Walk-in Customer</option></select></p></div><button>＋　Add Customer</button><aside><button>▯　Hold Bill</button><button className="clear" onClick={()=>setCart([])}>♲　Clear Cart</button></aside></div>
+   </section>
+   <aside className="cart-pane"><div className="cart-title"><h2>Current Cart <small>({cart.length} Items)</small></h2><button>＋　Add Item</button></div><div className="cart-items">{cart.map(x=><article key={x.id}><div className="cart-thumb">{x.visual||"🛢️"}</div><p><b>{x.name}</b><small>SKU: {x.sku}</small></p><button className="trash" onClick={()=>setCart(c=>c.filter(i=>i.id!==x.id))}>♲</button><div className="quantity"><button onClick={()=>qty(x.id,x.cartQuantity-1)}>−</button><span>{x.cartQuantity}</span><button onClick={()=>qty(x.id,x.cartQuantity+1)}>＋</button></div><strong>Rs. {(Number(x.price)*x.cartQuantity).toLocaleString("en-IN",{minimumFractionDigits:2})}</strong></article>)}{!cart.length&&<div className="empty-cart">Your cart is empty<br/><small>Select a product to begin</small></div>}</div>
+    <div className="totals"><p>Subtotal ({cart.length} Items)<b>Rs. {subtotal.toLocaleString("en-IN",{minimumFractionDigits:2})}</b></p><div><input placeholder="Discount"/><select><option>%</option></select><b>Rs. 0.00</b></div><p>Tax (18% GST)<b>Rs. {tax.toLocaleString("en-IN",{minimumFractionDigits:2})}</b></p><h3>Total Payable <b>Rs. {total.toLocaleString("en-IN",{minimumFractionDigits:2})}</b></h3></div>
+    <div className="payments"><h3>Payment Methods</h3><div>{[["▣","Cash"],["▤","Card"],["◈","UPI"],["▰","Wallet"],["▦","EMI"]].map(([i,l])=><button onClick={()=>setPayment(l)} className={payment===l?"active":""} key={l}><span>{i}</span>{l}</button>)}</div><button className="complete-sale" onClick={checkout} disabled={!cart.length||checking}>▣　{checking?"Processing Sale...":"Complete Sale & Print Invoice"}</button>{notice&&<p className="sale-notice">{notice}</p>}</div>
+    <div className="invoice"><header><h2>INVOICE</h2><b>#INV-000123</b></header><div className="invoice-brand"><span>◒</span><p><b>Oil Mart</b><small>Oil &amp; Spare Parts Store<br/>123, Industrial Area, New Delhi</small></p><aside>Date　: 07 Aug 2026<br/>Cashier : Rahul Sharma<br/>Customer : Walk-in Customer</aside></div><table><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead><tbody>{cart.map(x=><tr key={x.id}><td>{x.name}</td><td>{x.cartQuantity}</td><td>{Number(x.price).toLocaleString("en-IN")}</td><td>{(Number(x.price)*x.cartQuantity).toLocaleString("en-IN")}</td></tr>)}</tbody></table><div className="invoice-total"><p>Subtotal <b>Rs. {subtotal.toLocaleString("en-IN")}</b></p><p>Tax (18% GST) <b>Rs. {tax.toLocaleString("en-IN")}</b></p><h3>Total <b>Rs. {total.toLocaleString("en-IN")}</b></h3></div><small className="thanks">Thank you for your visit!<br/>Drive safe, Stay protected.</small><div className="barcode">|||| ||| |||||| || ||||| |||| ||||||| ||| ||||</div></div>
+   </aside></main>
+  </div>
+ </div>
 }
