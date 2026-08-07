@@ -1,0 +1,100 @@
+const mysql = require('mysql2/promise');
+const bcrypt = require('bcryptjs');
+
+async function setup() {
+  console.log('Connecting to MySQL...');
+  
+  // Connect without a specific database first to create it if it doesn't exist
+  const connection = await mysql.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: '',
+  });
+
+  try {
+    console.log('Creating database oil_mart if not exists...');
+    await connection.query('CREATE DATABASE IF NOT EXISTS oil_mart;');
+    await connection.query('USE oil_mart;');
+
+    console.log('Creating users table...');
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(255) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        role ENUM('admin', 'cashier') DEFAULT 'cashier',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    console.log('Creating products table...');
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS products (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        price DECIMAL(10, 2) NOT NULL,
+        stock_quantity INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    console.log('Creating sales table...');
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS sales (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        cashier_id INT NOT NULL,
+        total_amount DECIMAL(10, 2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (cashier_id) REFERENCES users(id)
+      )
+    `);
+
+    console.log('Creating sale_items table...');
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS sale_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sale_id INT NOT NULL,
+        product_id INT NOT NULL,
+        quantity INT NOT NULL,
+        price_at_time DECIMAL(10, 2) NOT NULL,
+        FOREIGN KEY (sale_id) REFERENCES sales(id),
+        FOREIGN KEY (product_id) REFERENCES products(id)
+      )
+    `);
+
+    // Insert default admin user if not exists
+    const [rows] = await connection.query('SELECT * FROM users WHERE username = "admin"');
+    if (rows.length === 0) {
+      console.log('Creating default admin user...');
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash('admin123', salt);
+      await connection.query(
+        'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
+        ['admin', hashedPassword, 'admin']
+      );
+      console.log('Default admin created: admin / admin123');
+    }
+
+    // Insert default cashier user if not exists
+    const [cashierRows] = await connection.query('SELECT * FROM users WHERE username = "cashier"');
+    if (cashierRows.length === 0) {
+      console.log('Creating default cashier user...');
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash('cashier123', salt);
+      await connection.query(
+        'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
+        ['cashier', hashedPassword, 'cashier']
+      );
+      console.log('Default cashier created: cashier / cashier123');
+    }
+
+    console.log('Database setup complete!');
+  } catch (err) {
+    console.error('Error setting up database:', err);
+  } finally {
+    await connection.end();
+  }
+}
+
+setup();

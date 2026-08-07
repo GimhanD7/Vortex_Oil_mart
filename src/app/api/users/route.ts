@@ -1,0 +1,43 @@
+import { NextResponse } from 'next/server';
+import { pool } from '@/lib/db';
+import bcrypt from 'bcryptjs';
+
+export async function GET() {
+  try {
+    // Never return the hashed password to the frontend
+    const [rows] = await pool.query('SELECT id, username, role, created_at FROM users ORDER BY id DESC');
+    return NextResponse.json(rows);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { username, password, role } = await request.json();
+
+    if (!username || !password || !role) {
+      return NextResponse.json({ error: 'Username, password, and role are required' }, { status: 400 });
+    }
+
+    // Check if user exists
+    const [existing]: any = await pool.query('SELECT id FROM users WHERE username = ?', [username]);
+    if (existing.length > 0) {
+      return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const [result]: any = await pool.query(
+      'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
+      [username, hashedPassword, role]
+    );
+
+    return NextResponse.json({ id: result.insertId, message: 'User created' }, { status: 201 });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
