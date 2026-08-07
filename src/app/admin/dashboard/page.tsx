@@ -36,33 +36,33 @@ export default function AdminDashboard() {
       {/* Recent Activity Table */}
       <div className="glass-panel" style={{ padding: "1.5rem" }}>
         <h2 style={{ fontSize: "1.25rem", fontWeight: "600", marginBottom: "1rem" }}>Recent Transactions</h2>
-        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+        <table className="data-table">
           <thead>
-            <tr style={{ borderBottom: "1px solid var(--border-strong)", color: "var(--text-secondary)" }}>
-              <th style={{ padding: "1rem" }}>Transaction ID</th>
-              <th style={{ padding: "1rem" }}>Cashier</th>
-              <th style={{ padding: "1rem" }}>Amount</th>
-              <th style={{ padding: "1rem" }}>Status</th>
+            <tr>
+              <th>Transaction ID</th>
+              <th>Cashier</th>
+              <th>Amount</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-              <td style={{ padding: "1rem" }}>#TXN-10023</td>
-              <td style={{ padding: "1rem" }}>John Doe</td>
-              <td style={{ padding: "1rem" }}>$120.00</td>
-              <td style={{ padding: "1rem" }}><span style={{ color: "#4ade80", backgroundColor: "rgba(74, 222, 128, 0.1)", padding: "0.25rem 0.5rem", borderRadius: "1rem", fontSize: "0.75rem" }}>Completed</span></td>
-            </tr>
-            <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-              <td style={{ padding: "1rem" }}>#TXN-10024</td>
-              <td style={{ padding: "1rem" }}>Jane Smith</td>
-              <td style={{ padding: "1rem" }}>$45.50</td>
-              <td style={{ padding: "1rem" }}><span style={{ color: "#4ade80", backgroundColor: "rgba(74, 222, 128, 0.1)", padding: "0.25rem 0.5rem", borderRadius: "1rem", fontSize: "0.75rem" }}>Completed</span></td>
+            <tr>
+              <td style={{ fontWeight: "500", color: "var(--text-primary)" }}>#TXN-10023</td>
+              <td>John Doe</td>
+              <td>$120.00</td>
+              <td><span className="badge bg-success-light text-success">Completed</span></td>
             </tr>
             <tr>
-              <td style={{ padding: "1rem" }}>#TXN-10025</td>
-              <td style={{ padding: "1rem" }}>Mike Johnson</td>
-              <td style={{ padding: "1rem" }}>$210.00</td>
-              <td style={{ padding: "1rem" }}><span style={{ color: "#facc15", backgroundColor: "rgba(250, 204, 21, 0.1)", padding: "0.25rem 0.5rem", borderRadius: "1rem", fontSize: "0.75rem" }}>Pending</span></td>
+              <td style={{ fontWeight: "500", color: "var(--text-primary)" }}>#TXN-10024</td>
+              <td>Jane Smith</td>
+              <td>$45.50</td>
+              <td><span className="badge bg-success-light text-success">Completed</span></td>
+            </tr>
+            <tr>
+              <td style={{ fontWeight: "500", color: "var(--text-primary)" }}>#TXN-10025</td>
+              <td>Mike Johnson</td>
+              <td>$210.00</td>
+              <td><span className="badge bg-warning-light text-warning">Pending</span></td>
             </tr>
           </tbody>
         </table>

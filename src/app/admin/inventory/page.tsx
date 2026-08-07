@@ -66,34 +66,30 @@ export default function InventoryPage() {
         {loading ? (
           <p>Loading inventory...</p>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+          <table className="data-table">
             <thead>
-              <tr style={{ borderBottom: "1px solid var(--border-strong)", color: "var(--text-secondary)" }}>
-                <th style={{ padding: "1rem" }}>ID</th>
-                <th style={{ padding: "1rem" }}>Product Name</th>
-                <th style={{ padding: "1rem" }}>Price</th>
-                <th style={{ padding: "1rem" }}>Stock</th>
-                <th style={{ padding: "1rem" }}>Actions</th>
+              <tr>
+                <th>ID</th>
+                <th>Product Name</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {products.map((product) => (
-                <tr key={product.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-                  <td style={{ padding: "1rem" }}>{product.id}</td>
-                  <td style={{ padding: "1rem", fontWeight: "500", color: "var(--text-primary)" }}>{product.name}</td>
-                  <td style={{ padding: "1rem" }}>${parseFloat(product.price as unknown as string).toFixed(2)}</td>
-                  <td style={{ padding: "1rem" }}>
-                    <span style={{ 
-                      color: product.stock_quantity < 10 ? "#ef4444" : "#4ade80", 
-                      backgroundColor: product.stock_quantity < 10 ? "rgba(239, 68, 68, 0.1)" : "rgba(74, 222, 128, 0.1)", 
-                      padding: "0.25rem 0.5rem", borderRadius: "1rem", fontSize: "0.75rem" 
-                    }}>
+                <tr key={product.id}>
+                  <td>{product.id}</td>
+                  <td style={{ fontWeight: "500", color: "var(--text-primary)" }}>{product.name}</td>
+                  <td>${parseFloat(product.price as unknown as string).toFixed(2)}</td>
+                  <td>
+                    <span className={`badge ${product.stock_quantity < 10 ? 'bg-danger-light text-danger' : 'bg-success-light text-success'}`}>
                       {product.stock_quantity} in stock
                     </span>
                   </td>
-                  <td style={{ padding: "1rem" }}>
+                  <td>
                     <button style={{ color: "var(--accent-primary)", background: "none", border: "none", cursor: "pointer", marginRight: "1rem" }}>Edit</button>
-                    <button style={{ color: "#ef4444", background: "none", border: "none", cursor: "pointer" }}>Delete</button>
+                    <button className="text-danger" style={{ background: "none", border: "none", cursor: "pointer" }}>Delete</button>
                   </td>
                 </tr>
               ))}
@@ -109,7 +105,7 @@ export default function InventoryPage() {
 
       {showModal && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-          <div className="glass-panel animate-fade-in" style={{ padding: "2rem", width: "100%", maxWidth: "500px", backgroundColor: "var(--bg-surface)" }}>
+          <div className="glass-panel animate-fade-in" style={{ padding: "2rem", width: "100%", maxWidth: "500px" }}>
             <h2 style={{ fontSize: "1.5rem", marginBottom: "1.5rem" }}>Add New Product</h2>
             <form onSubmit={handleAddProduct} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <input className="input-base" placeholder="Product Name" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} required />

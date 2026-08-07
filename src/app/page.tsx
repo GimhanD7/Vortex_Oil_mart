@@ -44,18 +44,18 @@ export default function LoginPage() {
   };
 
   return (
-    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "var(--bg-base)" }}>
       <div className="glass-panel animate-fade-in" style={{ padding: "2.5rem", width: "100%", maxWidth: "420px", textAlign: "center" }}>
         
         <div style={{ marginBottom: "2rem" }}>
-          <h1 style={{ fontSize: "1.875rem", fontWeight: "700", marginBottom: "0.5rem" }}>Oil Mart</h1>
+          <h1 style={{ fontSize: "1.875rem", fontWeight: "700", marginBottom: "0.5rem", color: "var(--text-primary)" }}>Oil Mart</h1>
           <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>Sign in to manage your operations</p>
         </div>
 
         <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "1rem", textAlign: "left" }}>
           
           {error && (
-            <div style={{ background: "rgba(220, 38, 38, 0.2)", color: "#ef4444", padding: "0.75rem", borderRadius: "0.375rem", fontSize: "0.875rem", border: "1px solid rgba(239, 68, 68, 0.3)" }}>
+            <div className="bg-danger-light text-danger" style={{ padding: "0.75rem", borderRadius: "var(--radius-all)", fontSize: "0.875rem", border: "1px solid rgba(239, 68, 68, 0.3)" }}>
               {error}
             </div>
           )}

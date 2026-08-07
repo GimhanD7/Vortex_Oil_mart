@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 type Product = {
   id: number;
@@ -84,7 +85,10 @@ export default function UserDashboard() {
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-base)" }}>
       {/* Sidebar / POS Menu */}
       <aside style={{ width: "300px", backgroundColor: "var(--bg-surface)", borderRight: "1px solid var(--border-subtle)", padding: "1.5rem", display: "flex", flexDirection: "column" }}>
-        <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "var(--accent-secondary)", marginBottom: "2rem" }}>Oil Mart POS</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+          <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "var(--accent-secondary)" }}>POS System</h2>
+          <ThemeToggle />
+        </div>
         
         <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
           {products.map(product => (
@@ -102,7 +106,7 @@ export default function UserDashboard() {
               onMouseOver={(e) => product.stock_quantity > 0 && (e.currentTarget.style.transform = "scale(1.02)")}
               onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
             >
-              <h4 style={{ fontWeight: "bold", marginBottom: "0.25rem" }}>{product.name}</h4>
+              <h4 style={{ fontWeight: "bold", marginBottom: "0.25rem", color: "var(--text-primary)" }}>{product.name}</h4>
               <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-secondary)", fontSize: "0.875rem" }}>
                 <span>${parseFloat(product.price as unknown as string).toFixed(2)}</span>
                 <span>Stock: {product.stock_quantity}</span>
@@ -124,7 +128,7 @@ export default function UserDashboard() {
       </aside>
 
       {/* Main Content / Cart */}
-      <main style={{ flex: 1, padding: "2rem", display: "flex", flexDirection: "column" }}>
+      <main style={{ flex: 1, padding: "2rem", display: "flex", flexDirection: "column", backgroundColor: "var(--bg-base)" }}>
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
           <h1 style={{ fontSize: "2rem", fontWeight: "700" }}>Current Transaction</h1>
           <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -143,25 +147,25 @@ export default function UserDashboard() {
                 <h2>Select products to start transaction</h2>
               </div>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+              <table className="data-table">
                 <thead>
-                  <tr style={{ borderBottom: "1px solid var(--border-strong)", color: "var(--text-secondary)" }}>
-                    <th style={{ padding: "1rem" }}>Product</th>
-                    <th style={{ padding: "1rem" }}>Qty</th>
-                    <th style={{ padding: "1rem" }}>Price</th>
-                    <th style={{ padding: "1rem" }}>Total</th>
-                    <th style={{ padding: "1rem" }}></th>
+                  <tr>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {cart.map(item => (
-                    <tr key={item.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-                      <td style={{ padding: "1rem", fontWeight: "bold" }}>{item.name}</td>
-                      <td style={{ padding: "1rem" }}>{item.cartQuantity}</td>
-                      <td style={{ padding: "1rem" }}>${parseFloat(item.price as unknown as string).toFixed(2)}</td>
-                      <td style={{ padding: "1rem" }}>${(Number(item.price) * item.cartQuantity).toFixed(2)}</td>
-                      <td style={{ padding: "1rem", textAlign: "right" }}>
-                        <button onClick={() => removeFromCart(item.id)} style={{ color: "#ef4444", background: "none", border: "none", cursor: "pointer", fontWeight: "bold" }}>X</button>
+                    <tr key={item.id}>
+                      <td style={{ fontWeight: "bold", color: "var(--text-primary)" }}>{item.name}</td>
+                      <td>{item.cartQuantity}</td>
+                      <td>${parseFloat(item.price as unknown as string).toFixed(2)}</td>
+                      <td>${(Number(item.price) * item.cartQuantity).toFixed(2)}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <button onClick={() => removeFromCart(item.id)} className="text-danger" style={{ background: "none", border: "none", cursor: "pointer", fontWeight: "bold" }}>X</button>
                       </td>
                     </tr>
                   ))}
@@ -173,7 +177,7 @@ export default function UserDashboard() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <p style={{ color: "var(--text-secondary)", fontSize: "1.25rem" }}>Total Amount:</p>
-              <h2 style={{ fontSize: "3rem", fontWeight: "bold", color: "#4ade80" }}>${cartTotal.toFixed(2)}</h2>
+              <h2 className="text-success" style={{ fontSize: "3rem", fontWeight: "bold" }}>${cartTotal.toFixed(2)}</h2>
             </div>
             <button 
               onClick={handleCheckout}
@@ -184,7 +188,8 @@ export default function UserDashboard() {
                 fontSize: "1.5rem", 
                 background: cart.length > 0 ? "linear-gradient(135deg, var(--accent-secondary), #db2777)" : "var(--bg-surface-elevated)",
                 opacity: cart.length > 0 ? 1 : 0.5,
-                cursor: cart.length > 0 ? "pointer" : "not-allowed"
+                cursor: cart.length > 0 ? "pointer" : "not-allowed",
+                color: cart.length > 0 ? "#fff" : "var(--text-secondary)"
               }}>
                 {checkingOut ? "Processing..." : "Checkout"}
             </button>

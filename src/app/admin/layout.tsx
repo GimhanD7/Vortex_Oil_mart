@@ -2,6 +2,7 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -9,11 +10,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navLinkStyle = (path: string) => ({
     padding: "0.75rem", 
-    borderRadius: "var(--radius-md)", 
+    borderRadius: "var(--radius-all)", 
     textDecoration: "none", 
     fontWeight: "500",
     transition: "all 0.2s",
-    backgroundColor: pathname === path ? "rgba(56, 189, 248, 0.1)" : "transparent",
+    backgroundColor: pathname === path ? "var(--bg-primary-light)" : "transparent",
     color: pathname === path ? "var(--accent-primary)" : "var(--text-secondary)",
   });
 
@@ -21,7 +22,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-base)" }}>
       {/* Sidebar */}
       <aside style={{ width: "250px", backgroundColor: "var(--bg-surface)", borderRight: "1px solid var(--border-subtle)", padding: "1.5rem", display: "flex", flexDirection: "column" }}>
-        <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "var(--accent-primary)", marginBottom: "2rem" }}>Oil Mart Admin</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+          <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "var(--accent-primary)" }}>Oil Mart</h2>
+          <ThemeToggle />
+        </div>
         
         <nav style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           <Link href="/admin/dashboard" style={navLinkStyle("/admin/dashboard")}>Dashboard Overview</Link>
@@ -42,7 +46,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Main Content */}
-      <main style={{ flex: 1, padding: "2rem", overflowY: "auto", maxHeight: "100vh" }}>
+      <main style={{ flex: 1, padding: "2rem", overflowY: "auto", maxHeight: "100vh", backgroundColor: "var(--bg-base)" }}>
         {children}
       </main>
     </div>

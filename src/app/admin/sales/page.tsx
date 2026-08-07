@@ -39,22 +39,22 @@ export default function SalesPage() {
         {loading ? (
           <p>Loading sales data...</p>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+          <table className="data-table">
             <thead>
-              <tr style={{ borderBottom: "1px solid var(--border-strong)", color: "var(--text-secondary)" }}>
-                <th style={{ padding: "1rem" }}>Sale ID</th>
-                <th style={{ padding: "1rem" }}>Cashier</th>
-                <th style={{ padding: "1rem" }}>Date & Time</th>
-                <th style={{ padding: "1rem" }}>Total Amount</th>
+              <tr>
+                <th>Sale ID</th>
+                <th>Cashier</th>
+                <th>Date & Time</th>
+                <th>Total Amount</th>
               </tr>
             </thead>
             <tbody>
               {sales.map((sale) => (
-                <tr key={sale.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-                  <td style={{ padding: "1rem" }}>#SALE-{sale.id.toString().padStart(5, '0')}</td>
-                  <td style={{ padding: "1rem", color: "var(--text-primary)" }}>{sale.cashier_name || 'Unknown'}</td>
-                  <td style={{ padding: "1rem" }}>{new Date(sale.created_at).toLocaleString()}</td>
-                  <td style={{ padding: "1rem", fontWeight: "bold", color: "#4ade80" }}>
+                <tr key={sale.id}>
+                  <td style={{ fontWeight: "500", color: "var(--text-primary)" }}>#SALE-{sale.id.toString().padStart(5, '0')}</td>
+                  <td>{sale.cashier_name || 'Unknown'}</td>
+                  <td>{new Date(sale.created_at).toLocaleString()}</td>
+                  <td className="text-success" style={{ fontWeight: "bold" }}>
                     ${parseFloat(sale.total_amount).toFixed(2)}
                   </td>
                 </tr>
