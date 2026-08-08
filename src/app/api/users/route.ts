@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     // Never return the hashed password to the frontend
-    const [rows] = await pool.query('SELECT id, username, role, created_at FROM users ORDER BY id DESC');
+    const [rows] = await pool.query('SELECT id, username, role, permissions, created_at FROM users ORDER BY id DESC');
     return NextResponse.json(rows);
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -15,7 +17,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { username, password, role } = await request.json();
+    const { username, password, role, permissions = [] } = await request.json();
 
     const normalizedUsername = typeof username === 'string' ? username.trim() : '';
     if (!normalizedUsername || !password || !role) {
@@ -38,10 +40,11 @@ export async function POST(request: Request) {
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
+    const permsJson = JSON.stringify(permissions);
 
     const [result]: any = await pool.query(
-      'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-      [normalizedUsername, hashedPassword, role]
+      'INSERT INTO users (username, password, role, permissions) VALUES (?, ?, ?, ?)',
+      [normalizedUsername, hashedPassword, role, permsJson]
     );
 
     return NextResponse.json({ id: result.insertId, message: 'User created' }, { status: 201 });

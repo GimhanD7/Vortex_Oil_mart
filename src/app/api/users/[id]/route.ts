@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const id = (await params).id;
-    const { username, role, password } = await request.json();
+    const { username, role, password, permissions = [] } = await request.json();
     const normalizedUsername = typeof username === 'string' ? username.trim() : '';
 
     if (!normalizedUsername || !role) {
@@ -25,17 +25,19 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
     }
 
+    const permsJson = JSON.stringify(permissions);
+
     if (password) {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
       await pool.query(
-        'UPDATE users SET username = ?, role = ?, password = ? WHERE id = ?',
-        [normalizedUsername, role, hashedPassword, id]
+        'UPDATE users SET username = ?, role = ?, password = ?, permissions = ? WHERE id = ?',
+        [normalizedUsername, role, hashedPassword, permsJson, id]
       );
     } else {
       await pool.query(
-        'UPDATE users SET username = ?, role = ? WHERE id = ?',
-        [normalizedUsername, role, id]
+        'UPDATE users SET username = ?, role = ?, permissions = ? WHERE id = ?',
+        [normalizedUsername, role, permsJson, id]
       );
     }
 

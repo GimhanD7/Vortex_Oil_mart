@@ -4,15 +4,15 @@ import { pool } from '@/lib/db';
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const id = (await params).id;
-    const { name, description, price, stock_quantity } = await request.json();
+    const { name, description, price, stock_quantity, sku, category, brand } = await request.json();
 
     if (!name || price === undefined) {
       return NextResponse.json({ error: 'Name and price are required' }, { status: 400 });
     }
 
     await pool.query(
-      'UPDATE products SET name = ?, description = ?, price = ?, stock_quantity = ? WHERE id = ?',
-      [name, description || '', price, stock_quantity || 0, id]
+      'UPDATE products SET name = ?, description = ?, price = ?, stock_quantity = ?, sku = ?, category = ?, brand = ? WHERE id = ?',
+      [name, description || '', price, stock_quantity || 0, sku || null, category || 'Uncategorized', brand || 'Generic', id]
     );
 
     return NextResponse.json({ message: 'Product updated successfully' });

@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     }
 
     const [rows]: any = await pool.query(
-      'SELECT id, username, password, role FROM users WHERE username = ? LIMIT 1',
+      'SELECT id, username, password, role, permissions FROM users WHERE username = ? LIMIT 1',
       [username]
     );
 
@@ -29,11 +29,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    const token = signToken({ id: user.id, username: user.username, role: user.role });
+    const token = signToken({ id: user.id, username: user.username, role: user.role, permissions: user.permissions });
 
     const response = NextResponse.json({
       message: 'Login successful',
-      user: { id: user.id, username: user.username, role: user.role }
+      user: { id: user.id, username: user.username, role: user.role, permissions: user.permissions }
     });
 
     // Set cookie

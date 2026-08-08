@@ -15,10 +15,12 @@ function databaseError(error: unknown) {
   return NextResponse.json({ error: 'Unable to access inventory data' }, { status: 500 });
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const [items] = await pool.query(`
-      SELECT id, name, description, price, stock_quantity
+      SELECT id, name, description, price, stock_quantity, sku, category, brand
       FROM products
       ORDER BY name ASC
     `);

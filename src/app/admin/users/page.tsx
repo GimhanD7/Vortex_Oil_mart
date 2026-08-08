@@ -6,6 +6,7 @@ type User = {
   id: number;
   username: string;
   role: "admin" | "cashier";
+  permissions: string[];
   created_at: string;
 };
 
@@ -13,13 +14,25 @@ type FormState = {
   username: string;
   password: string;
   role: "admin" | "cashier";
+  permissions: string[];
 };
 
 const emptyForm: FormState = {
   username: "",
   password: "",
   role: "cashier",
+  permissions: [],
 };
+
+const AVAILABLE_PERMISSIONS = [
+  { id: 'view_sales', label: 'View Sales' },
+  { id: 'manage_inventory', label: 'Manage Inventory' },
+  { id: 'manage_products', label: 'Manage Products' },
+  { id: 'manage_customers', label: 'Manage Customers' },
+  { id: 'view_reports', label: 'View Reports' },
+  { id: 'manage_users', label: 'Manage Users' },
+  { id: 'pos_billing', label: 'POS Billing' },
+];
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -39,7 +52,16 @@ export default function UsersPage() {
       const res = await fetch("/api/users", { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Unable to load users");
-      setUsers(data);
+      
+      const normalizedUsers = data.map((u: any) => {
+        let perms = u.permissions;
+        if (typeof perms === 'string') {
+          try { perms = JSON.parse(perms); } catch (e) { perms = []; }
+        }
+        return { ...u, permissions: Array.isArray(perms) ? perms : [] };
+      });
+      
+      setUsers(normalizedUsers);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to load users");
     } finally {
@@ -75,7 +97,7 @@ export default function UsersPage() {
   };
 
   const openEdit = (u: User) => {
-    setForm({ username: u.username, password: "", role: u.role });
+    setForm({ username: u.username, password: "", role: u.role, permissions: u.permissions || [] });
     setEditingId(u.id);
     setError("");
     setModal("edit");
@@ -253,7 +275,7 @@ export default function UsersPage() {
                       <em className={u.role === "admin" ? "admin-role" : ""}>{u.role}</em>
                     </td>
                     <td>{new Date(u.created_at).toLocaleDateString()}</td>
-                    <td>{u.role === "admin" ? "Full administration" : "POS billing"}</td>
+                    <td><div style={{display: 'flex', gap: '4px', flexWrap: 'wrap', maxWidth: '200px'}}>{(Array.isArray(u.permissions) && u.permissions.length > 0) ? u.permissions.map(p => <span key={p} style={{background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', textTransform: 'capitalize'}}>{p.replace('_', ' ')}</span>) : <span style={{color: '#94a3b8', fontSize: '11px'}}>No special access</span>}</div></td>
                     <td>
                       <button onClick={() => openEdit(u)} title="Edit user">
                         ✎
@@ -321,6 +343,29 @@ export default function UsersPage() {
                 <option value="admin">Admin</option>
               </select>
             </label>
+
+            <div style={{ marginTop: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <strong style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#334155' }}>Specific Permissions</strong>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                {AVAILABLE_PERMISSIONS.map(p => (
+                  <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'normal', margin: 0, padding: 0 }}>
+                    <input 
+                      type="checkbox" 
+                      checked={form.permissions.includes(p.id)} 
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setForm({ ...form, permissions: [...form.permissions, p.id] });
+                        } else {
+                          setForm({ ...form, permissions: form.permissions.filter(x => x !== p.id) });
+                        }
+                      }}
+                      style={{ margin: 0, width: 'auto' }}
+                    />
+                    {p.label}
+                  </label>
+                ))}
+              </div>
+            </div>
 
             <footer>
               <button type="button" onClick={() => setModal(null)}>

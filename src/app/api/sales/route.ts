@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const [rows] = await pool.query(`
-      SELECT s.id, s.total_amount, s.created_at, u.username as cashier_name
+      SELECT s.id, s.total_amount, s.created_at, u.username as cashier_name, c.name as customer_name
       FROM sales s
       LEFT JOIN users u ON s.cashier_id = u.id
+      LEFT JOIN customers c ON s.customer_id = c.id
       ORDER BY s.id DESC
     `);
     return NextResponse.json(rows);
@@ -19,7 +22,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const connection = await pool.getConnection();
   try {
-    const { cashier_id, items } = await request.json();
+    const { cashier_id, customer_id, items } = await request.json();
 
     if (!cashier_id || !items || items.length === 0) {
       return NextResponse.json({ error: 'Invalid sale data' }, { status: 400 });
@@ -43,10 +46,17 @@ export async function POST(request: Request) {
 
     // Insert into sales
     const [saleResult]: any = await connection.query(
-      'INSERT INTO sales (cashier_id, total_amount) VALUES (?, ?)',
-      [cashier_id, total_amount]
+      'INSERT INTO sales (cashier_id, customer_id, total_amount) VALUES (?, ?, ?)',
+      [cashier_id, customer_id || null, total_amount]
     );
     const saleId = saleResult.insertId;
+
+    if (customer_id) {
+      await connection.query(
+        'UPDATE customers SET total_purchases = total_purchases + ? WHERE id = ?',
+        [total_amount, customer_id]
+      );
+    }
 
     // Insert into sale_items and update stock
     for (const item of items) {
