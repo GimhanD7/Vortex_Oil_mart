@@ -35,7 +35,16 @@ async function setup() {
         description TEXT,
         price DECIMAL(10, 2) NOT NULL,
         stock_quantity INT DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        sku VARCHAR(100) UNIQUE,
+        barcode VARCHAR(100) UNIQUE,
+        category VARCHAR(100) NOT NULL DEFAULT 'Uncategorized',
+        brand VARCHAR(100) NOT NULL DEFAULT 'Generic',
+        reorder_level INT NOT NULL DEFAULT 10,
+        location VARCHAR(100) NOT NULL DEFAULT 'Main Store',
+        batch_no VARCHAR(100),
+        supplier VARCHAR(150) NOT NULL DEFAULT 'Not Assigned',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
 
@@ -60,6 +69,27 @@ async function setup() {
         price_at_time DECIMAL(10, 2) NOT NULL,
         FOREIGN KEY (sale_id) REFERENCES sales(id),
         FOREIGN KEY (product_id) REFERENCES products(id)
+      )
+    `);
+
+    console.log('Creating inventory movements table...');
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS inventory_movements (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        movement_type ENUM('in', 'out', 'adjustment', 'sale') NOT NULL,
+        quantity_change INT NOT NULL,
+        stock_before INT NOT NULL,
+        stock_after INT NOT NULL,
+        unit_price DECIMAL(10, 2) NOT NULL,
+        reference_no VARCHAR(100),
+        notes VARCHAR(500),
+        created_by INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_inventory_product (product_id),
+        INDEX idx_inventory_created (created_at),
+        FOREIGN KEY (product_id) REFERENCES products(id),
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
       )
     `);
 

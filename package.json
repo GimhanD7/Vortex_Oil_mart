@@ -6,6 +6,8 @@
     "dev": "next dev --webpack",
     "dev:turbo": "next dev --turbopack",
     "build": "next build",
+    "db:inventory": "node scripts/setup_inventory_db.js",
+    "db:start": "node scripts/start_database.js",
     "start": "next start",
     "lint": "eslint"
   },

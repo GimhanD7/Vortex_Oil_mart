@@ -50,8 +50,10 @@ export async function POST(request: Request) {
 
     // Insert into sale_items and update stock
     for (const item of items) {
-      const [productRows]: any = await connection.query('SELECT price FROM products WHERE id = ?', [item.product_id]);
+      const [productRows]: any = await connection.query('SELECT price, stock_quantity FROM products WHERE id = ? FOR UPDATE', [item.product_id]);
       const price_at_time = productRows[0].price;
+      const stockBefore = Number(productRows[0].stock_quantity);
+      const stockAfter = stockBefore - Number(item.quantity);
 
       await connection.query(
         'INSERT INTO sale_items (sale_id, product_id, quantity, price_at_time) VALUES (?, ?, ?, ?)',
@@ -61,6 +63,13 @@ export async function POST(request: Request) {
       await connection.query(
         'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
         [item.quantity, item.product_id]
+      );
+
+      await connection.query(
+        `INSERT INTO inventory_movements
+         (product_id, movement_type, quantity_change, stock_before, stock_after, unit_price, reference_no, notes, created_by)
+         VALUES (?, 'sale', ?, ?, ?, ?, ?, 'Stock deducted by POS sale', ?)`,
+        [item.product_id, -Number(item.quantity), stockBefore, stockAfter, price_at_time, `SALE-${saleId}`, cashier_id]
       );
     }
 

@@ -33,12 +33,12 @@ export default function InventoryPage() {
   const [saving, setSaving] = useState(false);
 
   const load = () => {
-    fetch("/api/products")
+    fetch("/api/inventory")
       .then((r) => r.json())
       .then((d) => {
-        if (Array.isArray(d) && d.length) {
+        if (Array.isArray(d.items) && d.items.length) {
           setProducts(
-            d.map((p: Product, i: number) => ({
+            d.items.map((p: Product, i: number) => ({
               ...p,
               sku: p.sku || `SKU-${p.id}`,
               category: p.category || fallback[i % 8].category,
@@ -75,12 +75,16 @@ export default function InventoryPage() {
     if (!adjust) return;
     
     setSaving(true);
-    const updated = Math.max(0, adjust.stock_quantity + amount);
-    
-    const r = await fetch(`/api/products/${adjust.id}`, {
-      method: "PUT",
+    const updated = adjust.stock_quantity + amount;
+
+    const r = await fetch("/api/inventory", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...adjust, stock_quantity: updated }),
+      body: JSON.stringify({
+        product_id: adjust.id,
+        quantity_change: amount,
+        notes: "Manual adjustment from inventory page",
+      }),
     });
     
     if (r.ok) {
