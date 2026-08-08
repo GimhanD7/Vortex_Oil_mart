@@ -17,12 +17,21 @@ export async function POST(request: Request) {
   try {
     const { username, password, role } = await request.json();
 
-    if (!username || !password || !role) {
+    const normalizedUsername = typeof username === 'string' ? username.trim() : '';
+    if (!normalizedUsername || !password || !role) {
       return NextResponse.json({ error: 'Username, password, and role are required' }, { status: 400 });
     }
 
+    if (normalizedUsername.length < 3 || password.length < 6) {
+      return NextResponse.json({ error: 'Username must be at least 3 characters and password at least 6 characters' }, { status: 400 });
+    }
+
+    if (!['admin', 'cashier'].includes(role)) {
+      return NextResponse.json({ error: 'Role must be admin or cashier' }, { status: 400 });
+    }
+
     // Check if user exists
-    const [existing]: any = await pool.query('SELECT id FROM users WHERE username = ?', [username]);
+    const [existing]: any = await pool.query('SELECT id FROM users WHERE username = ?', [normalizedUsername]);
     if (existing.length > 0) {
       return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
     }
@@ -32,7 +41,7 @@ export async function POST(request: Request) {
 
     const [result]: any = await pool.query(
       'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-      [username, hashedPassword, role]
+      [normalizedUsername, hashedPassword, role]
     );
 
     return NextResponse.json({ id: result.insertId, message: 'User created' }, { status: 201 });

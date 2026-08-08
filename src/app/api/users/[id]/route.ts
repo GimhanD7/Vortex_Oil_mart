@@ -6,9 +6,23 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   try {
     const id = (await params).id;
     const { username, role, password } = await request.json();
+    const normalizedUsername = typeof username === 'string' ? username.trim() : '';
 
-    if (!username || !role) {
+    if (!normalizedUsername || !role) {
       return NextResponse.json({ error: 'Username and role are required' }, { status: 400 });
+    }
+
+    if (!['admin', 'cashier'].includes(role)) {
+      return NextResponse.json({ error: 'Role must be admin or cashier' }, { status: 400 });
+    }
+
+    if (password && password.length < 6) {
+      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
+    }
+
+    const [duplicates]: any = await pool.query('SELECT id FROM users WHERE username = ? AND id <> ?', [normalizedUsername, id]);
+    if (duplicates.length > 0) {
+      return NextResponse.json({ error: 'Username already exists' }, { status: 400 });
     }
 
     if (password) {
@@ -16,12 +30,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       const hashedPassword = await bcrypt.hash(password, salt);
       await pool.query(
         'UPDATE users SET username = ?, role = ?, password = ? WHERE id = ?',
-        [username, role, hashedPassword, id]
+        [normalizedUsername, role, hashedPassword, id]
       );
     } else {
       await pool.query(
         'UPDATE users SET username = ?, role = ? WHERE id = ?',
-        [username, role, id]
+        [normalizedUsername, role, id]
       );
     }
 
@@ -35,6 +49,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const id = (await params).id;
+    const [targetRows]: any = await pool.query('SELECT role FROM users WHERE id = ?', [id]);
+    if (targetRows.length === 0) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+    if (targetRows[0].role === 'admin') {
+      const [adminRows]: any = await pool.query("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'");
+      if (Number(adminRows[0].count) <= 1) {
+        return NextResponse.json({ error: 'The last administrator cannot be deleted' }, { status: 400 });
+      }
+    }
     await pool.query('DELETE FROM users WHERE id = ?', [id]);
     return NextResponse.json({ message: 'User deleted successfully' });
   } catch (error) {
