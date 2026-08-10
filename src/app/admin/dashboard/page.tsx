@@ -1,7 +1,6 @@
 "use client";
 
-"use client";
-
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BatteryCharging,
@@ -22,40 +21,34 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-const metrics = [
-  ["revenue", "Total Revenue", "Rs. 1,25,340.00", "18.5%", "orange"],
-  ["orders", "Total Orders", "156", "12.3%", "green"],
-  ["items", "Total Items Sold", "342", "15.8%", "purple"],
-  ["average", "Average Order Value", "Rs. 803.46", "5.2%", "blue"],
-  ["profit", "Gross Profit", "Rs. 28,450.00", "16.7%", "green"],
-  ["customers", "Total Customers", "89", "8.9%", "purple"],
-];
+type DashboardData = {
+  metrics: {
+    revenue: number;
+    orders: number;
+    items_sold: number;
+    average_order_value: number;
+    gross_profit: number;
+    customers: number;
+  };
+  inventory: {
+    total_products: number;
+    total_skus: number;
+    in_stock: number;
+    out_of_stock: number;
+    low_stock: number;
+    stock_value: number;
+  };
+  low_stock: Array<{ id: number; name: string; sku: string | null; category: string | null; stock_quantity: number }>;
+  recent_orders: Array<{ id: number; total_amount: string | number; status: string | null; created_at: string; customer_name: string | null; item_count: number }>;
+  top_products: Array<{ name: string; category: string | null; quantity: string | number; total: string | number }>;
+  payment_methods: Array<{ method: string; orders: number; total: string | number }>;
+  categories: Array<{ category: string | null; total: string | number }>;
+  daily: Array<{ date: string; total: string | number; orders: number }>;
+};
 
-const lowStock = [
-  ["oil", "Shell Helix Ultra 5W-40 4L", "SHU-5W40-4L", "4"],
-  ["filter", "Bosch Oil Filter", "BOF-001", "6"],
-  ["battery", "Amaron Go Battery 55B24L", "AM55B24L", "3"],
-  ["spark", "NGK Spark Plug", "SPK-001", "8"],
-  ["air", "Mann Air Filter", "MA-102", "7"],
-];
+type MetricKey = "revenue" | "orders" | "items" | "average" | "profit" | "customers";
 
-const orders = [
-  ["INV-000132", "18 May, 10:30 AM", "Rs. 2,650.00"],
-  ["INV-000131", "18 May, 09:45 AM", "Rs. 1,250.00"],
-  ["INV-000130", "18 May, 09:20 AM", "Rs. 750.00"],
-  ["INV-000129", "17 May, 06:15 PM", "Rs. 3,450.00"],
-  ["INV-000128", "17 May, 05:40 PM", "Rs. 1,120.00"],
-];
-
-const products = [
-  ["1", "oil", "Shell Helix Ultra 5W-40 4L", "64", "Rs. 2,43,200.00"],
-  ["2", "oil", "Castrol EDGE 5W-30 4L", "48", "Rs. 1,68,960.00"],
-  ["3", "filter", "Bosch Oil Filter", "40", "Rs. 60,000.00"],
-  ["4", "brake", "Brake Pad Set (Front)", "32", "Rs. 40,800.00"],
-  ["5", "battery", "Amaron Go Battery", "24", "Rs. 48,000.00"],
-];
-
-const metricIcons: Record<string, LucideIcon> = {
+const metricIcons: Record<MetricKey, LucideIcon> = {
   revenue: Receipt,
   orders: ClipboardList,
   items: PackagePlus,
@@ -63,6 +56,15 @@ const metricIcons: Record<string, LucideIcon> = {
   profit: TrendingUp,
   customers: Users,
 };
+
+const metricDefs: Array<{ key: MetricKey; label: string; color: string }> = [
+  { key: "revenue", label: "Total Revenue", color: "orange" },
+  { key: "orders", label: "Total Orders", color: "green" },
+  { key: "items", label: "Total Items Sold", color: "purple" },
+  { key: "average", label: "Average Order Value", color: "blue" },
+  { key: "profit", label: "Gross Profit", color: "green" },
+  { key: "customers", label: "Total Customers", color: "purple" },
+];
 
 const productIcons: Record<string, LucideIcon> = {
   oil: PackagePlus,
@@ -95,137 +97,246 @@ const quickTargets: Record<string, string> = {
   "View Reports": "/admin/reports",
 };
 
-function Panel({ title, action, children, className = "" }: { title: string; action?: string; children: React.ReactNode; className?: string }) {
+const fallbackData: DashboardData = {
+  metrics: { revenue: 0, orders: 0, items_sold: 0, average_order_value: 0, gross_profit: 0, customers: 0 },
+  inventory: { total_products: 0, total_skus: 0, in_stock: 0, out_of_stock: 0, low_stock: 0, stock_value: 0 },
+  low_stock: [],
+  recent_orders: [],
+  top_products: [],
+  payment_methods: [],
+  categories: [],
+  daily: [],
+};
+
+function Panel({ title, action, onAction, children, className = "" }: { title: string; action?: string; onAction?: () => void; children: React.ReactNode; className?: string }) {
   return (
     <section className={`dash-panel ${className}`}>
       <header>
         <h2>{title}</h2>
-        {action && <button>{action}</button>}
+        {action && <button onClick={onAction}>{action}</button>}
       </header>
       {children}
     </section>
   );
 }
 
-function ProductMark({ name }: { name: string }) {
-  const Icon = productIcons[name] || Sparkles;
+function money(value: number | string) {
+  return `Rs. ${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+}
+
+function compactMoney(value: number | string) {
+  return `Rs. ${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+function categoryKey(category?: string | null) {
+  const text = (category || "").toLowerCase();
+  if (text.includes("filter")) return "filter";
+  if (text.includes("batter")) return "battery";
+  if (text.includes("spark")) return "spark";
+  if (text.includes("brake")) return "brake";
+  if (text.includes("air")) return "air";
+  if (text.includes("oil")) return "oil";
+  return "item";
+}
+
+function ProductMark({ category }: { category?: string | null }) {
+  const Icon = productIcons[categoryKey(category)] || Sparkles;
   return <Icon className="product-mark" aria-hidden="true" strokeWidth={1.9} />;
+}
+
+function percent(value: number, total: number) {
+  if (!total) return 0;
+  return Math.round((value / total) * 100);
+}
+
+function donutBackground(values: number[]) {
+  const colors = ["#ffbd00", "#3f434b", "#79a93d", "#9a56d5", "#4c82d4", "#b3b5b8"];
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (!total) return undefined;
+  let cursor = 0;
+  const stops = values.map((value, index) => {
+    const start = cursor;
+    cursor += (value / total) * 100;
+    return `${colors[index % colors.length]} ${start}% ${cursor}%`;
+  });
+  return `conic-gradient(${stops.join(",")})`;
 }
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const [data, setData] = useState<DashboardData>(fallbackData);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/dashboard", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((next) => setData({ ...fallbackData, ...next }))
+      .catch(() => setData(fallbackData))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const metrics = metricDefs.map((metric) => {
+    const raw = metric.key === "revenue"
+      ? data.metrics.revenue
+      : metric.key === "orders"
+        ? data.metrics.orders
+        : metric.key === "items"
+          ? data.metrics.items_sold
+          : metric.key === "average"
+            ? data.metrics.average_order_value
+            : metric.key === "profit"
+              ? data.metrics.gross_profit
+              : data.metrics.customers;
+    return {
+      ...metric,
+      value: ["revenue", "average", "profit"].includes(metric.key) ? money(raw) : Number(raw || 0).toLocaleString("en-IN"),
+    };
+  });
+
+  const categoryTotal = data.categories.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  const paymentTotal = data.payment_methods.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  const dailyPoints = useMemo(() => {
+    const rows = data.daily.slice(-7);
+    const maxRevenue = Math.max(1, ...rows.map((row) => Number(row.total || 0)));
+    const maxOrders = Math.max(1, ...rows.map((row) => Number(row.orders || 0)));
+    const xStep = rows.length > 1 ? 504 / (rows.length - 1) : 0;
+    return rows.map((row, index) => ({
+      x: 48 + index * xStep,
+      revenueY: 204 - (Number(row.total || 0) / maxRevenue) * 150,
+      orderY: 204 - (Number(row.orders || 0) / maxOrders) * 150,
+      label: new Date(row.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }),
+    }));
+  }, [data.daily]);
 
   return (
     <div className="dashboard-grid">
       <section className="metric-row">
-        {metrics.map(([icon, label, value, growth, color]) => (
-          <article className="metric-card" key={label}>
-            <span className={color}>
-              {(() => {
-                const Icon = metricIcons[icon];
-                return <Icon aria-hidden="true" size={24} strokeWidth={1.9} />;
-              })()}
-            </span>
-            <div>
-              <small>{label}</small>
-              <strong>{value}</strong>
-              <em>
-                Up {growth} <i>vs. last 7 days</i>
-              </em>
-            </div>
-          </article>
-        ))}
+        {metrics.map(({ key, label, value, color }) => {
+          const Icon = metricIcons[key];
+          return (
+            <article className="metric-card" key={label}>
+              <span className={color}>
+                <Icon aria-hidden="true" size={24} strokeWidth={1.9} />
+              </span>
+              <div>
+                <small>{label}</small>
+                <strong>{loading ? "Loading..." : value}</strong>
+                <em>
+                  Live data <i>from sales & inventory</i>
+                </em>
+              </div>
+            </article>
+          );
+        })}
       </section>
 
       <Panel title="Sales Overview" action="By Day" className="sales-chart-panel">
         <div className="chart-key"><i className="gold" />Revenue (Rs.) <i className="black" /> Orders</div>
         <svg className="line-chart" viewBox="0 0 600 235" role="img" aria-label="Sales and order trend for seven days">
           {[30, 75, 120, 165, 210].map((y) => <line key={y} x1="45" y1={y} x2="575" y2={y} className="gridline" />)}
-          <polyline points="48,184 132,151 216,84 300,116 384,95 468,55 552,88" className="revenue-line" />
-          <polyline points="48,202 132,176 216,144 300,112 384,137 468,103 552,132" className="orders-line" />
-          {[48, 132, 216, 300, 384, 468, 552].map((x, i) => (
-            <g key={x}>
-              <circle cx={x} cy={[184, 151, 84, 116, 95, 55, 88][i]} r="5" className="revenue-dot" />
-              <circle cx={x} cy={[202, 176, 144, 112, 137, 103, 132][i]} r="4" className="order-dot" />
-              <text x={x} y="231">{12 + i} May</text>
-            </g>
-          ))}
+          {dailyPoints.length ? (
+            <>
+              <polyline points={dailyPoints.map((point) => `${point.x},${point.revenueY}`).join(" ")} className="revenue-line" />
+              <polyline points={dailyPoints.map((point) => `${point.x},${point.orderY}`).join(" ")} className="orders-line" />
+              {dailyPoints.map((point) => (
+                <g key={`${point.x}-${point.label}`}>
+                  <circle cx={point.x} cy={point.revenueY} r="5" className="revenue-dot" />
+                  <circle cx={point.x} cy={point.orderY} r="4" className="order-dot" />
+                  <text x={point.x} y="231">{point.label}</text>
+                </g>
+              ))}
+            </>
+          ) : (
+            <text x="300" y="130">No sales yet</text>
+          )}
         </svg>
       </Panel>
 
       <Panel title="Revenue by Category" className="category-panel">
         <div className="donut-wrap">
-          <div className="donut large" />
+          <div className="donut large" style={{ background: donutBackground(data.categories.map((item) => Number(item.total || 0))) }} />
           <ul>
-            <li><i className="c1" />Engine Oils <b>40%</b></li>
-            <li><i className="c2" />Filters <b>20%</b></li>
-            <li><i className="c3" />Brake System <b>15%</b></li>
-            <li><i className="c4" />Batteries <b>10%</b></li>
-            <li><i className="c5" />Spark Plugs <b>8%</b></li>
-            <li><i className="c6" />Others <b>7%</b></li>
+            {(data.categories.length ? data.categories : [{ category: "No sales yet", total: 0 }]).slice(0, 6).map((item, index) => (
+              <li key={`${item.category || "Other"}-${index}`}><i className={`c${index + 1}`} />{item.category || "Others"} <b>{percent(Number(item.total || 0), categoryTotal)}%</b></li>
+            ))}
           </ul>
         </div>
       </Panel>
 
-      <Panel title="Low Stock Alerts" action="View All" className="low-stock-panel">
+      <Panel title="Low Stock Alerts" action="View All" onAction={() => router.push("/admin/inventory")} className="low-stock-panel">
         <div className="stock-list">
-          {lowStock.map(([mark, name, sku, count]) => (
-            <div key={name}>
-              <ProductMark name={mark} />
-              <p><b>{name}</b><small>SKU: {sku}</small></p>
-              <em>Stock: {count}</em>
+          {data.low_stock.map((item) => (
+            <div key={item.id}>
+              <ProductMark category={item.category} />
+              <p><b>{item.name}</b><small>SKU: {item.sku || `SKU-${item.id}`}</small></p>
+              <em>Stock: {item.stock_quantity}</em>
             </div>
           ))}
+          {!data.low_stock.length && <p className="empty-movement">No low stock alerts.</p>}
         </div>
       </Panel>
 
       <Panel title="Sales by Payment Method" className="payment-panel">
         <div className="donut-wrap compact">
-          <div className="donut small" />
+          <div className="donut small" style={{ background: donutBackground(data.payment_methods.map((item) => Number(item.total || 0))) }} />
           <ul>
-            <li><i className="c1" />Cash <b>45%</b></li>
-            <li><i className="c2" />UPI <b>30%</b></li>
-            <li><i className="c3" />Card <b>15%</b></li>
-            <li><i className="c4" />Wallet <b>7%</b></li>
-            <li><i className="c5" />Net Banking <b>3%</b></li>
+            {(data.payment_methods.length ? data.payment_methods : [{ method: "No sales yet", total: 0, orders: 0 }]).slice(0, 5).map((item, index) => (
+              <li key={item.method}><i className={`c${index + 1}`} />{item.method} <b>{percent(Number(item.total || 0), paymentTotal)}%</b></li>
+            ))}
           </ul>
         </div>
       </Panel>
 
       <Panel title="Sales by Store" action="This Week" className="store-panel">
         <div className="store-bars">
-          <div><p>Main Store <b>Rs. 78,450 <small>(62%)</small></b></p><i><span style={{ width: "82%" }} /></i></div>
-          <div><p>Branch Store (Noida) <b>Rs. 28,730 <small>(23%)</small></b></p><i><span style={{ width: "42%" }} /></i></div>
-          <div><p>Branch Store (Gurgaon) <b>Rs. 18,160 <small>(15%)</small></b></p><i><span style={{ width: "28%" }} /></i></div>
+          <div><p>Main Store <b>{compactMoney(data.metrics.revenue)} <small>(100%)</small></b></p><i><span style={{ width: data.metrics.revenue ? "100%" : "0%" }} /></i></div>
+          <div><p>Purchase Value <b>{compactMoney(data.inventory.stock_value)} <small>inventory</small></b></p><i><span style={{ width: data.inventory.stock_value ? "72%" : "0%" }} /></i></div>
+          <div><p>Low Stock Items <b>{data.inventory.low_stock} <small>needs reorder</small></b></p><i><span style={{ width: `${Math.min(100, data.inventory.low_stock * 8)}%` }} /></i></div>
         </div>
       </Panel>
 
-      <Panel title="Recent Orders" action="View All" className="orders-panel">
+      <Panel title="Recent Orders" action="View All" onAction={() => router.push("/admin/sales")} className="orders-panel">
         <div className="order-list">
-          {orders.map(([id, date, total]) => <div key={id}><b>{id}</b><span>{date}</span><strong>{total}</strong><em>Completed</em></div>)}
+          {data.recent_orders.map((order) => (
+            <div key={order.id}>
+              <b>INV-{String(order.id).padStart(6, "0")}</b>
+              <span>{new Date(order.created_at).toLocaleString()}</span>
+              <strong>{money(order.total_amount)}</strong>
+              <em>{order.status || "Completed"}</em>
+            </div>
+          ))}
+          {!data.recent_orders.length && <p className="empty-movement">No recent orders.</p>}
         </div>
       </Panel>
 
       <Panel title="Top Selling Products" action="This Week" className="products-panel">
         <div className="product-list">
-          {products.map(([rank, mark, name, qty, total]) => (
-            <div key={rank}>
-              <i>{rank}</i>
-              <ProductMark name={mark} />
-              <b>{name}</b>
-              <em>{qty}</em>
-              <strong>{total}</strong>
+          {data.top_products.map((item, index) => (
+            <div key={`${item.name}-${index}`}>
+              <i>{index + 1}</i>
+              <ProductMark category={item.category} />
+              <b>{item.name}</b>
+              <em>{Number(item.quantity || 0)}</em>
+              <strong>{money(item.total)}</strong>
             </div>
           ))}
+          {!data.top_products.length && <p className="empty-movement">No top products yet.</p>}
         </div>
       </Panel>
 
-      <Panel title="Recent Sales" action="View All" className="recent-sales-panel">
+      <Panel title="Recent Sales" action="View All" onAction={() => router.push("/admin/sales")} className="recent-sales-panel">
         <table>
           <thead><tr><th>Invoice No.</th><th>Date &amp; Time</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
           <tbody>
-            {orders.slice(0, 4).map(([id, date, total], i) => (
-              <tr key={id}><td>{id}</td><td>{date}</td><td>{["Walk-in Customer", "Rahul Sharma", "Amit Kumar", "Rajesh Anand"][i]}</td><td>{i + 1}</td><td>{total}</td><td><span>Completed</span></td></tr>
+            {data.recent_orders.map((order) => (
+              <tr key={order.id}>
+                <td>INV-{String(order.id).padStart(6, "0")}</td>
+                <td>{new Date(order.created_at).toLocaleString()}</td>
+                <td>{order.customer_name || "Walk-in Customer"}</td>
+                <td>{Number(order.item_count || 0)}</td>
+                <td>{money(order.total_amount)}</td>
+                <td><span>{order.status || "Completed"}</span></td>
+              </tr>
             ))}
           </tbody>
         </table>
@@ -233,21 +344,21 @@ export default function AdminDashboard() {
 
       <Panel title="Quick Actions" className="quick-panel">
         <div className="quick-actions">
-          {["Add Product", "Add Customer", "New Purchase", "POS Billing", "Stock Adjustment", "Expense Entry", "Add User", "View Reports"].map((label) => {
+          {Object.keys(quickIcons).map((label) => {
             const Icon = quickIcons[label];
             return <button key={label} onClick={() => router.push(quickTargets[label])}><span><Icon aria-hidden="true" size={22} strokeWidth={1.9} /></span>{label}</button>;
           })}
         </div>
       </Panel>
 
-      <Panel title="Inventory Summary" action="View All" className="inventory-panel">
+      <Panel title="Inventory Summary" action="View All" onAction={() => router.push("/admin/inventory")} className="inventory-panel">
         <div className="inventory-stats">
-          <div><small>Total Products</small><b>256</b></div>
-          <div><small>Total SKUs</small><b>368</b></div>
-          <div className="good"><small>In Stock</small><b>284</b></div>
-          <div className="bad"><small>Out of Stock</small><b>12</b></div>
-          <div className="wide"><small>Stock Value</small><b>Rs. 18,75,340.00</b></div>
-          <div className="wide bad"><small>Low Stock Items</small><b>22</b></div>
+          <div><small>Total Products</small><b>{data.inventory.total_products}</b></div>
+          <div><small>Total SKUs</small><b>{data.inventory.total_skus}</b></div>
+          <div className="good"><small>In Stock</small><b>{data.inventory.in_stock}</b></div>
+          <div className="bad"><small>Out of Stock</small><b>{data.inventory.out_of_stock}</b></div>
+          <div className="wide"><small>Stock Value</small><b>{money(data.inventory.stock_value)}</b></div>
+          <div className="wide bad"><small>Low Stock Items</small><b>{data.inventory.low_stock}</b></div>
         </div>
       </Panel>
     </div>

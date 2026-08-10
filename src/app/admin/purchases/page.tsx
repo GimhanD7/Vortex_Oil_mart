@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Download, PackagePlus, Plus, Trash2, X } from "lucide-react";
+import { Download, Eye, PackagePlus, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
 
 type Product = {
   id: number;
@@ -21,6 +21,16 @@ type Purchase = {
   item_count: number;
   created_by: string | null;
   created_at: string;
+  notes?: string | null;
+};
+
+type PurchaseItem = {
+  id: number;
+  product_id: number;
+  product_name: string;
+  sku?: string;
+  quantity: number;
+  unit_cost: string;
 };
 
 type PurchaseLine = {
@@ -33,7 +43,7 @@ const blankLine: PurchaseLine = { product_id: "", quantity: 1, unit_cost: 0 };
 const paymentMethods = ["Cash", "Card", "UPI", "Bank Transfer", "Credit"];
 
 function money(value: string | number) {
-  return `Rs. ${Number(value).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+  return `Rs. ${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 }
 
 export default function PurchasesPage() {
@@ -46,9 +56,14 @@ export default function PurchasesPage() {
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<PurchaseLine[]>([{ ...blankLine }]);
+  const [selected, setSelected] = useState<Purchase | null>(null);
+  const [selectedItems, setSelectedItems] = useState<PurchaseItem[]>([]);
+  const [editing, setEditing] = useState<Purchase | null>(null);
 
   const total = useMemo(() => lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unit_cost || 0), 0), [lines]);
-  const receivedThisMonth = purchases.reduce((sum, purchase) => sum + Number(purchase.total_amount), 0);
+  const receivedThisMonth = purchases
+    .filter((purchase) => purchase.status !== "cancelled")
+    .reduce((sum, purchase) => sum + Number(purchase.total_amount), 0);
 
   const load = () => {
     fetch("/api/products", { cache: "no-store" })
@@ -131,6 +146,67 @@ export default function PurchasesPage() {
     URL.revokeObjectURL(url);
   };
 
+  const viewPurchase = async (purchase: Purchase) => {
+    setSelected(purchase);
+    setSelectedItems([]);
+    const response = await fetch(`/api/purchases/${purchase.id}`, { cache: "no-store" });
+    const data = await response.json();
+    if (response.ok) {
+      setSelected(data.purchase || purchase);
+      setSelectedItems(Array.isArray(data.items) ? data.items : []);
+    } else {
+      setMessage(data.error || "Unable to load purchase details.");
+    }
+  };
+
+  const openEdit = (purchase: Purchase) => {
+    setEditing(purchase);
+    setSupplier(purchase.supplier || "");
+    setPaymentMethod(purchase.payment_method || "Cash");
+    setNotes(purchase.notes || "");
+  };
+
+  const updatePurchase = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editing) return;
+    setSaving(true);
+    const response = await fetch(`/api/purchases/${editing.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ supplier, payment_method: paymentMethod, notes }),
+    });
+    const data = await response.json();
+    setSaving(false);
+    setMessage(data.message || data.error || "Purchase updated.");
+    if (response.ok) {
+      setEditing(null);
+      setSupplier("");
+      setPaymentMethod("Cash");
+      setNotes("");
+      load();
+    }
+  };
+
+  const cancelPurchase = async (purchase: Purchase) => {
+    if (!confirm("Cancel this purchase and reverse received stock?")) return;
+    const response = await fetch(`/api/purchases/${purchase.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "cancelled" }),
+    });
+    const data = await response.json();
+    setMessage(data.message || data.error || "Purchase cancelled.");
+    if (response.ok) load();
+  };
+
+  const deletePurchase = async (purchase: Purchase) => {
+    if (!confirm("Delete this purchase permanently? Received stock will be reversed if needed.")) return;
+    const response = await fetch(`/api/purchases/${purchase.id}`, { method: "DELETE" });
+    const data = await response.json();
+    setMessage(data.message || data.error || "Purchase deleted.");
+    if (response.ok) load();
+  };
+
   return (
     <div className="management-page purchases-page">
       <div className="management-heading">
@@ -144,7 +220,7 @@ export default function PurchasesPage() {
         </aside>
       </div>
 
-      {message && <div className="user-error">{message}<button onClick={() => setMessage("")}>×</button></div>}
+      {message && <div className="user-error">{message}<button onClick={() => setMessage("")}>x</button></div>}
 
       <section className="purchase-kpis">
         <article><small>Purchase Entries</small><b>{purchases.length}</b><em>All received orders</em></article>
@@ -167,6 +243,7 @@ export default function PurchasesPage() {
                 <th>Items</th>
                 <th>Total Amount</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -178,7 +255,13 @@ export default function PurchasesPage() {
                   <td>{purchase.payment_method}</td>
                   <td>{purchase.item_count || 0}</td>
                   <td>{money(purchase.total_amount)}</td>
-                  <td><em>{purchase.status}</em></td>
+                  <td><em className={purchase.status === "cancelled" ? "out" : ""}>{purchase.status}</em></td>
+                  <td className="purchase-actions">
+                    <button onClick={() => viewPurchase(purchase)} aria-label="View purchase"><Eye size={15} aria-hidden="true" /></button>
+                    <button onClick={() => openEdit(purchase)} aria-label="Edit purchase"><Pencil size={15} aria-hidden="true" /></button>
+                    <button onClick={() => cancelPurchase(purchase)} disabled={purchase.status === "cancelled"} aria-label="Cancel purchase"><RotateCcw size={15} aria-hidden="true" /></button>
+                    <button onClick={() => deletePurchase(purchase)} aria-label="Delete purchase"><Trash2 size={15} aria-hidden="true" /></button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -228,6 +311,64 @@ export default function PurchasesPage() {
               <button type="button" onClick={() => setShowForm(false)}>Cancel</button>
               <button className="gold-btn" disabled={saving}>{saving ? "Saving..." : "Receive Stock"}</button>
             </footer>
+          </form>
+        </div>
+      )}
+
+      {editing && (
+        <div className="management-modal">
+          <form onSubmit={updatePurchase}>
+            <header>
+              <h2>Edit Purchase</h2>
+              <button type="button" onClick={() => setEditing(null)}><X size={22} aria-label="Close" /></button>
+            </header>
+            <div>
+              <label>Supplier<input required value={supplier} onChange={(event) => setSupplier(event.target.value)} /></label>
+              <label>
+                Payment Method
+                <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
+                  {paymentMethods.map((method) => <option key={method}>{method}</option>)}
+                </select>
+              </label>
+            </div>
+            <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+            <footer>
+              <button type="button" onClick={() => setEditing(null)}>Cancel</button>
+              <button className="gold-btn" disabled={saving}>{saving ? "Saving..." : "Save Changes"}</button>
+            </footer>
+          </form>
+        </div>
+      )}
+
+      {selected && (
+        <div className="management-modal">
+          <form>
+            <header>
+              <h2>PUR-{String(selected.id).padStart(6, "0")}</h2>
+              <button type="button" onClick={() => setSelected(null)}><X size={22} aria-label="Close" /></button>
+            </header>
+            <section className="purchase-detail">
+              <p><small>Supplier</small><b>{selected.supplier}</b></p>
+              <p><small>Payment Method</small><b>{selected.payment_method}</b></p>
+              <p><small>Status</small><b>{selected.status}</b></p>
+              <p><small>Total</small><b>{money(selected.total_amount)}</b></p>
+            </section>
+            <div className="table-scroll">
+              <table>
+                <thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit Cost</th><th>Total</th></tr></thead>
+                <tbody>
+                  {selectedItems.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.product_name}</td>
+                      <td>{item.sku || `SKU-${item.product_id}`}</td>
+                      <td>{item.quantity}</td>
+                      <td>{money(item.unit_cost)}</td>
+                      <td>{money(Number(item.unit_cost) * Number(item.quantity))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </form>
         </div>
       )}

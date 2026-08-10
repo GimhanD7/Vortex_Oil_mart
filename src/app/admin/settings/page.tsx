@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Download, FileUp, RefreshCcw, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Download, FileUp, ReceiptText, RefreshCcw, Save, ShieldCheck, Store } from "lucide-react";
 
 type ImportResult = {
   message?: string;
@@ -11,13 +11,98 @@ type ImportResult = {
     customers: number;
     categories: number;
     brands: number;
+    sales?: number;
+    sale_items?: number;
+    inventory_movements?: number;
+    purchases?: number;
+    purchase_items?: number;
   };
 };
+
+type Settings = {
+  store_name: string;
+  store_address: string;
+  store_phone: string;
+  gst_number: string;
+  tax_rate: string;
+  invoice_prefix: string;
+  invoice_footer: string;
+  payment_methods: string[];
+};
+
+const defaultSettings: Settings = {
+  store_name: "Oil Mart",
+  store_address: "123, Industrial Area, New Delhi",
+  store_phone: "",
+  gst_number: "",
+  tax_rate: "18",
+  invoice_prefix: "INV",
+  invoice_footer: "Thank you for your visit. Drive safe. Stay protected.",
+  payment_methods: ["Cash", "Card", "UPI"],
+};
+
+const paymentOptions = ["Cash", "Card", "UPI", "Bank Transfer", "Credit"];
+
+function countPreview(payload: Record<string, unknown>) {
+  const count = (key: string) => Array.isArray(payload[key]) ? (payload[key] as unknown[]).length : 0;
+  return {
+    products: count("products"),
+    customers: count("customers"),
+    categories: count("categories"),
+    brands: count("brands"),
+    sales: count("sales"),
+    sale_items: count("sale_items"),
+    inventory_movements: count("inventory_movements"),
+    purchases: count("purchases"),
+    purchase_items: count("purchase_items"),
+  };
+}
 
 export default function SettingsPage() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [message, setMessage] = useState("");
   const [importing, setImporting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [pendingImport, setPendingImport] = useState<Record<string, unknown> | null>(null);
+  const [preview, setPreview] = useState<ReturnType<typeof countPreview> | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => setSettings({ ...defaultSettings, ...data }))
+      .catch(() => setMessage("Unable to load saved settings."));
+  }, []);
+
+  const updateSetting = (key: keyof Settings, value: string) => {
+    setSettings((current) => ({ ...current, [key]: value }));
+  };
+
+  const togglePayment = (method: string) => {
+    setSettings((current) => {
+      const exists = current.payment_methods.includes(method);
+      return {
+        ...current,
+        payment_methods: exists
+          ? current.payment_methods.filter((item) => item !== method)
+          : [...current.payment_methods, method],
+      };
+    });
+  };
+
+  const saveSettings = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    setMessage("");
+    const response = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+    const data = await response.json();
+    setSaving(false);
+    setMessage(data.message || data.error || "Settings saved.");
+  };
 
   const exportBackup = async () => {
     const response = await fetch("/api/settings/backup", { cache: "no-store" });
@@ -30,31 +115,46 @@ export default function SettingsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const importBackup = async (file: File | null) => {
+  const chooseImportFile = async (file: File | null) => {
     if (!file) return;
-    setImporting(true);
     setMessage("");
     try {
       const text = await file.text();
-      const payload = JSON.parse(text);
+      const payload = JSON.parse(text) as Record<string, unknown>;
+      setPendingImport(payload);
+      setPreview(countPreview(payload));
+      setMessage("Backup file selected. Review the preview, then import.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to read backup file.");
+    } finally {
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  const importBackup = async () => {
+    if (!pendingImport) return;
+    setImporting(true);
+    setMessage("");
+    try {
       const response = await fetch("/api/settings/backup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(pendingImport),
       });
       const result = (await response.json()) as ImportResult;
       if (!response.ok) throw new Error(result.error || "Import failed");
       const imported = result.imported;
       setMessage(
         imported
-          ? `${result.message}: ${imported.products} products, ${imported.customers} customers, ${imported.categories} categories, ${imported.brands} brands.`
+          ? `${result.message}: ${imported.products} products, ${imported.customers} customers, ${imported.categories} categories, ${imported.brands} brands, ${imported.sales || 0} sales, ${imported.inventory_movements || 0} movements, ${imported.purchases || 0} purchases.`
           : result.message || "Import completed."
       );
+      setPendingImport(null);
+      setPreview(null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to import backup.");
     } finally {
       setImporting(false);
-      if (inputRef.current) inputRef.current.value = "";
     }
   };
 
@@ -67,9 +167,37 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {message && <div className="user-error">{message}<button onClick={() => setMessage("")}>×</button></div>}
+      {message && <div className="user-error">{message}<button onClick={() => setMessage("")}>x</button></div>}
 
       <section className="settings-grid">
+        <article className="settings-form-card">
+          <span><Store size={24} aria-hidden="true" /></span>
+          <h2>Store Profile</h2>
+          <form onSubmit={saveSettings} className="settings-form">
+            <label>Store Name<input value={settings.store_name} onChange={(event) => updateSetting("store_name", event.target.value)} /></label>
+            <label>Store Address<textarea value={settings.store_address} onChange={(event) => updateSetting("store_address", event.target.value)} /></label>
+            <label>Phone<input value={settings.store_phone} onChange={(event) => updateSetting("store_phone", event.target.value)} /></label>
+            <label>GST Number<input value={settings.gst_number} onChange={(event) => updateSetting("gst_number", event.target.value)} /></label>
+            <button className="gold-btn" disabled={saving}><Save size={16} aria-hidden="true" /> {saving ? "Saving..." : "Save Store Settings"}</button>
+          </form>
+        </article>
+
+        <article className="settings-form-card">
+          <span><ReceiptText size={24} aria-hidden="true" /></span>
+          <h2>Invoice &amp; Payment</h2>
+          <form onSubmit={saveSettings} className="settings-form">
+            <label>Tax Rate (%)<input type="number" min="0" step="0.01" value={settings.tax_rate} onChange={(event) => updateSetting("tax_rate", event.target.value)} /></label>
+            <label>Invoice Prefix<input value={settings.invoice_prefix} onChange={(event) => updateSetting("invoice_prefix", event.target.value)} /></label>
+            <label>Invoice Footer<textarea value={settings.invoice_footer} onChange={(event) => updateSetting("invoice_footer", event.target.value)} /></label>
+            <div className="payment-checks">
+              {paymentOptions.map((method) => (
+                <label key={method}><input type="checkbox" checked={settings.payment_methods.includes(method)} onChange={() => togglePayment(method)} /> {method}</label>
+              ))}
+            </div>
+            <button className="gold-btn" disabled={saving}><Save size={16} aria-hidden="true" /> {saving ? "Saving..." : "Save Invoice Settings"}</button>
+          </form>
+        </article>
+
         <article>
           <span><ShieldCheck size={24} aria-hidden="true" /></span>
           <h2>System Backup</h2>
@@ -80,9 +208,16 @@ export default function SettingsPage() {
         <article>
           <span><FileUp size={24} aria-hidden="true" /></span>
           <h2>Import Master Data</h2>
-          <p>Import an Oil Mart backup JSON. Products, customers, categories, and brands will be restored into the database.</p>
-          <input ref={inputRef} type="file" accept="application/json,.json" onChange={(event) => importBackup(event.target.files?.[0] || null)} />
-          <button onClick={() => inputRef.current?.click()} disabled={importing}><FileUp size={16} aria-hidden="true" /> {importing ? "Importing..." : "Choose Backup File"}</button>
+          <p>Choose an Oil Mart backup JSON, review the counts, then import it into the database.</p>
+          <input ref={inputRef} type="file" accept="application/json,.json" onChange={(event) => chooseImportFile(event.target.files?.[0] || null)} />
+          <button onClick={() => inputRef.current?.click()} disabled={importing}><FileUp size={16} aria-hidden="true" /> Choose Backup File</button>
+          {preview && (
+            <div className="import-preview">
+              <b>Ready to import</b>
+              <small>{preview.products} products / {preview.customers} customers / {preview.categories} categories / {preview.brands} brands / {preview.sales} sales / {preview.inventory_movements} movements / {preview.purchases} purchases</small>
+              <button className="gold-btn" onClick={importBackup} disabled={importing}>{importing ? "Importing..." : "Import Backup"}</button>
+            </div>
+          )}
         </article>
 
         <article>

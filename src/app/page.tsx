@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 function Icon({ name }: { name: "user" | "lock" | "eye" | "arrow" | "cart" | "box" | "chart" | "shield" }) {
   const paths = {
@@ -99,8 +100,18 @@ export default function LoginPage() {
       </section>
 
       <footer className="login-footer">
-        <p><Icon name="shield" /> © 2026 Oil Mart POS. All rights reserved.</p>
-        <p className="footer-values"><b>★</b> Secure <i/> Reliable <i/> Efficient</p>
+        <a
+          className="designer-credit"
+          href="https://www.facebook.com/profile.php?id=61590307577386"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <small>Design By</small>
+          <Image src="/vortex-mark.png" alt="" width={22} height={22} />
+          <b>Vortex Digital Labs</b>
+        </a>
+        <p><Icon name="shield" /> &copy; 2026 Oil Mart POS. All rights reserved.</p>
+        <p className="footer-values"><b aria-hidden="true" /> Secure <i aria-hidden="true" /> Reliable <i aria-hidden="true" /> Efficient</p>
         <nav><a href="#">Privacy Policy</a><a href="#">Terms of Service</a><a href="#">Help &amp; Support</a></nav>
       </footer>
     </main>

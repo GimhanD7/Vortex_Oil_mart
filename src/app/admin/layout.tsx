@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -73,9 +74,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const [showShift, setShowShift] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [user, setUser] = useState<{ username: string; role: string; permissions: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notificationSummary, setNotificationSummary] = useState({ lowStock: 0, recentOrders: 0, outOfStock: 0 });
 
   const today = new Date();
   const nextWeek = new Date(today);
@@ -111,6 +115,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       router.push(available ? available[2] : "/");
     }
   }, [loading, pathname, router, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/dashboard", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        setNotificationSummary({
+          lowStock: Number(data?.inventory?.low_stock || data?.low_stock?.length || 0),
+          recentOrders: Number(data?.recent_orders?.length || 0),
+          outOfStock: Number(data?.inventory?.out_of_stock || 0),
+        });
+      })
+      .catch(() => {});
+  }, [user]);
 
   if (loading || !user) {
     return (
@@ -149,6 +167,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               : pathname.includes("settings")
                 ? "Settings"
                 : "Dashboard";
+
+  const signOut = () => {
+    document.cookie = "auth_token=; Max-Age=0; path=/";
+    router.push("/");
+  };
+  const notificationCount = notificationSummary.lowStock + notificationSummary.recentOrders + notificationSummary.outOfStock;
 
   return (
     <div className={`admin-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
@@ -208,7 +232,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
           <div className="topbar-actions">
             <div className="topbar-control">
-              <button onClick={() => setShowDatePicker(!showDatePicker)}>
+              <button onClick={() => {
+                setShowDatePicker(!showDatePicker);
+                setShowShift(false);
+                setShowProfile(false);
+                setShowNotifications(false);
+              }}>
                 {formatDate(startDate)} - {formatDate(endDate)}
                 <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
               </button>
@@ -228,7 +257,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
 
             <div className="topbar-control">
-              <button onClick={() => setShowShift(!showShift)}>
+              <button onClick={() => {
+                setShowShift(!showShift);
+                setShowDatePicker(false);
+                setShowProfile(false);
+                setShowNotifications(false);
+              }}>
                 Shift #CSH-001
                 <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
               </button>
@@ -241,18 +275,82 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               )}
             </div>
 
-            <button className="bell" aria-label="Notifications">
-              <Bell aria-hidden="true" size={22} strokeWidth={1.9} />
-              <i>6</i>
-            </button>
+            <div className="notification-control">
+              <button
+                className="bell"
+                aria-label="Notifications"
+                aria-expanded={showNotifications}
+                onClick={() => {
+                  setShowNotifications((current) => !current);
+                  setShowDatePicker(false);
+                  setShowShift(false);
+                  setShowProfile(false);
+                }}
+              >
+                <Bell aria-hidden="true" size={22} strokeWidth={1.9} />
+                <i>{notificationCount || 0}</i>
+              </button>
+              {showNotifications && (
+                <div className="notification-menu">
+                  <header>
+                    <b>Notifications</b>
+                    <small>Live admin alerts</small>
+                  </header>
+                  <button onClick={() => router.push("/admin/inventory")}>
+                    <PackageCheck size={16} aria-hidden="true" />
+                    <span><b>{notificationSummary.lowStock} low stock items</b><small>Open inventory reorder alerts</small></span>
+                  </button>
+                  <button onClick={() => router.push("/admin/sales")}>
+                    <TrendingUp size={16} aria-hidden="true" />
+                    <span><b>{notificationSummary.recentOrders} recent orders</b><small>Review sales and invoices</small></span>
+                  </button>
+                  <button onClick={() => router.push("/admin/products")}>
+                    <Package size={16} aria-hidden="true" />
+                    <span><b>{notificationSummary.outOfStock} out of stock items</b><small>Update unavailable products</small></span>
+                  </button>
+                </div>
+              )}
+            </div>
 
-            <div className="admin-profile">
-              <span>{user.username.charAt(0).toUpperCase()}</span>
-              <p>
-                <b>{user.username}</b>
-                <small>{user.role === "admin" ? "Super Admin" : "Cashier"}</small>
-              </p>
-              <ChevronDown className="profile-chevron" aria-hidden="true" size={16} strokeWidth={2} />
+            <div className="profile-control">
+              <button
+                className="admin-profile"
+                aria-label="Open profile menu"
+                aria-expanded={showProfile}
+                onClick={() => {
+                  setShowProfile(!showProfile);
+                  setShowDatePicker(false);
+                  setShowShift(false);
+                  setShowNotifications(false);
+                }}
+              >
+                <span>{user.username.charAt(0).toUpperCase()}</span>
+                <p>
+                  <b>{user.username}</b>
+                  <small>{user.role === "admin" ? "Super Admin" : "Cashier"}</small>
+                </p>
+                <ChevronDown className="profile-chevron" aria-hidden="true" size={16} strokeWidth={2} />
+              </button>
+              {showProfile && (
+                <div className="profile-menu">
+                  <div>
+                    <span>{user.username.charAt(0).toUpperCase()}</span>
+                    <p>
+                      <b>{user.username}</b>
+                      <small>{user.role === "admin" ? "Super Admin" : "Cashier"}</small>
+                    </p>
+                  </div>
+                  <button onClick={() => router.push("/admin/settings")}>
+                    <Settings size={16} aria-hidden="true" /> Settings
+                  </button>
+                  <button onClick={() => router.push("/dashboard")}>
+                    <ShoppingCart size={16} aria-hidden="true" /> POS Billing
+                  </button>
+                  <button className="danger" onClick={signOut}>
+                    <LogOut size={16} aria-hidden="true" /> Logout
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -260,6 +358,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <main className="admin-content">{children}</main>
         <footer className="admin-footer">
           <span>Copyright 2026 Oil Mart POS. All rights reserved.</span>
+          <a
+            className="designer-credit"
+            href="https://www.facebook.com/profile.php?id=61590307577386"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <small>Design By</small>
+            <Image src="/vortex-mark.png" alt="" width={22} height={22} />
+            <b>Vortex Digital Labs</b>
+          </a>
           <p>
             <b /> Secure <i /> Reliable <i /> Efficient
           </p>

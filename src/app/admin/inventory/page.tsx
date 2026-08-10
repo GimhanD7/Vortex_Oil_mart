@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Armchair,
   BatteryCharging,
   Box,
-  CheckSquare,
   CircleStop,
   CloudRain,
   Cog,
@@ -24,7 +23,6 @@ import {
   Plus,
   SlidersHorizontal,
   Sparkles,
-  Square,
   Wrench,
   X,
   Zap,
@@ -37,8 +35,14 @@ type Product = {
   price: number;
   stock_quantity: number;
   sku?: string;
+  barcode?: string;
   category?: string;
   brand?: string;
+  reorder_level?: number;
+  location?: string;
+  batch_no?: string | null;
+  supplier?: string;
+  updated_at?: string;
   visual?: string;
 };
 
@@ -84,6 +88,8 @@ export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [tab, setTab] = useState("All Items");
   const [catFilter, setCatFilter] = useState("All Categories");
+  const [locationFilter, setLocationFilter] = useState("All Locations");
+  const [supplierFilter, setSupplierFilter] = useState("All Suppliers");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [adjust, setAdjust] = useState<Product | null>(null);
@@ -91,10 +97,29 @@ export default function InventoryPage() {
   const [saving, setSaving] = useState(false);
   const [movementSummary, setMovementSummary] = useState<MovementSummary>({ transactions: 0, total_inward: 0, total_outward: 0 });
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
+  const [movementType, setMovementType] = useState("all");
+  const [movementProduct, setMovementProduct] = useState("all");
+  const [movementFrom, setMovementFrom] = useState("");
+  const [movementTo, setMovementTo] = useState("");
   const [showCols, setShowCols] = useState(false);
   const [cols, setCols] = useState({ check: true, prod: true, sku: true, cat: true, stock: true, reorder: true, loc: true, batch: true, price: true, supplier: true, status: true, updated: true, actions: true });
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [openActions, setOpenActions] = useState<number | null>(null);
 
-  const load = () => {
+  const loadMovements = useCallback(() => {
+    const params = new URLSearchParams({ limit: "6" });
+    if (movementType !== "all") params.set("type", movementType);
+    if (movementProduct !== "all") params.set("product_id", movementProduct);
+    if (movementFrom) params.set("date_from", movementFrom);
+    if (movementTo) params.set("date_to", movementTo);
+
+    fetch(`/api/inventory/movements?${params.toString()}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => Array.isArray(d) && setMovements(d))
+      .catch(() => setMovements([]));
+  }, [movementFrom, movementProduct, movementTo, movementType]);
+
+  const load = useCallback(() => {
     fetch("/api/inventory")
       .then((r) => r.json())
       .then((d) => {
@@ -105,6 +130,9 @@ export default function InventoryPage() {
               sku: p.sku || `SKU-${String(p.id).padStart(3, "0")}`,
               category: p.category || "General",
               brand: p.brand || "Generic",
+              supplier: p.supplier || p.brand || "Not Assigned",
+              location: p.location || "Main Store",
+              reorder_level: Number(p.reorder_level || 10),
             }))
           );
         }
@@ -118,15 +146,16 @@ export default function InventoryPage() {
       })
       .catch(() => {});
 
-    fetch("/api/inventory/movements?limit=6", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => Array.isArray(d) && setMovements(d))
-      .catch(() => setMovements([]));
-  };
+    loadMovements();
+  }, [loadMovements]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
+
+  useEffect(() => {
+    loadMovements();
+  }, [loadMovements]);
 
   const shown = useMemo(() => {
     return products.filter(
@@ -135,18 +164,39 @@ export default function InventoryPage() {
           (tab === "Low Stock" && p.stock_quantity > 0 && p.stock_quantity < 10) ||
           (tab === "Out of Stock" && p.stock_quantity === 0) ||
           (tab === "Expiring Soon" && false)) &&
-        (catFilter === "All Categories" || p.category === catFilter)
+        (catFilter === "All Categories" || p.category === catFilter) &&
+        (locationFilter === "All Locations" || p.location === locationFilter) &&
+        (supplierFilter === "All Suppliers" || p.supplier === supplierFilter)
     );
-  }, [products, tab, catFilter]);
+  }, [products, tab, catFilter, locationFilter, supplierFilter]);
 
   const categories = useMemo(() => {
     const c = new Set(products.map((p) => p.category).filter(Boolean));
     return ["All Categories", ...Array.from(c)] as string[];
   }, [products]);
+  const locations = useMemo(() => ["All Locations", ...Array.from(new Set(products.map((p) => p.location).filter(Boolean))) as string[]], [products]);
+  const suppliers = useMemo(() => ["All Suppliers", ...Array.from(new Set(products.map((p) => p.supplier).filter(Boolean))) as string[]], [products]);
 
   const totalPages = Math.max(1, Math.ceil(shown.length / itemsPerPage));
   const activePage = Math.min(currentPage, totalPages);
   const paginatedShown = shown.slice((activePage - 1) * itemsPerPage, activePage * itemsPerPage);
+  const visibleIds = paginatedShown.map((product) => product.id);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+  const someVisibleSelected = visibleIds.some((id) => selectedIds.includes(id));
+
+  const toggleVisibleSelection = (checked: boolean) => {
+    setSelectedIds((current) => {
+      if (checked) return Array.from(new Set([...current, ...visibleIds]));
+      return current.filter((id) => !visibleIds.includes(id));
+    });
+  };
+
+  const toggleProductSelection = (id: number, checked: boolean) => {
+    setSelectedIds((current) => {
+      if (checked) return current.includes(id) ? current : [...current, id];
+      return current.filter((item) => item !== id);
+    });
+  };
 
   const stockValue = products.reduce((s, p) => s + Number(p.price) * p.stock_quantity, 0);
   const low = products.filter((p) => p.stock_quantity > 0 && p.stock_quantity < 10).length;
@@ -269,11 +319,11 @@ export default function InventoryPage() {
                 </option>
               ))}
             </select>
-            <select>
-              <option>All Locations</option>
+            <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
+              {locations.map((location) => <option key={location}>{location}</option>)}
             </select>
-            <select>
-              <option>All Suppliers</option>
+            <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
+              {suppliers.map((supplier) => <option key={supplier}>{supplier}</option>)}
             </select>
             <button className="gold-btn" onClick={() => router.push("/admin/products")}>
               <Plus size={15} aria-hidden="true" /> Add Stock
@@ -307,8 +357,17 @@ export default function InventoryPage() {
             <thead>
               <tr>
                 {cols.check && (
-                  <th>
-                    <CheckSquare size={15} aria-label="Select" />
+                  <th className="select-cell">
+                    <input
+                      type="checkbox"
+                      className="inventory-row-checkbox"
+                      checked={allVisibleSelected}
+                      ref={(input) => {
+                        if (input) input.indeterminate = !allVisibleSelected && someVisibleSelected;
+                      }}
+                      onChange={(event) => toggleVisibleSelection(event.target.checked)}
+                      aria-label="Select all visible inventory items"
+                    />
                   </th>
                 )}
                 {cols.prod && <th>Product</th>}
@@ -329,8 +388,14 @@ export default function InventoryPage() {
               {paginatedShown.map((p, i) => (
                 <tr key={p.id} className={p.stock_quantity < 10 ? "warning-row" : ""}>
                   {cols.check && (
-                    <td>
-                      <Square size={15} aria-label={`Select ${p.name}`} />
+                    <td className="select-cell">
+                      <input
+                        type="checkbox"
+                        className="inventory-row-checkbox"
+                        checked={selectedIds.includes(p.id)}
+                        onChange={(event) => toggleProductSelection(p.id, event.target.checked)}
+                        aria-label={`Select ${p.name}`}
+                      />
                     </td>
                   )}
                   {cols.prod && (
@@ -360,15 +425,15 @@ export default function InventoryPage() {
                       </small>
                     </td>
                   )}
-                  {cols.reorder && <td>10</td>}
-                  {cols.loc && <td>{i % 3 === 0 ? "Warehouse A" : "Main Store"}</td>}
-                  {cols.batch && <td>{p.stock_quantity ? `BATCH-2405-${String(i + 1).padStart(3, "0")}` : "-"}</td>}
+                  {cols.reorder && <td>{p.reorder_level || 10}</td>}
+                  {cols.loc && <td>{p.location || "Main Store"}</td>}
+                  {cols.batch && <td>{p.batch_no || "-"}</td>}
                   {cols.price && (
                     <td>
                       Rs. {Number(p.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                     </td>
                   )}
-                  {cols.supplier && <td>{p.brand}</td>}
+                  {cols.supplier && <td>{p.supplier || p.brand}</td>}
                   {cols.status && (
                     <td>
                       <em
@@ -386,17 +451,25 @@ export default function InventoryPage() {
                   )}
                   {cols.updated && (
                     <td>
-                      07 Aug 2026<small>10:15 AM</small>
+                      {p.updated_at ? new Date(p.updated_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
+                      {p.updated_at && <small>{new Date(p.updated_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</small>}
                     </td>
                   )}
                   {cols.actions && (
-                    <td>
+                    <td className="inventory-actions-cell">
                       <button onClick={() => setAdjust(p)} aria-label={`Adjust ${p.name}`}>
                         <Pencil size={15} aria-hidden="true" />
                       </button>
-                      <button aria-label={`More actions for ${p.name}`}>
+                      <button onClick={() => setOpenActions((current) => current === p.id ? null : p.id)} aria-label={`More actions for ${p.name}`}>
                         <MoreVertical size={15} aria-hidden="true" />
                       </button>
+                      {openActions === p.id && (
+                        <div className="inventory-action-menu">
+                          <button onClick={() => router.push(`/admin/products?edit=${p.id}`)}>Edit product</button>
+                          <button onClick={() => { setMovementProduct(String(p.id)); setOpenActions(null); }}>View movements</button>
+                          <button onClick={() => { setAdjust(p); setOpenActions(null); }}>Adjust stock</button>
+                        </div>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -455,6 +528,22 @@ export default function InventoryPage() {
 
         <article className="stock-chart movement-list">
           <h2>Recent Inventory Movement</h2>
+          <div className="movement-filters">
+            <select value={movementType} onChange={(event) => setMovementType(event.target.value)}>
+              <option value="all">All Movements</option>
+              <option value="in">Inward</option>
+              <option value="out">Outward</option>
+              <option value="adjustment">Adjustment</option>
+            </select>
+            <select value={movementProduct} onChange={(event) => setMovementProduct(event.target.value)}>
+              <option value="all">All Products</option>
+              {products.map((product) => (
+                <option key={product.id} value={product.id}>{product.name}</option>
+              ))}
+            </select>
+            <input type="date" value={movementFrom} onChange={(event) => setMovementFrom(event.target.value)} />
+            <input type="date" value={movementTo} onChange={(event) => setMovementTo(event.target.value)} />
+          </div>
           {movements.map((movement) => (
             <div key={movement.id}>
               <p>

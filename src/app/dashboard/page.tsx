@@ -2,6 +2,40 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  BatteryCharging,
+  Bell,
+  Boxes,
+  CalendarDays,
+  ChevronDown,
+  CircleHelp,
+  CircleDot,
+  CreditCard,
+  Filter,
+  Gauge,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Minus,
+  Package,
+  PackageCheck,
+  Plus,
+  Printer,
+  Receipt,
+  ScanBarcode,
+  Search,
+  Settings,
+  ShoppingCart,
+  Star,
+  Trash2,
+  TrendingUp,
+  UserCog,
+  Users,
+  Wallet,
+  Wrench,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 
 const PERMISSION_MAP: Record<string, string> = {
   "/admin/sales": "view_sales",
@@ -11,6 +45,7 @@ const PERMISSION_MAP: Record<string, string> = {
   "/admin/reports": "view_reports",
   "/admin/dashboard": "view_reports",
   "/admin/users": "manage_users",
+  "/admin/purchases": "manage_inventory",
   "/dashboard": "pos_billing",
 };
 
@@ -21,7 +56,6 @@ type Product = {
   stock_quantity: number;
   category?: string;
   sku?: string;
-  visual?: string;
 };
 
 type Customer = {
@@ -33,106 +67,184 @@ type Customer = {
 
 type CartItem = Product & { cartQuantity: number };
 
-const categories = ["All Items", "Engine Oils", "Lubricants", "Filters", "Brake System", "Batteries", "Spark Plugs"];
-const fallbackVisuals = ["🛢️", "🧴", "⚙️", "▤", "▰", "🔋", "♢", "◉"];
+type NavItem = {
+  label: string;
+  href: string;
+  Icon: LucideIcon;
+};
+
+const navItems: NavItem[] = [
+  { label: "POS Billing", href: "/dashboard", Icon: ShoppingCart },
+  { label: "Dashboard", href: "/admin/dashboard", Icon: LayoutDashboard },
+  { label: "Products", href: "/admin/products", Icon: Package },
+  { label: "Inventory", href: "/admin/inventory", Icon: Boxes },
+  { label: "Customers", href: "/admin/customers", Icon: Users },
+  { label: "Sales", href: "/admin/sales", Icon: TrendingUp },
+  { label: "Purchases", href: "/admin/purchases", Icon: PackageCheck },
+  { label: "Reports", href: "/admin/reports", Icon: Gauge },
+  { label: "Users", href: "/admin/users", Icon: UserCog },
+  { label: "Settings", href: "/admin/settings", Icon: Settings },
+];
+
+const paymentIcons: Record<string, LucideIcon> = {
+  Cash: Wallet,
+  Card: CreditCard,
+  UPI: ScanBarcode,
+  Wallet,
+  "Bank Transfer": CreditCard,
+  Credit: Wallet,
+};
+
+type PosSettings = {
+  store_name: string;
+  store_address: string;
+  store_phone: string;
+  gst_number: string;
+  tax_rate: string;
+  invoice_prefix: string;
+  invoice_footer: string;
+  payment_methods: string[];
+};
+
+const defaultPosSettings: PosSettings = {
+  store_name: "Oil Mart",
+  store_address: "123, Industrial Area, New Delhi",
+  store_phone: "",
+  gst_number: "",
+  tax_rate: "18",
+  invoice_prefix: "INV",
+  invoice_footer: "Thank you for your visit. Drive safe. Stay protected.",
+  payment_methods: ["Cash", "Card", "UPI"],
+};
+
+function money(value: number) {
+  return `Rs. ${value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+}
+
+function ProductIcon({ product, className = "" }: { product: Product; className?: string }) {
+  const label = `${product.category || ""} ${product.name}`.toLowerCase();
+  const Icon = label.includes("batter")
+    ? BatteryCharging
+    : label.includes("filter")
+      ? Filter
+      : label.includes("spark") || label.includes("plug")
+        ? Zap
+        : label.includes("brake")
+          ? Wrench
+          : Package;
+
+  return <Icon className={`pos-product-icon ${className}`} aria-hidden="true" strokeWidth={1.8} />;
+}
 
 export default function PosBilling() {
   const router = useRouter();
-  const [user, setUser] = useState<{ id: number, username: string, role: string, permissions: string[] } | null>(null);
+  const [user, setUser] = useState<{ id: number; username: string; role: string; permissions: string[] } | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
-
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
-  
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All Items");
   const [payment, setPayment] = useState("Cash");
   const [customerId, setCustomerId] = useState<number | "">("");
-  
   const [checking, setChecking] = useState(false);
   const [notice, setNotice] = useState("");
-  const [lastInvoice, setLastInvoice] = useState<{ id: number, date: string, items: CartItem[], total: number, tax: number, subtotal: number, customerName: string } | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [settings, setSettings] = useState<PosSettings>(defaultPosSettings);
+  const [lastInvoice, setLastInvoice] = useState<{ id: number; date: string; items: CartItem[]; total: number; tax: number; subtotal: number; customerName: string } | null>(null);
+
+  const fetchProducts = async () => {
+    const response = await fetch("/api/products", { cache: "no-store" });
+    const data = await response.json();
+    if (Array.isArray(data)) {
+      return (data as Product[]).map((product) => ({
+        ...product,
+        category: product.category || "Uncategorized",
+        sku: product.sku || `SKU-${String(product.id).padStart(3, "0")}`,
+      }));
+    }
+    return [];
+  };
 
   useEffect(() => {
-    // Auth Fetch
-    fetch('/api/auth/me', { cache: 'no-store' })
-      .then(res => {
-        if (!res.ok) throw new Error('Not logged in');
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) throw new Error("Not logged in");
         return res.json();
       })
-      .then(data => {
-        if (data.role !== 'admin' && !data.permissions.includes('pos_billing')) {
-          router.push('/');
+      .then((data) => {
+        if (data.role !== "admin" && !data.permissions.includes("pos_billing")) {
+          router.push("/");
         } else {
           setUser(data);
           setLoadingAuth(false);
         }
       })
-      .catch(() => {
-        router.push('/');
-      });
+      .catch(() => router.push("/"));
 
-    // Fetch Products
-    fetch("/api/products", { cache: "no-store" })
-      .then(r => r.json())
-      .then(d => {
-        if (Array.isArray(d)) {
-          const live = (d as Product[]).map((p, i) => ({
-            ...p,
-            category: p.category || "Uncategorized",
-            sku: p.sku || `SKU-${String(p.id).padStart(3, "0")}`,
-            visual: fallbackVisuals[i % fallbackVisuals.length]
-          }));
-          setProducts(live);
-        }
-      })
-      .catch(e => console.error("Error loading products", e));
-
-    // Fetch Customers
+    fetchProducts()
+      .then((items) => setProducts(items))
+      .catch(() => console.error("Error loading products"));
     fetch("/api/customers", { cache: "no-store" })
-      .then(r => r.json())
-      .then(d => {
-        if (Array.isArray(d)) {
-          setCustomers(d);
-        }
+      .then((r) => r.json())
+      .then((d) => Array.isArray(d) && setCustomers(d))
+      .catch(() => console.error("Error loading customers"));
+    fetch("/api/settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        const next = { ...defaultPosSettings, ...data };
+        setSettings(next);
+        setPayment((current) => Array.isArray(next.payment_methods) && next.payment_methods.includes(current) ? current : next.payment_methods[0] || "Cash");
       })
-      .catch(e => console.error("Error loading customers", e));
+      .catch(() => setSettings(defaultPosSettings));
   }, [router]);
 
   const shown = useMemo(() => {
-    return products.filter(p => {
-      const matchCategory = category === "All Items" || p.category === category;
-      const matchQuery = !query || `${p.name} ${p.sku}`.toLowerCase().includes(query.toLowerCase());
+    return products.filter((product) => {
+      const matchCategory = category === "All Items" || product.category === category;
+      const matchQuery = !query || `${product.name} ${product.sku}`.toLowerCase().includes(query.toLowerCase());
       return matchCategory && matchQuery;
     });
   }, [products, category, query]);
 
-  const subtotal = cart.reduce((s, x) => s + Number(x.price) * x.cartQuantity, 0);
-  const tax = subtotal * 0.18; // 18% GST fixed for now
+  const productCategories = useMemo(() => {
+    const values = Array.from(new Set(products.map((product) => product.category || "Uncategorized")));
+    return ["All Items", ...values];
+  }, [products]);
+  const paymentMethods = settings.payment_methods.length ? settings.payment_methods : defaultPosSettings.payment_methods;
+  const taxRate = Number(settings.tax_rate || 0);
+  const lowStockCount = products.filter((product) => product.stock_quantity > 0 && product.stock_quantity < 10).length;
+  const outOfStockCount = products.filter((product) => product.stock_quantity === 0).length;
+  const notificationCount = lowStockCount + outOfStockCount;
+  const subtotal = cart.reduce((sum, item) => sum + Number(item.price) * item.cartQuantity, 0);
+  const tax = subtotal * (Number.isFinite(taxRate) ? taxRate / 100 : 0);
   const total = subtotal + tax;
 
-  const add = (p: Product) => {
-    if (p.stock_quantity <= 0) {
-      alert("This item is out of stock!");
+  const add = (product: Product) => {
+    if (product.stock_quantity <= 0) {
+      alert("This item is out of stock.");
       return;
     }
-    setCart(c => {
-      const found = c.find(x => x.id === p.id);
+    setCart((current) => {
+      const found = current.find((item) => item.id === product.id);
       if (found) {
-        return c.map(x => x.id === p.id 
-          ? { ...x, cartQuantity: Math.min(x.cartQuantity + 1, p.stock_quantity) } 
-          : x
+        return current.map((item) =>
+          item.id === product.id ? { ...item, cartQuantity: Math.min(item.cartQuantity + 1, product.stock_quantity) } : item
         );
       }
-      return [...c, { ...p, cartQuantity: 1 }];
+      return [...current, { ...product, cartQuantity: 1 }];
     });
     setLastInvoice(null);
     setNotice("");
   };
 
-  const qty = (id: number, n: number) => {
-    setCart(c => c.map(x => x.id === id ? { ...x, cartQuantity: Math.max(1, Math.min(x.stock_quantity, n)) } : x));
+  const qty = (id: number, nextQuantity: number) => {
+    setCart((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, cartQuantity: Math.max(1, Math.min(item.stock_quantity, nextQuantity)) } : item
+      )
+    );
   };
 
   const checkout = async () => {
@@ -140,73 +252,55 @@ export default function PosBilling() {
     setChecking(true);
     setNotice("");
     try {
-      const r = await fetch("/api/sales", {
+      const response = await fetch("/api/sales", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cashier_id: user?.id || 1,
           customer_id: customerId === "" ? null : customerId,
           payment_method: payment,
-          items: cart.map(x => ({ product_id: x.id, quantity: x.cartQuantity }))
-        })
+          items: cart.map((item) => ({ product_id: item.id, quantity: item.cartQuantity })),
+        }),
       });
-      const data = await r.json();
-      
-      if (r.ok) {
-        setNotice("Sale completed successfully!");
-        
-        // Setup Invoice Print
-        const selectedCustomer = customers.find(c => c.id === customerId);
+      const data = await response.json();
+
+      if (response.ok) {
+        const selectedCustomer = customers.find((customer) => customer.id === customerId);
         setLastInvoice({
           id: data.saleId,
-          date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+          date: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
           items: [...cart],
           subtotal,
           tax,
           total,
-          customerName: selectedCustomer ? selectedCustomer.name : "Walk-in Customer"
+          customerName: selectedCustomer ? selectedCustomer.name : "Walk-in Customer",
         });
-        
+        setNotice("Sale completed successfully.");
         setCart([]);
-        
-        // Refresh products to show updated stock
-        const pRes = await fetch("/api/products", { cache: "no-store" });
-        const pData = await pRes.json();
-        if (Array.isArray(pData)) {
-          setProducts((pData as Product[]).map((p, i) => ({
-            ...p,
-            category: p.category || "Uncategorized",
-            sku: p.sku || `SKU-${String(p.id).padStart(3, "0")}`,
-            visual: fallbackVisuals[i % fallbackVisuals.length]
-          })));
-        }
-
+        setProducts(await fetchProducts());
       } else {
         setNotice(data.error || "Could not complete sale. Please check stock.");
       }
     } catch {
-      setNotice("Unable to connect to sales service");
+      setNotice("Unable to connect to sales service.");
     } finally {
       setChecking(false);
     }
   };
 
+  const signOut = () => {
+    document.cookie = "auth_token=; Max-Age=0; path=/";
+    router.push("/");
+  };
+
   if (loadingAuth || !user) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Loading POS...</div>;
+    return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>Loading POS...</div>;
   }
 
-  const navItems = [
-    ["🛒", "POS Billing"], ["⌂", "Dashboard"], ["◇", "Products"], 
-    ["▣", "Inventory"], ["♙", "Customers"], ["▤", "Sales"], 
-    ["□", "Purchases"], ["▧", "Reports"], ["♙", "Users"], ["⚙", "Settings"]
-  ];
-
-  const filteredNav = navItems.filter(item => {
-    if (user.role === 'admin') return true;
-    if (item[1] === "Settings" || item[1] === "Purchases") return true;
-    
-    const href = item[1] === "POS Billing" ? "/dashboard" : "/admin/" + item[1].toLowerCase().replace(' ', '-');
-    const req = PERMISSION_MAP[href];
+  const filteredNav = navItems.filter((item) => {
+    if (user.role === "admin") return true;
+    if (item.label === "Settings" || item.label === "Purchases") return true;
+    const req = PERMISSION_MAP[item.href];
     return !req || user.permissions.includes(req);
   });
 
@@ -214,35 +308,114 @@ export default function PosBilling() {
     <div className="pos-shell">
       <aside className="pos-sidebar">
         <div className="pos-logo">
-          <span>◒</span>
+          <span className="admin-logo-mark" aria-hidden="true"><i /></span>
           <div>
             <b>OIL <em>MART</em> <i>POS</i></b>
             <small>Oil &amp; Spare Parts Store</small>
           </div>
         </div>
         <nav>
-          {filteredNav.map(([i, l]) => (
-            <button className={l === "POS Billing" ? "active" : ""} key={l} onClick={() => l !== "POS Billing" && router.push("/admin/" + l.toLowerCase().replace(' ', '-'))}>
-              <span>{i}</span>{l}
+          {filteredNav.map(({ Icon, label, href }) => (
+            <button className={href === "/dashboard" ? "active" : ""} key={href} onClick={() => href !== "/dashboard" && router.push(href)}>
+              <Icon className="pos-nav-icon" aria-hidden="true" strokeWidth={1.9} />
+              {label}
             </button>
           ))}
         </nav>
         <div className="pos-side-bottom">
-          <button>ⓘ　Help &amp; Support</button>
-          <button onClick={() => { document.cookie = 'auth_token=; Max-Age=0; path=/'; router.push("/"); }}>↪　Logout</button>
+          <button><CircleHelp className="pos-nav-icon" aria-hidden="true" /> Help &amp; Support</button>
+          <button onClick={() => { document.cookie = "auth_token=; Max-Age=0; path=/"; router.push("/"); }}>
+            <LogOut className="pos-nav-icon" aria-hidden="true" /> Logout
+          </button>
         </div>
       </aside>
 
       <div className="pos-workspace">
-        <header className="pos-topbar">
-          <button className="pos-menu">☰</button>
-          <h1>POS Billing <span>Cashier Mode</span></h1>
+        <header className="pos-topbar admin-mode-bar">
+          <button className="pos-menu" aria-label="Menu"><Menu aria-hidden="true" size={22} /></button>
+          <div className="page-title pos-page-title">
+            <h1>POS Billing</h1>
+            <p>Cashier workspace / Welcome back, {user.username}</p>
+          </div>
           <div className="pos-top-actions">
-            <button>Shift #CSH-001　⌄</button>
-            <button>{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}　 <i /> Online</button>
-            <div className="cashier">
-              <span>{user.username.charAt(0).toUpperCase()}</span>
-              <p><b>Cashier</b><small>{user.username}</small></p>⌄
+            <button className="pos-status-pill">
+              <ShoppingCart size={16} aria-hidden="true" />
+              <span>Shift #CSH-001</span>
+              <ChevronDown size={15} aria-hidden="true" />
+            </button>
+            <button className="pos-status-pill">
+              <CalendarDays size={16} aria-hidden="true" />
+              <span>{new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+              <em><CircleDot size={12} aria-hidden="true" /> Online</em>
+            </button>
+            <div className="pos-topbar-popover pos-notification-control">
+              <button
+                className="pos-bell"
+                aria-label="Notifications"
+                aria-expanded={showNotifications}
+                onClick={() => {
+                  setShowNotifications((current) => !current);
+                  setShowProfile(false);
+                }}
+              >
+                <Bell aria-hidden="true" size={20} />
+                <i>{notificationCount}</i>
+              </button>
+              {showNotifications && (
+                <div className="pos-notification-menu">
+                  <header>
+                    <b>Notifications</b>
+                    <small>Today</small>
+                  </header>
+                  <button onClick={() => router.push("/admin/inventory")}>
+                    <PackageCheck size={16} aria-hidden="true" />
+                    <span><b>Low stock alert</b><small>{lowStockCount} items need reorder</small></span>
+                  </button>
+                  <button onClick={() => router.push("/admin/sales")}>
+                    <Receipt size={16} aria-hidden="true" />
+                    <span><b>Sales history</b><small>Review latest invoices</small></span>
+                  </button>
+                  <button onClick={() => router.push("/admin/purchases")}>
+                    <ShoppingCart size={16} aria-hidden="true" />
+                    <span><b>Out of stock</b><small>{outOfStockCount} items need purchase stock</small></span>
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="pos-topbar-popover pos-profile-control">
+              <button
+                className="cashier"
+                aria-label="Open cashier profile"
+                aria-expanded={showProfile}
+                onClick={() => {
+                  setShowProfile((current) => !current);
+                  setShowNotifications(false);
+                }}
+              >
+                <span>{user.username.charAt(0).toUpperCase()}</span>
+                <p><b>{user.username}</b><small>{user.role === "admin" ? "Super Admin" : "Cashier"}</small></p>
+                <ChevronDown className="cashier-chevron" size={15} aria-hidden="true" />
+              </button>
+              {showProfile && (
+                <div className="profile-menu pos-profile-menu">
+                  <div>
+                    <span>{user.username.charAt(0).toUpperCase()}</span>
+                    <p>
+                      <b>{user.username}</b>
+                      <small>{user.role === "admin" ? "Super Admin" : "Cashier"}</small>
+                    </p>
+                  </div>
+                  <button onClick={() => router.push("/admin/dashboard")}>
+                    <LayoutDashboard size={16} aria-hidden="true" /> Admin Dashboard
+                  </button>
+                  <button onClick={() => router.push("/admin/settings")}>
+                    <Settings size={16} aria-hidden="true" /> Settings
+                  </button>
+                  <button className="danger" onClick={signOut}>
+                    <LogOut size={16} aria-hidden="true" /> Logout
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -250,28 +423,28 @@ export default function PosBilling() {
         <main className="pos-main">
           <section className="catalog">
             <div className="product-search">
-              <span>⌕</span>
-              <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Scan Barcode / Search by SKU, Part No., Product Name..." />
-              <button>▣</button>
+              <Search className="catalog-icon" aria-hidden="true" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Scan barcode, SKU, part number, or product name" />
+              <button aria-label="Scan barcode"><ScanBarcode size={18} aria-hidden="true" /></button>
             </div>
-            
-            <div className="category-tabs" style={{ overflowX: 'auto', whiteSpace: 'nowrap' }}>
-              {categories.map(c => (
-                <button className={category === c ? "active" : ""} onClick={() => setCategory(c)} key={c}>
-                  {c === "Engine Oils" && "♨　"}{c}
+
+            <div className="category-tabs" style={{ overflowX: "auto", whiteSpace: "nowrap" }}>
+              {productCategories.map((item) => (
+                <button className={category === item ? "active" : ""} onClick={() => setCategory(item)} key={item}>
+                  {item}
                 </button>
               ))}
             </div>
 
             <div className="product-grid">
-              {shown.map((p, i) => (
-                <article key={p.id} onClick={() => add(p)} style={{ opacity: p.stock_quantity <= 0 ? 0.5 : 1 }}>
-                  <button className="favorite">☆</button>
-                  <div className={`product-visual pv${i % 6}`}>{p.visual || "🛢️"}</div>
-                  <h3 style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</h3>
-                  <small>Stock: {p.stock_quantity}</small>
-                  <p>SKU: {p.sku}</p>
-                  <strong>Rs. {Number(p.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong>
+              {shown.map((product) => (
+                <article key={product.id} onClick={() => add(product)} style={{ opacity: product.stock_quantity <= 0 ? 0.5 : 1 }}>
+                  <button className="favorite" aria-label={`Favorite ${product.name}`}><Star size={18} aria-hidden="true" /></button>
+                  <div className="product-visual"><ProductIcon product={product} className="large" /></div>
+                  <h3>{product.name}</h3>
+                  <small>Stock: {product.stock_quantity}</small>
+                  <p>SKU: {product.sku}</p>
+                  <strong>{money(Number(product.price))}</strong>
                 </article>
               ))}
               {!shown.length && <div className="no-products">No matching products found.</div>}
@@ -283,20 +456,20 @@ export default function PosBilling() {
 
             <div className="customer-bar">
               <div>
-                <span>♙</span>
+                <Users className="catalog-icon" aria-hidden="true" />
                 <p>
                   <small>Customer</small>
-                  <select value={customerId} onChange={e => setCustomerId(e.target.value ? Number(e.target.value) : "")}>
+                  <select value={customerId} onChange={(event) => setCustomerId(event.target.value ? Number(event.target.value) : "")}>
                     <option value="">Walk-in Customer</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ""}</option>
+                    {customers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>{customer.name} {customer.phone ? `(${customer.phone})` : ""}</option>
                     ))}
                   </select>
                 </p>
               </div>
-              <button onClick={() => router.push('/admin/customers')}>＋　Manage Customers</button>
+              <button onClick={() => router.push("/admin/customers")}><Plus size={16} aria-hidden="true" /> Manage Customers</button>
               <aside>
-                <button className="clear" onClick={() => setCart([])}>♲　Clear Cart</button>
+                <button className="clear" onClick={() => setCart([])}><Trash2 size={16} aria-hidden="true" /> Clear Cart</button>
               </aside>
             </div>
           </section>
@@ -305,93 +478,102 @@ export default function PosBilling() {
             <div className="cart-title">
               <h2>Current Cart <small>({cart.length} Items)</small></h2>
             </div>
-            
+
             <div className="cart-items">
-              {cart.map(x => (
-                <article key={x.id}>
-                  <div className="cart-thumb">{x.visual || "🛢️"}</div>
+              {cart.map((item) => (
+                <article key={item.id}>
+                  <div className="cart-thumb"><ProductIcon product={item} /></div>
                   <p>
-                    <b style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{x.name}</b>
-                    <small>SKU: {x.sku}</small>
+                    <b>{item.name}</b>
+                    <small>SKU: {item.sku}</small>
                   </p>
-                  <button className="trash" onClick={() => setCart(c => c.filter(i => i.id !== x.id))}>♲</button>
+                  <button className="trash" onClick={() => setCart((current) => current.filter((cartItem) => cartItem.id !== item.id))} aria-label={`Remove ${item.name}`}>
+                    <Trash2 size={16} aria-hidden="true" />
+                  </button>
                   <div className="quantity">
-                    <button onClick={() => qty(x.id, x.cartQuantity - 1)}>−</button>
-                    <span>{x.cartQuantity}</span>
-                    <button onClick={() => qty(x.id, x.cartQuantity + 1)}>＋</button>
+                    <button onClick={() => qty(item.id, item.cartQuantity - 1)} aria-label={`Decrease ${item.name}`}><Minus size={14} aria-hidden="true" /></button>
+                    <span>{item.cartQuantity}</span>
+                    <button onClick={() => qty(item.id, item.cartQuantity + 1)} aria-label={`Increase ${item.name}`}><Plus size={14} aria-hidden="true" /></button>
                   </div>
-                  <strong>Rs. {(Number(x.price) * x.cartQuantity).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong>
+                  <strong>{money(Number(item.price) * item.cartQuantity)}</strong>
                 </article>
               ))}
               {!cart.length && <div className="empty-cart">Your cart is empty<br /><small>Select a product to begin</small></div>}
             </div>
 
             <div className="totals">
-              <p>Subtotal ({cart.length} Items)<b>Rs. {subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b></p>
-              <p>Tax (18% GST)<b>Rs. {tax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b></p>
-              <h3>Total Payable <b>Rs. {total.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b></h3>
+              <p>Subtotal ({cart.length} Items)<b>{money(subtotal)}</b></p>
+              <p>Tax ({Number.isFinite(taxRate) ? taxRate : 0}% GST)<b>{money(tax)}</b></p>
+              <h3>Total Payable <b>{money(total)}</b></h3>
             </div>
 
             <div className="payments">
               <h3>Payment Methods</h3>
               <div>
-                {[["▣", "Cash"], ["▤", "Card"], ["◈", "UPI"]].map(([i, l]) => (
-                  <button onClick={() => setPayment(l)} className={payment === l ? "active" : ""} key={l}>
-                    <span>{i}</span>{l}
-                  </button>
-                ))}
+                {paymentMethods.map((method) => {
+                  const Icon = paymentIcons[method] || Wallet;
+                  return (
+                    <button onClick={() => setPayment(method)} className={payment === method ? "active" : ""} key={method}>
+                      <span><Icon size={19} aria-hidden="true" /></span>{method}
+                    </button>
+                  );
+                })}
               </div>
               <button className="complete-sale" onClick={checkout} disabled={!cart.length || checking}>
-                ▣　{checking ? "Processing Sale..." : "Complete Sale"}
+                <Receipt size={17} aria-hidden="true" /> {checking ? "Processing Sale..." : "Complete Sale"}
               </button>
-              {notice && <p className="sale-notice" style={{ marginTop: '12px', fontSize: '13px', color: '#16a34a', background: '#dcfce7', padding: '8px', borderRadius: '4px', textAlign: 'center', fontWeight: 'bold' }}>{notice}</p>}
+              {notice && <p className="sale-notice" style={{ marginTop: "12px", fontSize: "13px", color: notice.includes("success") ? "#16a34a" : "#dc2626", background: notice.includes("success") ? "#dcfce7" : "#fff1f1", padding: "8px", borderRadius: "4px", textAlign: "center", fontWeight: "bold" }}>{notice}</p>}
             </div>
 
             {lastInvoice && (
-              <div className="invoice" style={{ marginTop: '20px', padding: '16px', border: '2px dashed #cbd5e1', borderRadius: '8px' }}>
-                <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h2 style={{ fontSize: '16px', margin: 0 }}>INVOICE</h2>
-                  <b style={{ fontSize: '14px' }}>#INV-{String(lastInvoice.id).padStart(6, '0')}</b>
+              <div className="invoice" style={{ marginTop: "20px", padding: "16px", border: "2px dashed #cbd5e1", borderRadius: "8px" }}>
+                <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                  <h2 style={{ fontSize: "16px", margin: 0 }}>INVOICE</h2>
+                  <b style={{ fontSize: "14px" }}>#{settings.invoice_prefix}-{String(lastInvoice.id).padStart(6, "0")}</b>
                 </header>
-                <div className="invoice-brand" style={{ marginBottom: '16px', fontSize: '12px' }}>
+                <div className="invoice-brand" style={{ marginBottom: "16px", fontSize: "12px" }}>
                   <p>
-                    <b style={{ fontSize: '14px', display: 'block' }}>Oil Mart</b>
-                    <small>123, Industrial Area, New Delhi</small>
+                    <b style={{ fontSize: "14px", display: "block" }}>{settings.store_name}</b>
+                    <small>{settings.store_address}</small>
+                    {settings.store_phone && <small style={{ display: "block" }}>Phone: {settings.store_phone}</small>}
+                    {settings.gst_number && <small style={{ display: "block" }}>GST: {settings.gst_number}</small>}
                   </p>
-                  <aside style={{ textAlign: 'right', marginTop: '8px' }}>
+                  <aside style={{ textAlign: "right", marginTop: "8px" }}>
                     Date: {lastInvoice.date}<br />
                     Cashier: {user.username}<br />
                     Customer: {lastInvoice.customerName}
                   </aside>
                 </div>
-                <table style={{ width: '100%', fontSize: '12px', marginBottom: '16px', borderCollapse: 'collapse' }}>
+                <table style={{ width: "100%", fontSize: "12px", marginBottom: "16px", borderCollapse: "collapse" }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
-                      <th style={{ paddingBottom: '4px' }}>Item</th>
-                      <th style={{ paddingBottom: '4px' }}>Qty</th>
-                      <th style={{ paddingBottom: '4px', textAlign: 'right' }}>Total</th>
+                    <tr style={{ borderBottom: "1px solid #e2e8f0", textAlign: "left" }}>
+                      <th style={{ paddingBottom: "4px" }}>Item</th>
+                      <th style={{ paddingBottom: "4px" }}>Qty</th>
+                      <th style={{ paddingBottom: "4px", textAlign: "right" }}>Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {lastInvoice.items.map(x => (
-                      <tr key={x.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '6px 0' }}>{x.name}</td>
-                        <td style={{ padding: '6px 0' }}>{x.cartQuantity}</td>
-                        <td style={{ padding: '6px 0', textAlign: 'right' }}>{(Number(x.price) * x.cartQuantity).toLocaleString("en-IN")}</td>
+                    {lastInvoice.items.map((item) => (
+                      <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "6px 0" }}>{item.name}</td>
+                        <td style={{ padding: "6px 0" }}>{item.cartQuantity}</td>
+                        <td style={{ padding: "6px 0", textAlign: "right" }}>{money(Number(item.price) * item.cartQuantity)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <div className="invoice-total" style={{ fontSize: '13px', borderTop: '2px solid #e2e8f0', paddingTop: '8px' }}>
-                  <p style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0' }}>Subtotal <b>Rs. {lastInvoice.subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b></p>
-                  <p style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0' }}>Tax (18% GST) <b>Rs. {lastInvoice.tax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b></p>
-                  <h3 style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0 0 0', fontSize: '16px' }}>Total <b>Rs. {lastInvoice.total.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b></h3>
+                <div className="invoice-total" style={{ fontSize: "13px", borderTop: "2px solid #e2e8f0", paddingTop: "8px" }}>
+                  <p style={{ display: "flex", justifyContent: "space-between", margin: "4px 0" }}>Subtotal <b>{money(lastInvoice.subtotal)}</b></p>
+                  <p style={{ display: "flex", justifyContent: "space-between", margin: "4px 0" }}>Tax ({Number.isFinite(taxRate) ? taxRate : 0}% GST) <b>{money(lastInvoice.tax)}</b></p>
+                  <h3 style={{ display: "flex", justifyContent: "space-between", margin: "8px 0 0 0", fontSize: "16px" }}>Total <b>{money(lastInvoice.total)}</b></h3>
                 </div>
-                <small className="thanks" style={{ display: 'block', textAlign: 'center', marginTop: '16px', color: '#64748b' }}>
-                  Thank you for your visit!<br />Drive safe, Stay protected.
+                <small className="thanks" style={{ display: "block", textAlign: "center", marginTop: "16px", color: "#64748b" }}>
+                  {settings.invoice_footer}
                 </small>
-                <div style={{ textAlign: 'center', marginTop: '16px' }}>
-                  <button onClick={() => window.print()} style={{ background: '#3b82f6', color: 'white', padding: '6px 12px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '12px' }}>🖨️ Print Invoice</button>
+                <div style={{ textAlign: "center", marginTop: "16px" }}>
+                  <button onClick={() => window.print()} style={{ background: "#3b82f6", color: "white", padding: "6px 12px", borderRadius: "4px", border: "none", cursor: "pointer", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                    <Printer size={15} aria-hidden="true" /> Print Invoice
+                  </button>
                 </div>
               </div>
             )}

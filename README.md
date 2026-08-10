@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Oil Mart POS
 
-## Getting Started
+Oil Mart POS is a Next.js admin and cashier system for oil and spare-parts stores.
 
-First, run the development server:
+## Main Features
+
+- Admin dashboard with revenue, orders, stock alerts, recent sales, and top products.
+- POS billing with cart, customers, saved payment methods, tax, invoice preview, and stock deduction.
+- Product, customer, user, sales, inventory, purchase, report, and settings modules.
+- Inventory movement history for sales, purchases, and manual stock adjustments.
+- Purchase receiving with stock increase, edit, cancel, delete, and CSV export.
+- Settings for store profile, invoice/payment settings, JSON backup export, and full backup import.
+
+## Setup
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Create and seed the database:
+
+```bash
+npm run db:start
+npm run db:inventory
+```
+
+Start the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Default Users
 
-## Learn More
+- Admin: `admin` / `admin123`
+- Cashier: `cashier` / `cashier123`
 
-To learn more about Next.js, take a look at the following resources:
+## Database Environment
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The app uses MySQL. Defaults:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```text
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=
+MYSQL_DATABASE=oil_mart
+```
 
-## Deploy on Vercel
+## Useful Commands
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run db:inventory
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Notes
+
+- Start MySQL before signing in.
+- Run `npm run db:inventory` after a fresh clone or when inventory, purchase, or sales columns are missing.
+- The login API no longer uses a demo fallback when the database is unavailable.

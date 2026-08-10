@@ -44,7 +44,8 @@ export async function GET() {
   try {
     await ensureInventoryMovementTable();
     const [items] = await pool.query(`
-      SELECT id, name, description, price, stock_quantity, sku, category, brand
+      SELECT id, name, description, price, stock_quantity, sku, barcode, category, brand,
+             reorder_level, location, batch_no, supplier, updated_at
       FROM products
       ORDER BY name ASC
     `);

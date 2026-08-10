@@ -5,12 +5,27 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('product_id');
+    const type = searchParams.get('type');
+    const dateFrom = searchParams.get('date_from');
+    const dateTo = searchParams.get('date_to');
     const limit = Math.min(Math.max(Number(searchParams.get('limit')) || 50, 1), 200);
     const values: Array<string | number> = [];
-    let where = '';
+    const where: string[] = [];
     if (productId) {
-      where = 'WHERE m.product_id = ?';
+      where.push('m.product_id = ?');
       values.push(productId);
+    }
+    if (type && type !== 'All Types') {
+      where.push('m.movement_type = ?');
+      values.push(type);
+    }
+    if (dateFrom) {
+      where.push('DATE(m.created_at) >= ?');
+      values.push(dateFrom);
+    }
+    if (dateTo) {
+      where.push('DATE(m.created_at) <= ?');
+      values.push(dateTo);
     }
     values.push(limit);
 
@@ -22,7 +37,7 @@ export async function GET(request: Request) {
        FROM inventory_movements m
        JOIN products p ON p.id = m.product_id
        LEFT JOIN users u ON u.id = m.created_by
-       ${where}
+       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
        ORDER BY m.created_at DESC, m.id DESC
        LIMIT ?`,
       values

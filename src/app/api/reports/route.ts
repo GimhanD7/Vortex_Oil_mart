@@ -58,13 +58,42 @@ export async function GET() {
       ORDER BY total DESC
     `);
 
+    const [paymentRows] = await pool.query(`
+      SELECT COALESCE(payment_method, 'Cash') AS payment_method, COUNT(*) AS orders, SUM(total_amount) AS total
+      FROM sales
+      WHERE status IS NULL OR status != 'refunded'
+      GROUP BY COALESCE(payment_method, 'Cash')
+      ORDER BY total DESC
+    `);
+
+    const [purchaseRows] = await pool.query(`
+      SELECT DATE(created_at) AS date, COUNT(*) AS purchases, SUM(total_amount) AS total
+      FROM purchases
+      WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `);
+
+    const [movementRows] = await pool.query(`
+      SELECT movement_type, COUNT(*) AS transactions,
+             SUM(quantity_change) AS quantity,
+             SUM(ABS(quantity_change) * unit_price) AS value
+      FROM inventory_movements
+      WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+      GROUP BY movement_type
+      ORDER BY value DESC
+    `);
+
     return NextResponse.json({
       daily: dailyRows,
       monthly: monthlyRows,
       yearly: yearlyRows,
       brands: brandRows,
       categories: categoryRows,
-      staff: staffRows
+      staff: staffRows,
+      payment_methods: paymentRows,
+      purchases: purchaseRows,
+      inventory_movements: movementRows
     });
   } catch (error) {
     console.error('Error fetching reports data:', error);
