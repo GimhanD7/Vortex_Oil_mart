@@ -1,6 +1,34 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  AlertTriangle,
+  Armchair,
+  BatteryCharging,
+  Box,
+  CheckSquare,
+  CircleStop,
+  CloudRain,
+  Cog,
+  Columns3,
+  Filter,
+  IndianRupee,
+  Lightbulb,
+  Link,
+  MapPinHouse,
+  MoreVertical,
+  Package,
+  PackageX,
+  Pencil,
+  Plus,
+  SlidersHorizontal,
+  Sparkles,
+  Square,
+  Wrench,
+  X,
+  Zap,
+} from "lucide-react";
 
 type Product = {
   id: number;
@@ -14,36 +42,55 @@ type Product = {
   visual?: string;
 };
 
-const getCategoryIcon = (category: string) => {
-  const c = category.toLowerCase();
-  if (c.includes('engine') || c.includes('oil')) return "🛢️";
-  if (c.includes('gear') || c.includes('lubricant') || c.includes('grease')) return "⚙️";
-  if (c.includes('filter')) return "🌪️";
-  if (c.includes('brake') || c.includes('pad') || c.includes('shoe')) return "🛑";
-  if (c.includes('batter')) return "🔋";
-  if (c.includes('spark') || c.includes('ignition') || c.includes('plug')) return "⚡";
-  if (c.includes('coolant') || c.includes('antfreeze') || c.includes('radiator')) return "❄️";
-  if (c.includes('wiper') || c.includes('wash')) return "🌧️";
-  if (c.includes('bulb') || c.includes('light') || c.includes('lamp')) return "💡";
-  if (c.includes('tire') || c.includes('tyre') || c.includes('wheel')) return "🛞";
-  if (c.includes('belt') || c.includes('chain')) return "⛓️";
-  if (c.includes('exhaust') || c.includes('muffler')) return "💨";
-  if (c.includes('suspension') || c.includes('shock') || c.includes('spring')) return "🛠️";
-  if (c.includes('tool') || c.includes('equipment')) return "🔧";
-  if (c.includes('polish') || c.includes('wax') || c.includes('cleaner') || c.includes('shampoo')) return "🧽";
-  if (c.includes('accessory') || c.includes('mat') || c.includes('cover')) return "💺";
-  return "📦";
+type MovementSummary = {
+  transactions: number;
+  total_inward: number;
+  total_outward: number;
 };
 
+type InventoryMovement = {
+  id: number;
+  product_name: string;
+  movement_type: string;
+  quantity_change: number;
+  stock_before: number;
+  stock_after: number;
+  unit_price: string;
+  reference_no: string | null;
+  created_at: string;
+};
+
+function CategoryIcon({ category, className = "" }: { category: string; className?: string }) {
+  const props = { className: className || "table-product-icon", "aria-hidden": true, size: 22, strokeWidth: 1.9 };
+  const c = category.toLowerCase();
+  if (c.includes("engine") || c.includes("oil")) return <Package {...props} />;
+  if (c.includes("gear") || c.includes("lubricant") || c.includes("grease")) return <Cog {...props} />;
+  if (c.includes("filter")) return <Filter {...props} />;
+  if (c.includes("brake") || c.includes("pad") || c.includes("shoe")) return <CircleStop {...props} />;
+  if (c.includes("batter")) return <BatteryCharging {...props} />;
+  if (c.includes("spark") || c.includes("ignition") || c.includes("plug")) return <Zap {...props} />;
+  if (c.includes("coolant") || c.includes("radiator") || c.includes("wiper") || c.includes("wash")) return <CloudRain {...props} />;
+  if (c.includes("bulb") || c.includes("light") || c.includes("lamp")) return <Lightbulb {...props} />;
+  if (c.includes("tire") || c.includes("tyre") || c.includes("wheel")) return <CircleStop {...props} />;
+  if (c.includes("belt") || c.includes("chain")) return <Link {...props} />;
+  if (c.includes("suspension") || c.includes("shock") || c.includes("spring") || c.includes("tool") || c.includes("equipment")) return <Wrench {...props} />;
+  if (c.includes("polish") || c.includes("wax") || c.includes("cleaner") || c.includes("shampoo")) return <Sparkles {...props} />;
+  if (c.includes("accessory") || c.includes("mat") || c.includes("cover")) return <Armchair {...props} />;
+  return <Box {...props} />;
+}
+
 export default function InventoryPage() {
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [tab, setTab] = useState("All Items");
   const [catFilter, setCatFilter] = useState("All Categories");
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(10);
   const [adjust, setAdjust] = useState<Product | null>(null);
   const [amount, setAmount] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [movementSummary, setMovementSummary] = useState<MovementSummary>({ transactions: 0, total_inward: 0, total_outward: 0 });
+  const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [showCols, setShowCols] = useState(false);
   const [cols, setCols] = useState({ check: true, prod: true, sku: true, cat: true, stock: true, reorder: true, loc: true, batch: true, price: true, supplier: true, status: true, updated: true, actions: true });
 
@@ -58,12 +105,23 @@ export default function InventoryPage() {
               sku: p.sku || `SKU-${String(p.id).padStart(3, "0")}`,
               category: p.category || "General",
               brand: p.brand || "Generic",
-              visual: p.visual || getCategoryIcon(p.category || "General"),
             }))
           );
         }
+        if (d.movements) {
+          setMovementSummary({
+            transactions: Number(d.movements.transactions || 0),
+            total_inward: Number(d.movements.total_inward || 0),
+            total_outward: Number(d.movements.total_outward || 0),
+          });
+        }
       })
       .catch(() => {});
+
+    fetch("/api/inventory/movements?limit=6", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => Array.isArray(d) && setMovements(d))
+      .catch(() => setMovements([]));
   };
 
   useEffect(() => {
@@ -87,15 +145,50 @@ export default function InventoryPage() {
   }, [products]);
 
   const totalPages = Math.max(1, Math.ceil(shown.length / itemsPerPage));
-  const paginatedShown = shown.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(1);
-  }, [totalPages, currentPage]);
+  const activePage = Math.min(currentPage, totalPages);
+  const paginatedShown = shown.slice((activePage - 1) * itemsPerPage, activePage * itemsPerPage);
 
   const stockValue = products.reduce((s, p) => s + Number(p.price) * p.stock_quantity, 0);
   const low = products.filter((p) => p.stock_quantity > 0 && p.stock_quantity < 10).length;
   const out = products.filter((p) => !p.stock_quantity).length;
+  const netMovement = movementSummary.total_inward - movementSummary.total_outward;
+  const kpiCards = [
+    {
+      label: "Total Items",
+      value: products.length,
+      summary: "All products & parts",
+      Icon: Package,
+      tone: "purple",
+    },
+    {
+      label: "Total Stock Value",
+      value: `Rs. ${stockValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+      summary: "At selling price",
+      Icon: IndianRupee,
+      tone: "blue",
+    },
+    {
+      label: "Low Stock Items",
+      value: low,
+      summary: "Reorder recommended",
+      Icon: AlertTriangle,
+      tone: "orange",
+    },
+    {
+      label: "Out of Stock Items",
+      value: out,
+      summary: "Currently unavailable",
+      Icon: PackageX,
+      tone: "red",
+    },
+    {
+      label: "Stock Locations",
+      value: 4,
+      summary: "Warehouses / Stores",
+      Icon: MapPinHouse,
+      tone: "green",
+    },
+  ];
 
   const saveAdjustment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,6 +211,7 @@ export default function InventoryPage() {
       setProducts((p) =>
         p.map((x) => (x.id === adjust.id ? { ...x, stock_quantity: updated } : x))
       );
+      load();
     }
     
     setSaving(false);
@@ -129,25 +223,21 @@ export default function InventoryPage() {
     <div className="management-page inventory-page">
       <div className="inventory-title">
         <h1>
-          ◇ Inventory <span>/ Stock Management</span>
+          <Package className="section-title-icon" size={25} aria-hidden="true" /> Inventory <span>/ Stock Management</span>
         </h1>
       </div>
 
       <section className="inventory-kpis">
-        {[
-          ["Total Items", products.length, "All products & parts", "◇", "purple"],
-          ["Total Stock Value", `Rs. ${stockValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, "At selling price", "₹", "blue"],
-          ["Low Stock Items", low, "Reorder recommended", "⚠", "orange"],
-          ["Out of Stock Items", out, "Currently unavailable", "⊗", "red"],
-          ["Stock Locations", 4, "Warehouses / Stores", "▦", "green"]
-        ].map(([l, v, s, i, c]) => (
-          <article key={String(l)}>
+        {kpiCards.map(({ label, value, summary, Icon, tone }) => (
+          <article key={label}>
             <p>
-              <small>{l}</small>
-              <b>{v}</b>
-              <em>{s}</em>
+              <small>{label}</small>
+              <b>{value}</b>
+              <em>{summary}</em>
             </p>
-            <span className={String(c)}>{i}</span>
+            <span className={tone}>
+              <Icon size={22} strokeWidth={1.9} aria-hidden="true" />
+            </span>
           </article>
         ))}
       </section>
@@ -175,7 +265,7 @@ export default function InventoryPage() {
             <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
               {categories.map((c) => (
                 <option key={c} value={c}>
-                  {c === "All Categories" ? "▦" : getCategoryIcon(c)} {c}
+                  {c}
                 </option>
               ))}
             </select>
@@ -185,10 +275,12 @@ export default function InventoryPage() {
             <select>
               <option>All Suppliers</option>
             </select>
-            <button className="gold-btn" onClick={() => window.location.href = '/admin/products'}>＋ Add Stock</button>
-            <button onClick={() => { if(products.length > 0) setAdjust(products[0]) }}>☷ Stock Adjustment</button>
+            <button className="gold-btn" onClick={() => router.push("/admin/products")}>
+              <Plus size={15} aria-hidden="true" /> Add Stock
+            </button>
+            <button onClick={() => { if(products.length > 0) setAdjust(products[0]) }}><SlidersHorizontal size={15} aria-hidden="true" /> Stock Adjustment</button>
             <div style={{ position: 'relative' }}>
-              <button onClick={() => setShowCols(!showCols)} style={{ marginLeft: '4px', height: '34px', padding: '0 12px' }}>⚙️ Columns</button>
+              <button onClick={() => setShowCols(!showCols)} style={{ marginLeft: '4px', height: '34px', padding: '0 12px' }}><Columns3 size={15} aria-hidden="true" /> Columns</button>
               {showCols && (
                 <div style={{ position: 'absolute', right: 0, top: '40px', background: '#fff', border: '1px solid #e2e4e7', padding: '12px', borderRadius: '8px', zIndex: 50, display: 'grid', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', textAlign: 'left', minWidth: '150px' }}>
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.check} onChange={(e) => setCols({...cols, check: e.target.checked})} /> Checkbox</label>
@@ -214,7 +306,11 @@ export default function InventoryPage() {
           <table>
             <thead>
               <tr>
-                {cols.check && <th>□</th>}
+                {cols.check && (
+                  <th>
+                    <CheckSquare size={15} aria-label="Select" />
+                  </th>
+                )}
                 {cols.prod && <th>Product</th>}
                 {cols.sku && <th>SKU / Barcode</th>}
                 {cols.cat && <th>Category</th>}
@@ -232,10 +328,14 @@ export default function InventoryPage() {
             <tbody>
               {paginatedShown.map((p, i) => (
                 <tr key={p.id} className={p.stock_quantity < 10 ? "warning-row" : ""}>
-                  {cols.check && <td>□</td>}
+                  {cols.check && (
+                    <td>
+                      <Square size={15} aria-label={`Select ${p.name}`} />
+                    </td>
+                  )}
                   {cols.prod && (
                     <td>
-                      <span>{p.visual}</span>
+                      <CategoryIcon category={p.category || "General"} />
                       <b>{p.name}</b>
                     </td>
                   )}
@@ -291,8 +391,12 @@ export default function InventoryPage() {
                   )}
                   {cols.actions && (
                     <td>
-                      <button onClick={() => setAdjust(p)}>✎</button>
-                      <button>⋮</button>
+                      <button onClick={() => setAdjust(p)} aria-label={`Adjust ${p.name}`}>
+                        <Pencil size={15} aria-hidden="true" />
+                      </button>
+                      <button aria-label={`More actions for ${p.name}`}>
+                        <MoreVertical size={15} aria-hidden="true" />
+                      </button>
                     </td>
                   )}
                 </tr>
@@ -302,24 +406,24 @@ export default function InventoryPage() {
         </div>
 
         <footer>
-          Showing {shown.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, shown.length)} of {shown.length} items
+          Showing {shown.length === 0 ? 0 : (activePage - 1) * itemsPerPage + 1} to {Math.min(activePage * itemsPerPage, shown.length)} of {shown.length} items
           <p>
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>‹</button>
+            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={activePage === 1}>{"<"}</button>
             {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - activePage) <= 1)
               .map((p, i, arr) => {
                 const isDots = i > 0 && arr[i - 1] !== p - 1;
                 return (
                   <span key={p}>
-                    {isDots && <button disabled>…</button>}
-                    <button className={currentPage === p ? "active" : ""} onClick={() => setCurrentPage(p)}>
+                    {isDots && <button disabled>...</button>}
+                    <button className={activePage === p ? "active" : ""} onClick={() => setCurrentPage(p)}>
                       {p}
                     </button>
                   </span>
                 );
               })
             }
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>›</button>
+            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={activePage === totalPages}>{">"}</button>
           </p>
         </footer>
       </section>
@@ -332,35 +436,37 @@ export default function InventoryPage() {
           <div>
             <p>
               <small>Total Inward</small>
-              <b className="success">Rs. 2,45,600.00</b>
+              <b className="success">Rs. {movementSummary.total_inward.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b>
             </p>
             <p>
               <small>Total Outward</small>
-              <b className="danger">Rs. 1,80,250.00</b>
+              <b className="danger">Rs. {movementSummary.total_outward.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b>
             </p>
             <p>
               <small>Net Movement</small>
-              <b className="blue-text">Rs. 65,350.00</b>
+              <b className="blue-text">Rs. {netMovement.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</b>
             </p>
             <p>
               <small>Transactions</small>
-              <b>342</b>
+              <b>{movementSummary.transactions}</b>
             </p>
           </div>
         </article>
 
-        <article className="stock-chart">
-          <h2>Incoming vs Outgoing Stock</h2>
-          <p>
-            <i /> Incoming (Rs.) <i /> Outgoing (Rs.)
-          </p>
-          <svg viewBox="0 0 500 150">
-            <path d="M10 115L70 85L125 25L180 58L235 100L290 88L345 52L400 94L455 110L490 92" />
-            <path
-              className="red-line"
-              d="M10 135L70 110L125 75L180 65L235 92L290 72L345 95L400 108L455 132L490 100"
-            />
-          </svg>
+        <article className="stock-chart movement-list">
+          <h2>Recent Inventory Movement</h2>
+          {movements.map((movement) => (
+            <div key={movement.id}>
+              <p>
+                <b>{movement.product_name}</b>
+                <small>{movement.reference_no || movement.movement_type} / {new Date(movement.created_at).toLocaleString()}</small>
+              </p>
+              <strong className={movement.quantity_change > 0 ? "success" : "danger"}>
+                {movement.quantity_change > 0 ? "+" : ""}{movement.quantity_change}
+              </strong>
+            </div>
+          ))}
+          {!movements.length && <p className="empty-movement">No movement history yet.</p>}
         </article>
 
         <article className="low-alerts">
@@ -372,7 +478,7 @@ export default function InventoryPage() {
             .slice(0, 4)
             .map((p) => (
               <div key={p.id}>
-                <span>{p.visual}</span>
+                <CategoryIcon category={p.category || "General"} />
                 <p>
                   <b>{p.name}</b>
                   <small>
@@ -391,7 +497,7 @@ export default function InventoryPage() {
             <header>
               <h2>Stock Adjustment</h2>
               <button type="button" onClick={() => setAdjust(null)}>
-                ×
+                <X size={22} aria-label="Close" />
               </button>
             </header>
             <p className="adjust-product">

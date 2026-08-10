@@ -26,6 +26,7 @@ type FormState = {
   status: 'Active' | 'Inactive';
   credit_limit: string;
   outstanding_balance: string;
+  total_purchases: string;
 };
 
 const emptyForm: FormState = {
@@ -38,6 +39,7 @@ const emptyForm: FormState = {
   status: "Active",
   credit_limit: "0",
   outstanding_balance: "0",
+  total_purchases: "0",
 };
 
 export default function CustomersPage() {
@@ -72,8 +74,17 @@ export default function CustomersPage() {
   }, [selected]);
 
   useEffect(() => {
-    void loadCustomers();
-  }, [loadCustomers]);
+    fetch("/api/customers", { cache: "no-store" })
+      .then((res) => res.ok ? res.json() : [])
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setCustomers(data);
+          setSelected(data[0] || null);
+        }
+      })
+      .catch((e) => console.error(e))
+      .finally(() => setLoading(false));
+  }, []);
 
   const rows = useMemo(() => {
     return customers.filter(c => {
@@ -101,6 +112,7 @@ export default function CustomersPage() {
       status: c.status,
       credit_limit: c.credit_limit,
       outstanding_balance: c.outstanding_balance,
+      total_purchases: c.total_purchases,
     });
     setError("");
     setModal("edit");
@@ -143,8 +155,8 @@ export default function CustomersPage() {
       }
       if (selected?.id === c.id) setSelected(null);
       await loadCustomers();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to delete");
     }
   };
 
@@ -337,7 +349,7 @@ export default function CustomersPage() {
               
               <label>
                 Status
-                <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
+                <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as "Active" | "Inactive" })}>
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
                 </select>

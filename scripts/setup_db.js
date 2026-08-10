@@ -53,7 +53,10 @@ async function setup() {
       CREATE TABLE IF NOT EXISTS sales (
         id INT AUTO_INCREMENT PRIMARY KEY,
         cashier_id INT NOT NULL,
+        customer_id INT NULL,
         total_amount DECIMAL(10, 2) NOT NULL,
+        payment_method VARCHAR(40) NOT NULL DEFAULT 'Cash',
+        status VARCHAR(30) NOT NULL DEFAULT 'completed',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (cashier_id) REFERENCES users(id)
       )
@@ -90,6 +93,33 @@ async function setup() {
         INDEX idx_inventory_created (created_at),
         FOREIGN KEY (product_id) REFERENCES products(id),
         FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    console.log('Creating purchases tables...');
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS purchases (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        supplier VARCHAR(150) NOT NULL,
+        payment_method VARCHAR(40) NOT NULL DEFAULT 'Cash',
+        total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
+        status VARCHAR(30) NOT NULL DEFAULT 'received',
+        notes VARCHAR(500),
+        created_by INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS purchase_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        purchase_id INT NOT NULL,
+        product_id INT NOT NULL,
+        quantity INT NOT NULL,
+        unit_cost DECIMAL(10, 2) NOT NULL,
+        FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id)
       )
     `);
 

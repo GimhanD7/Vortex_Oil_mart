@@ -1,17 +1,75 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
+import type { PoolConnection } from 'mysql2/promise';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+const paymentMethods = new Set(['Cash', 'Card', 'UPI', 'Wallet', 'Bank Transfer', 'Credit']);
+
+async function ensureSalesColumns(connection: PoolConnection | typeof pool = pool) {
+  const [columns]: any = await connection.query(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sales'
+       AND COLUMN_NAME IN ('payment_method', 'status', 'customer_id')`
+  );
+  const names = new Set(columns.map((row: { COLUMN_NAME: string }) => row.COLUMN_NAME));
+  if (!names.has('customer_id')) {
+    await connection.query('ALTER TABLE sales ADD COLUMN customer_id INT NULL');
+  }
+  if (!names.has('payment_method')) {
+    await connection.query(`ALTER TABLE sales ADD COLUMN payment_method VARCHAR(40) NOT NULL DEFAULT 'Cash'`);
+  }
+  if (!names.has('status')) {
+    await connection.query(`ALTER TABLE sales ADD COLUMN status VARCHAR(30) NOT NULL DEFAULT 'completed'`);
+  }
+}
+
+export async function GET(request: Request) {
   try {
+    await ensureSalesColumns();
+    const { searchParams } = new URL(request.url);
+    const values: Array<string | number> = [];
+    const where: string[] = [];
+    const dateFrom = searchParams.get('date_from');
+    const dateTo = searchParams.get('date_to');
+    const cashier = searchParams.get('cashier');
+    const paymentMethod = searchParams.get('payment_method');
+    const status = searchParams.get('status');
+
+    if (dateFrom) {
+      where.push('DATE(s.created_at) >= ?');
+      values.push(dateFrom);
+    }
+    if (dateTo) {
+      where.push('DATE(s.created_at) <= ?');
+      values.push(dateTo);
+    }
+    if (cashier && cashier !== 'All Cashiers') {
+      where.push('u.username = ?');
+      values.push(cashier);
+    }
+    if (paymentMethod && paymentMethod !== 'All Payment Methods') {
+      where.push('s.payment_method = ?');
+      values.push(paymentMethod);
+    }
+    if (status && status !== 'All Status') {
+      where.push('s.status = ?');
+      values.push(status.toLowerCase());
+    }
+
     const [rows] = await pool.query(`
-      SELECT s.id, s.total_amount, s.created_at, u.username as cashier_name, c.name as customer_name
+      SELECT s.id, s.total_amount, s.payment_method, s.status, s.created_at,
+             u.username as cashier_name, c.name as customer_name,
+             COALESCE(SUM(si.quantity), 0) as item_count
       FROM sales s
       LEFT JOIN users u ON s.cashier_id = u.id
       LEFT JOIN customers c ON s.customer_id = c.id
+      LEFT JOIN sale_items si ON si.sale_id = s.id
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      GROUP BY s.id, s.total_amount, s.payment_method, s.status, s.created_at, u.username, c.name
       ORDER BY s.id DESC
-    `);
+    `, values);
     return NextResponse.json(rows);
   } catch (error) {
     console.error('Error fetching sales:', error);
@@ -22,7 +80,9 @@ export async function GET() {
 export async function POST(request: Request) {
   const connection = await pool.getConnection();
   try {
-    const { cashier_id, customer_id, items } = await request.json();
+    await ensureSalesColumns(connection);
+    const { cashier_id, customer_id, items, payment_method = 'Cash' } = await request.json();
+    const paymentMethod = paymentMethods.has(payment_method) ? payment_method : 'Cash';
 
     if (!cashier_id || !items || items.length === 0) {
       return NextResponse.json({ error: 'Invalid sale data' }, { status: 400 });
@@ -46,8 +106,8 @@ export async function POST(request: Request) {
 
     // Insert into sales
     const [saleResult]: any = await connection.query(
-      'INSERT INTO sales (cashier_id, customer_id, total_amount) VALUES (?, ?, ?)',
-      [cashier_id, customer_id || null, total_amount]
+      'INSERT INTO sales (cashier_id, customer_id, total_amount, payment_method, status) VALUES (?, ?, ?, ?, ?)',
+      [cashier_id, customer_id || null, total_amount, paymentMethod, 'completed']
     );
     const saleId = saleResult.insertId;
 
@@ -84,7 +144,7 @@ export async function POST(request: Request) {
     }
 
     await connection.commit();
-    return NextResponse.json({ message: 'Sale completed successfully', saleId }, { status: 201 });
+    return NextResponse.json({ message: 'Sale completed successfully', saleId, payment_method: paymentMethod, status: 'completed' }, { status: 201 });
   } catch (error: any) {
     await connection.rollback();
     console.error('Error processing sale:', error);

@@ -1,133 +1,204 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
+import { Columns3, Download, Eye, Printer, RotateCcw, X } from "lucide-react";
+
 type Sale = {
   id: number;
   total_amount: string;
+  payment_method: string;
+  status: string;
   created_at: string;
-  cashier_name: string;
+  cashier_name: string | null;
+  customer_name: string | null;
+  item_count: number;
 };
+
 type SaleItem = {
+  product_id: number;
   product_name: string;
   quantity: number;
   price_at_time: string;
 };
 
+const paymentMethods = ["All Payment Methods", "Cash", "Card", "UPI", "Wallet", "Bank Transfer", "Credit"];
+const statuses = ["All Status", "Completed", "Refunded", "Cancelled"];
+
+function money(value: string | number) {
+  return `Rs. ${Number(value).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+}
+
+function downloadFile(name: string, text: string, type: string) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [selected, setSelected] = useState<Sale | null>(null);
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
-  
-  // Column toggle state
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
   const [showCols, setShowCols] = useState(false);
+  const [filters, setFilters] = useState({
+    from: "",
+    to: "",
+    cashier: "All Cashiers",
+    payment: "All Payment Methods",
+    status: "All Status",
+  });
   const [cols, setCols] = useState({ inv: true, date: true, cashier: true, cust: true, pay: true, items: true, total: true, status: true, actions: true });
 
-  useEffect(() => {
-    fetch("/api/sales")
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) {
-          setSales(d);
-          if (d.length > 0) {
-            setSelected(d[0]);
-          }
+  const cashiers = useMemo(() => ["All Cashiers", ...Array.from(new Set(sales.map((sale) => sale.cashier_name || "Admin")))], [sales]);
+  const total = sales.reduce((sum, sale) => sum + Number(sale.total_amount), 0);
+
+  const loadSales = (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    const params = new URLSearchParams();
+    if (filters.from) params.set("date_from", filters.from);
+    if (filters.to) params.set("date_to", filters.to);
+    if (filters.cashier !== "All Cashiers") params.set("cashier", filters.cashier);
+    if (filters.payment !== "All Payment Methods") params.set("payment_method", filters.payment);
+    if (filters.status !== "All Status") params.set("status", filters.status);
+
+    fetch(`/api/sales?${params.toString()}`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setSales(data);
+          setSelected((current) => data.find((sale) => sale.id === current?.id) || data[0] || null);
         }
       })
-      .catch(() => {});
+      .catch(() => setMessage("Unable to load sales."))
+      .finally(() => showLoading && setLoading(false));
+  };
+
+  useEffect(() => {
+    fetch("/api/sales", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setSales(data);
+          setSelected(data[0] || null);
+        }
+      })
+      .catch(() => setMessage("Unable to load sales."));
   }, []);
 
   useEffect(() => {
-    if (selected) {
-      setSaleItems([]);
-      fetch(`/api/sales/${selected.id}`)
-        .then(r => r.json())
-        .then(d => {
-          if (Array.isArray(d)) {
-            setSaleItems(d);
-          }
-        })
-        .catch(()=>{});
+    if (!selected) {
+      return;
     }
+
+    fetch(`/api/sales/${selected.id}`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => setSaleItems(Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : []))
+      .catch(() => setSaleItems([]));
   }, [selected]);
 
-  const total = sales.reduce((s, x) => s + Number(x.total_amount), 0);
-  
+  const exportSales = () => {
+    const rows = [
+      ["Invoice No", "Date", "Cashier", "Customer", "Payment Method", "Items", "Total", "Status"],
+      ...sales.map((sale) => [
+        `INV-${String(sale.id).padStart(6, "0")}`,
+        new Date(sale.created_at).toLocaleString(),
+        sale.cashier_name || "Admin",
+        sale.customer_name || "Walk-in Customer",
+        sale.payment_method || "Cash",
+        String(sale.item_count || 0),
+        String(sale.total_amount),
+        sale.status || "completed",
+      ]),
+    ];
+    downloadFile("oil-mart-sales.csv", rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n"), "text/csv");
+  };
+
+  const exportInvoice = () => {
+    if (!selected) return;
+    const payload = { invoice: selected, items: saleItems };
+    downloadFile(`invoice-${selected.id}.json`, JSON.stringify(payload, null, 2), "application/json");
+  };
+
+  const refundInvoice = async () => {
+    if (!selected || selected.status === "refunded") return;
+    if (!confirm(`Refund invoice INV-${String(selected.id).padStart(6, "0")}? Stock will be returned.`)) return;
+    const response = await fetch(`/api/sales/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "refund" }),
+    });
+    const data = await response.json();
+    setMessage(data.message || data.error || "Refund action completed.");
+    if (response.ok) loadSales();
+  };
+
   return (
     <div className="sales-history">
       <div className="sales-title">
         <h1>Sales History &amp; Invoice Management</h1>
-        <p>Sales　›　Sales History &amp; Invoices</p>
+        <p>Sales / Sales History &amp; Invoices</p>
       </div>
+
+      {message && <div className="user-error">{message}<button onClick={() => setMessage("")}>×</button></div>}
+
       <div className="sales-layout">
         <section>
           <div className="sales-filters">
             <h2>Filters</h2>
             <label>
-              Date Range
-              <input value="01 Aug 2026　–　07 Aug 2026" readOnly />
+              From
+              <input type="date" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
+            </label>
+            <label>
+              To
+              <input type="date" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
             </label>
             <label>
               Cashier
-              <select>
-                <option>All Cashiers</option>
+              <select value={filters.cashier} onChange={(event) => setFilters({ ...filters, cashier: event.target.value })}>
+                {cashiers.map((cashier) => <option key={cashier}>{cashier}</option>)}
               </select>
             </label>
             <label>
               Payment Method
-              <select>
-                <option>All Payment Methods</option>
+              <select value={filters.payment} onChange={(event) => setFilters({ ...filters, payment: event.target.value })}>
+                {paymentMethods.map((method) => <option key={method}>{method}</option>)}
               </select>
             </label>
             <label>
               Order Status
-              <select>
-                <option>All Status</option>
+              <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
+                {statuses.map((status) => <option key={status}>{status}</option>)}
               </select>
             </label>
             <footer>
-              <button>Reset Filters</button>
-              <button className="gold-btn">Apply Filters</button>
+              <button onClick={() => setFilters({ from: "", to: "", cashier: "All Cashiers", payment: "All Payment Methods", status: "All Status" })}>Reset Filters</button>
+              <button className="gold-btn" onClick={() => loadSales()}>{loading ? "Loading..." : "Apply Filters"}</button>
             </footer>
           </div>
+
           <div className="sales-table">
-            <header style={{ position: 'relative', zIndex: 10 }}>
-              <div>
-                <small>Total Invoices</small>
-                <b>{sales.length}</b>
-              </div>
-              <div>
-                <small>Total Sales</small>
-                <b>
-                  Rs.{" "}
-                  {total.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                </b>
-              </div>
-              <div>
-                <small>Average Order Value</small>
-                <b>
-                  Rs.{" "}
-                  {(total / Math.max(sales.length, 1)).toLocaleString("en-IN", {
-                    minimumFractionDigits: 2,
-                  })}
-                </b>
-              </div>
-              <aside style={{ position: 'relative', display: 'flex', gap: '8px' }}>
-                <button>⇩　Export⌄</button>
-                <button onClick={() => setShowCols(!showCols)}>Columns⌄</button>
+            <header style={{ position: "relative", zIndex: 10 }}>
+              <div><small>Total Invoices</small><b>{sales.length}</b></div>
+              <div><small>Total Sales</small><b>{money(total)}</b></div>
+              <div><small>Average Order Value</small><b>{money(total / Math.max(sales.length, 1))}</b></div>
+              <aside style={{ position: "relative", display: "flex", gap: "8px" }}>
+                <button onClick={exportSales}><Download size={15} aria-hidden="true" /> Export</button>
+                <button onClick={() => setShowCols(!showCols)}><Columns3 size={15} aria-hidden="true" /> Columns</button>
                 {showCols && (
-                  <div style={{ position: 'absolute', right: 0, top: '40px', background: '#fff', border: '1px solid #e2e4e7', padding: '12px', borderRadius: '8px', zIndex: 50, display: 'grid', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', textAlign: 'left', minWidth: '150px' }}>
-                    <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '12px', fontWeight: 'normal', whiteSpace: 'nowrap' }}><input type="checkbox" checked={cols.inv} onChange={(e) => setCols({...cols, inv: e.target.checked})} /> Invoice No.</label>
-                    <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '12px', fontWeight: 'normal', whiteSpace: 'nowrap' }}><input type="checkbox" checked={cols.date} onChange={(e) => setCols({...cols, date: e.target.checked})} /> Date &amp; Time</label>
-                    <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '12px', fontWeight: 'normal', whiteSpace: 'nowrap' }}><input type="checkbox" checked={cols.cashier} onChange={(e) => setCols({...cols, cashier: e.target.checked})} /> Cashier</label>
-                    <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '12px', fontWeight: 'normal', whiteSpace: 'nowrap' }}><input type="checkbox" checked={cols.cust} onChange={(e) => setCols({...cols, cust: e.target.checked})} /> Customer</label>
-                    <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '12px', fontWeight: 'normal', whiteSpace: 'nowrap' }}><input type="checkbox" checked={cols.pay} onChange={(e) => setCols({...cols, pay: e.target.checked})} /> Payment Method</label>
-                    <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '12px', fontWeight: 'normal', whiteSpace: 'nowrap' }}><input type="checkbox" checked={cols.items} onChange={(e) => setCols({...cols, items: e.target.checked})} /> Items</label>
-                    <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '12px', fontWeight: 'normal', whiteSpace: 'nowrap' }}><input type="checkbox" checked={cols.total} onChange={(e) => setCols({...cols, total: e.target.checked})} /> Total Amount</label>
-                    <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '12px', fontWeight: 'normal', whiteSpace: 'nowrap' }}><input type="checkbox" checked={cols.status} onChange={(e) => setCols({...cols, status: e.target.checked})} /> Status</label>
-                    <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '12px', fontWeight: 'normal', whiteSpace: 'nowrap' }}><input type="checkbox" checked={cols.actions} onChange={(e) => setCols({...cols, actions: e.target.checked})} /> Actions</label>
+                  <div className="column-menu">
+                    {Object.entries({ inv: "Invoice No.", date: "Date & Time", cashier: "Cashier", cust: "Customer", pay: "Payment Method", items: "Items", total: "Total Amount", status: "Status", actions: "Actions" }).map(([key, label]) => (
+                      <label key={key}><input type="checkbox" checked={cols[key as keyof typeof cols]} onChange={(event) => setCols({ ...cols, [key]: event.target.checked })} /> {label}</label>
+                    ))}
                   </div>
                 )}
               </aside>
             </header>
+
             <div className="table-scroll">
               <table>
                 <thead>
@@ -144,155 +215,77 @@ export default function SalesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sales.map((s, i) => (
-                    <tr
-                      key={s.id}
-                      onClick={() => setSelected(s)}
-                      className={selected?.id === s.id ? "selected" : ""}
-                    >
-                      {cols.inv && <td>
-                        <b>INV-{String(s.id).padStart(6, "0")}</b>
-                      </td>}
-                      {cols.date && <td>{new Date(s.created_at).toLocaleString()}</td>}
-                      {cols.cashier && <td>{s.cashier_name || "Admin"}</td>}
-                      {cols.cust && <td>{i % 2 ? "Rohan Verma" : "Walk-in Customer"}</td>}
-                      {cols.pay && <td>{["Cash", "UPI", "Card"][i % 3]}</td>}
-                      {cols.items && <td>--</td>}
-                      {cols.total && <td>
-                        Rs.{" "}
-                        {Number(s.total_amount).toLocaleString("en-IN", {
-                          minimumFractionDigits: 2,
-                        })}
-                      </td>}
-                      {cols.status && <td>
-                        <em
-                          className={
-                            i === 6 ? "refund" : i === 7 ? "cancel" : ""
-                          }
-                        >
-                          {i === 6
-                            ? "Refunded"
-                            : i === 7
-                              ? "Cancelled"
-                              : "Completed"}
-                        </em>
-                      </td>}
-                      {cols.actions && <td>
-                        <button>⊙</button>
-                        <button>▣</button>
-                      </td>}
+                  {sales.map((sale) => (
+                    <tr key={sale.id} onClick={() => setSelected(sale)} className={selected?.id === sale.id ? "selected" : ""}>
+                      {cols.inv && <td><b>INV-{String(sale.id).padStart(6, "0")}</b></td>}
+                      {cols.date && <td>{new Date(sale.created_at).toLocaleString()}</td>}
+                      {cols.cashier && <td>{sale.cashier_name || "Admin"}</td>}
+                      {cols.cust && <td>{sale.customer_name || "Walk-in Customer"}</td>}
+                      {cols.pay && <td>{sale.payment_method || "Cash"}</td>}
+                      {cols.items && <td>{sale.item_count || 0}</td>}
+                      {cols.total && <td>{money(sale.total_amount)}</td>}
+                      {cols.status && <td><em className={sale.status === "refunded" ? "refund" : sale.status === "cancelled" ? "cancel" : ""}>{sale.status || "completed"}</em></td>}
+                      {cols.actions && (
+                        <td>
+                          <button aria-label="View invoice" onClick={(event) => { event.stopPropagation(); setSelected(sale); }}><Eye size={15} aria-hidden="true" /></button>
+                          <button aria-label="Print invoice" onClick={(event) => { event.stopPropagation(); setSelected(sale); setTimeout(() => window.print(), 50); }}><Printer size={15} aria-hidden="true" /></button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <footer>
-              Showing {sales.length === 0 ? 0 : 1} to {sales.length} of {sales.length} invoices{" "}
-              <p>
-                <button>‹</button>
-                <button className="active">1</button>
-                <button>›</button>
-              </p>
-            </footer>
+            <footer>Showing {sales.length === 0 ? 0 : 1} to {sales.length} of {sales.length} invoices</footer>
           </div>
         </section>
-        
+
         {selected && (
           <aside className="invoice-preview">
             <header>
               <h2>Invoice Preview</h2>
-              <button onClick={() => setSelected(null)}>×</button>
+              <button onClick={() => setSelected(null)}><X size={20} aria-label="Close" /></button>
             </header>
             <div className="preview-paper">
               <div className="preview-brand">
-                <span>◒</span>
-                <h3>
-                  OIL <b>MART</b>
-                </h3>
-                <p>
-                  Oil &amp; Spare Parts Store
-                  <br />
-                  <br />
-                  123, Industrial Area, New Delhi
-                </p>
+                <h3>OIL <b>MART</b></h3>
+                <p>Oil &amp; Spare Parts Store<br />123, Industrial Area, New Delhi</p>
               </div>
               <dl>
                 {[
                   ["Invoice No.", `INV-${String(selected.id).padStart(6, "0")}`],
                   ["Date", new Date(selected.created_at).toLocaleString()],
                   ["Cashier", selected.cashier_name || "Admin"],
-                  ["Customer", "Walk-in Customer"],
-                  ["Payment Method", "Cash"],
-                ].map((x) => (
-                  <div key={x[0]}>
-                    <dt>{x[0]}</dt>
-                    <dd>{x[1]}</dd>
-                  </div>
-                ))}
+                  ["Customer", selected.customer_name || "Walk-in Customer"],
+                  ["Payment Method", selected.payment_method || "Cash"],
+                  ["Status", selected.status || "completed"],
+                ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
               </dl>
               <table>
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th>Qty</th>
-                    <th>Price</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
+                <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
                 <tbody>
-                  {saleItems.length === 0 && (
-                    <tr>
-                      <td colSpan={4} style={{ textAlign: 'center', padding: '10px' }}>Loading items...</td>
-                    </tr>
-                  )}
-                  {saleItems.map((item, idx) => (
-                    <tr key={idx}>
+                  {!saleItems.length && <tr><td colSpan={4} style={{ textAlign: "center", padding: "10px" }}>No item rows found.</td></tr>}
+                  {saleItems.map((item) => (
+                    <tr key={`${item.product_id}-${item.product_name}`}>
                       <td>{item.product_name}</td>
                       <td>{item.quantity}</td>
-                      <td>{Number(item.price_at_time).toLocaleString("en-IN")}</td>
-                      <td>{(Number(item.price_at_time) * item.quantity).toLocaleString("en-IN")}</td>
+                      <td>{money(item.price_at_time)}</td>
+                      <td>{money(Number(item.price_at_time) * item.quantity)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <div className="preview-total">
-                <p>
-                  Subtotal{" "}
-                  <b>
-                    Rs. {Number(selected.total_amount).toLocaleString("en-IN")}
-                  </b>
-                </p>
-                <p>
-                  Tax (18% GST){" "}
-                  <b>
-                    Rs.{" "}
-                    {(Number(selected.total_amount) * 0.18).toLocaleString(
-                      "en-IN",
-                    )}
-                  </b>
-                </p>
-                <h3>
-                  Total{" "}
-                  <b>
-                    Rs.{" "}
-                    {(Number(selected.total_amount) * 1.18).toLocaleString(
-                      "en-IN",
-                    )}
-                  </b>
-                </h3>
+                <p>Subtotal <b>{money(selected.total_amount)}</b></p>
+                <p>Tax (18% GST) <b>{money(Number(selected.total_amount) * 0.18)}</b></p>
+                <h3>Total <b>{money(Number(selected.total_amount) * 1.18)}</b></h3>
               </div>
-              <div className="barcode">|||| ||| |||||| || ||||| ||||</div>
-              <p className="thanks">
-                Thank you for your visit!
-                <br />
-                Drive safe. Stay protected.
-              </p>
+              <p className="thanks">Thank you for your visit!<br />Drive safe. Stay protected.</p>
             </div>
             <footer>
-              <button>⊙　View Invoice</button>
-              <button>▣　Print Invoice</button>
-              <button className="danger">↻　Refund Invoice</button>
-              <button>⇩　Export Invoice</button>
+              <button onClick={() => window.print()}><Printer size={15} aria-hidden="true" /> Print</button>
+              <button onClick={exportInvoice}><Download size={15} aria-hidden="true" /> Export</button>
+              <button className="danger" onClick={refundInvoice} disabled={selected.status === "refunded"}><RotateCcw size={15} aria-hidden="true" /> Refund</button>
             </footer>
           </aside>
         )}

@@ -1,6 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  Armchair,
+  BatteryCharging,
+  Box,
+  ChevronLeft,
+  ChevronRight,
+  CircleStop,
+  CloudRain,
+  Cog,
+  Columns3,
+  Download,
+  Filter,
+  Lightbulb,
+  Link,
+  Package,
+  PackageSearch,
+  Pencil,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+  Upload,
+  Wrench,
+  X,
+  Zap,
+} from "lucide-react";
 
 type Product = {
   id: number;
@@ -14,26 +40,25 @@ type Product = {
   visual?: string;
 };
 
-const getCategoryIcon = (category: string) => {
+function CategoryIcon({ category, className = "" }: { category: string; className?: string }) {
+  const props = { className: className || "catalog-icon", "aria-hidden": true, size: 22, strokeWidth: 1.9 };
+  if (category === "All") return <PackageSearch {...props} />;
   const c = category.toLowerCase();
-  if (c.includes('engine') || c.includes('oil')) return "🛢️";
-  if (c.includes('gear') || c.includes('lubricant') || c.includes('grease')) return "⚙️";
-  if (c.includes('filter')) return "🌪️";
-  if (c.includes('brake') || c.includes('pad') || c.includes('shoe')) return "🛑";
-  if (c.includes('batter')) return "🔋";
-  if (c.includes('spark') || c.includes('ignition') || c.includes('plug')) return "⚡";
-  if (c.includes('coolant') || c.includes('antifreeze') || c.includes('radiator')) return "❄️";
-  if (c.includes('wiper') || c.includes('wash')) return "🌧️";
-  if (c.includes('bulb') || c.includes('light') || c.includes('lamp')) return "💡";
-  if (c.includes('tire') || c.includes('tyre') || c.includes('wheel')) return "🛞";
-  if (c.includes('belt') || c.includes('chain')) return "⛓️";
-  if (c.includes('exhaust') || c.includes('muffler')) return "💨";
-  if (c.includes('suspension') || c.includes('shock') || c.includes('spring')) return "🛠️";
-  if (c.includes('tool') || c.includes('equipment')) return "🔧";
-  if (c.includes('polish') || c.includes('wax') || c.includes('cleaner') || c.includes('shampoo')) return "🧽";
-  if (c.includes('accessory') || c.includes('mat') || c.includes('cover')) return "💺";
-  return "📦";
-};
+  if (c.includes("engine") || c.includes("oil")) return <Package {...props} />;
+  if (c.includes("gear") || c.includes("lubricant") || c.includes("grease")) return <Cog {...props} />;
+  if (c.includes("filter")) return <Filter {...props} />;
+  if (c.includes("brake") || c.includes("pad") || c.includes("shoe")) return <CircleStop {...props} />;
+  if (c.includes("batter")) return <BatteryCharging {...props} />;
+  if (c.includes("spark") || c.includes("ignition") || c.includes("plug")) return <Zap {...props} />;
+  if (c.includes("coolant") || c.includes("radiator") || c.includes("wiper") || c.includes("wash")) return <CloudRain {...props} />;
+  if (c.includes("bulb") || c.includes("light") || c.includes("lamp")) return <Lightbulb {...props} />;
+  if (c.includes("tire") || c.includes("tyre") || c.includes("wheel")) return <CircleStop {...props} />;
+  if (c.includes("belt") || c.includes("chain")) return <Link {...props} />;
+  if (c.includes("suspension") || c.includes("shock") || c.includes("spring") || c.includes("tool") || c.includes("equipment")) return <Wrench {...props} />;
+  if (c.includes("polish") || c.includes("wax") || c.includes("cleaner") || c.includes("shampoo")) return <Sparkles {...props} />;
+  if (c.includes("accessory") || c.includes("mat") || c.includes("cover")) return <Armchair {...props} />;
+  return <Box {...props} />;
+}
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -92,12 +117,11 @@ export default function ProductsPage() {
       .then((d) => {
         if (Array.isArray(d) && d.length) {
           setProducts(
-            d.map((p: Product, i: number) => ({
+            d.map((p: Product) => ({
               ...p,
               sku: p.sku || `SKU-${String(p.id).padStart(3, "0")}`,
               category: p.category || "General",
               brand: p.brand || "Generic",
-              visual: p.visual || getCategoryIcon(p.category || "General"),
             }))
           );
         }
@@ -134,11 +158,8 @@ export default function ProductsPage() {
 
 
   const totalPages = Math.max(1, Math.ceil(shown.length / itemsPerPage));
-  const paginatedShown = shown.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(1);
-  }, [totalPages, currentPage]);
+  const activePage = Math.min(currentPage, totalPages);
+  const paginatedShown = shown.slice((activePage - 1) * itemsPerPage, activePage * itemsPerPage);
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,20 +215,24 @@ export default function ProductsPage() {
       <div className="management-heading">
         <div>
           <h1>Product Management</h1>
-          <p>Dashboard › Products</p>
+          <p>Dashboard / Products</p>
         </div>
         <aside>
-          <button>⇩ Import</button>
-          <button>⇧ Export</button>
+          <button>
+            <Upload size={15} aria-hidden="true" /> Import
+          </button>
+          <button>
+            <Download size={15} aria-hidden="true" /> Export
+          </button>
           <button className="gold-btn" onClick={() => { setEditId(null); setForm({ name: "", description: "", price: "", stock_quantity: "", sku: "", category: "Engine Oils", brand: "Generic" }); setShow(true); }}>
-            ＋ Add Product
+            <Plus size={15} aria-hidden="true" /> Add Product
           </button>
         </aside>
       </div>
 
       <div className="management-filters">
         <label>
-          ⌕
+          <Search size={18} aria-hidden="true" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -229,13 +254,13 @@ export default function ProductsPage() {
       </div>
 
       <div className="catalog-cats">
-        {catsList.map((c, i) => (
+        {catsList.map((c) => (
           <button
             key={c}
             onClick={() => setCat(c)}
             className={cat === c ? "active" : ""}
           >
-            <span>{c === "All" ? "▦" : getCategoryIcon(c)}</span>
+            <CategoryIcon category={c} />
             {c}
           </button>
         ))}
@@ -246,7 +271,7 @@ export default function ProductsPage() {
         <div>
           {shown.slice(0, 7).map((p) => (
             <article key={p.id}>
-              <span>{p.visual}</span>
+              <CategoryIcon category={p.category || "General"} className="product-card-icon" />
               <b>{p.name}</b>
               <small>SKU: {p.sku}</small>
               <em className={p.stock_quantity < 10 ? "low" : ""}>
@@ -271,27 +296,31 @@ export default function ProductsPage() {
               <option value={25}>25</option>
               <option value={50}>50</option>
             </select>{" "}
-            Showing {shown.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, shown.length)} of {shown.length} products{" "}
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>‹</button>
+            Showing {shown.length === 0 ? 0 : (activePage - 1) * itemsPerPage + 1} to {Math.min(activePage * itemsPerPage, shown.length)} of {shown.length} products{" "}
+            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={activePage === 1} aria-label="Previous page">
+              <ChevronLeft size={14} aria-hidden="true" />
+            </button>
             {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - activePage) <= 1)
               .map((p, i, arr) => {
                 const isDots = i > 0 && arr[i - 1] !== p - 1;
                 return (
                   <span key={p}>
-                    {isDots && <button disabled>…</button>}
-                    <button className={currentPage === p ? "active" : ""} onClick={() => setCurrentPage(p)}>
+                    {isDots && <button disabled>...</button>}
+                    <button className={activePage === p ? "active" : ""} onClick={() => setCurrentPage(p)}>
                       {p}
                     </button>
                   </span>
                 );
               })
             }
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>›</button>
+            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={activePage === totalPages} aria-label="Next page">
+              <ChevronRight size={14} aria-hidden="true" />
+            </button>
           </p>
           <div style={{ display: 'inline-block', position: 'relative', marginLeft: '12px' }}>
-            <button onClick={() => setShowCols(!showCols)} className="gold-btn" style={{ padding: '0 8px', fontSize: '10px', height: '27px' }}>
-              ⚙️ Columns
+            <button onClick={() => setShowCols(!showCols)} className="gold-btn columns-button">
+              <Columns3 size={15} aria-hidden="true" /> Columns
             </button>
             {showCols && (
               <div style={{ position: 'absolute', right: 0, top: '35px', background: '#fff', border: '1px solid #e2e4e7', padding: '10px', borderRadius: '8px', zIndex: 50, display: 'grid', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', textAlign: 'left', minWidth: '130px' }}>
@@ -327,7 +356,7 @@ export default function ProductsPage() {
                 <tr key={p.id}>
                   {cols.prod && (
                     <td>
-                      <span>{p.visual}</span>
+                      <CategoryIcon category={p.category || "General"} className="table-product-icon" />
                       <b>{p.name}</b>
                     </td>
                   )}
@@ -349,9 +378,11 @@ export default function ProductsPage() {
                   )}
                   {cols.actions && (
                     <td>
-                      <button onClick={() => openEdit(p)}>✎</button>
-                      <button className="delete" onClick={() => del(p.id)}>
-                        ♲
+                      <button onClick={() => openEdit(p)} aria-label={`Edit ${p.name}`}>
+                        <Pencil size={15} aria-hidden="true" />
+                      </button>
+                      <button className="delete" onClick={() => del(p.id)} aria-label={`Delete ${p.name}`}>
+                        <Trash2 size={15} aria-hidden="true" />
                       </button>
                     </td>
                   )}
@@ -367,11 +398,11 @@ export default function ProductsPage() {
           <form onSubmit={add}>
             <header>
               <h2>
-                <span style={{ fontSize: '1.5em', marginRight: '8px' }}>{getCategoryIcon(form.category)}</span>
+                <CategoryIcon category={form.category || "General"} className="modal-title-icon" />
                 {editId ? "Edit Product" : "Add New Product"}
               </h2>
               <button type="button" onClick={() => { setShow(false); setEditId(null); }}>
-                ×
+                <X size={22} aria-label="Close" />
               </button>
             </header>
             

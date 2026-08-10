@@ -37,6 +37,10 @@ async function setupInventory() {
       await ensureColumn(connection, 'products', name, definition);
     }
 
+    await ensureColumn(connection, 'sales', 'customer_id', 'INT NULL');
+    await ensureColumn(connection, 'sales', 'payment_method', "VARCHAR(40) NOT NULL DEFAULT 'Cash'");
+    await ensureColumn(connection, 'sales', 'status', "VARCHAR(30) NOT NULL DEFAULT 'completed'");
+
     await connection.query(`
       CREATE TABLE IF NOT EXISTS inventory_movements (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -59,6 +63,32 @@ async function setupInventory() {
 
     await connection.query(`UPDATE products SET sku = CONCAT('SKU-', LPAD(id, 5, '0')) WHERE sku IS NULL OR sku = ''`);
     await connection.query(`UPDATE products SET barcode = CONCAT('89010409', LPAD(id, 5, '0')) WHERE barcode IS NULL OR barcode = ''`);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS purchases (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        supplier VARCHAR(150) NOT NULL,
+        payment_method VARCHAR(40) NOT NULL DEFAULT 'Cash',
+        total_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+        status VARCHAR(30) NOT NULL DEFAULT 'received',
+        notes VARCHAR(500) NULL,
+        created_by INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_purchase_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS purchase_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        purchase_id INT NOT NULL,
+        product_id INT NOT NULL,
+        quantity INT NOT NULL,
+        unit_cost DECIMAL(10,2) NOT NULL,
+        CONSTRAINT fk_purchase_item_purchase FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
+        CONSTRAINT fk_purchase_item_product FOREIGN KEY (product_id) REFERENCES products(id)
+      )
+    `);
 
     const [productCount] = await connection.query('SELECT COUNT(*) AS count FROM products');
     if (Number(productCount[0].count) === 0) {

@@ -78,7 +78,7 @@ export default function PosBilling() {
       .then(r => r.json())
       .then(d => {
         if (Array.isArray(d)) {
-          const live = d.map((p: any, i: number) => ({
+          const live = (d as Product[]).map((p, i) => ({
             ...p,
             category: p.category || "Uncategorized",
             sku: p.sku || `SKU-${String(p.id).padStart(3, "0")}`,
@@ -98,7 +98,7 @@ export default function PosBilling() {
         }
       })
       .catch(e => console.error("Error loading customers", e));
-  }, []);
+  }, [router]);
 
   const shown = useMemo(() => {
     return products.filter(p => {
@@ -146,6 +146,7 @@ export default function PosBilling() {
         body: JSON.stringify({
           cashier_id: user?.id || 1,
           customer_id: customerId === "" ? null : customerId,
+          payment_method: payment,
           items: cart.map(x => ({ product_id: x.id, quantity: x.cartQuantity }))
         })
       });
@@ -172,7 +173,7 @@ export default function PosBilling() {
         const pRes = await fetch("/api/products", { cache: "no-store" });
         const pData = await pRes.json();
         if (Array.isArray(pData)) {
-          setProducts(pData.map((p: any, i: number) => ({
+          setProducts((pData as Product[]).map((p, i) => ({
             ...p,
             category: p.category || "Uncategorized",
             sku: p.sku || `SKU-${String(p.id).padStart(3, "0")}`,
@@ -220,7 +221,7 @@ export default function PosBilling() {
           </div>
         </div>
         <nav>
-          {filteredNav.map(([i, l], n) => (
+          {filteredNav.map(([i, l]) => (
             <button className={l === "POS Billing" ? "active" : ""} key={l} onClick={() => l !== "POS Billing" && router.push("/admin/" + l.toLowerCase().replace(' ', '-'))}>
               <span>{i}</span>{l}
             </button>
