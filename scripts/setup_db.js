@@ -23,9 +23,16 @@ async function setup() {
         username VARCHAR(255) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL,
         role ENUM('admin', 'cashier') DEFAULT 'cashier',
+        permissions JSON NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    try {
+      await connection.query('ALTER TABLE users ADD COLUMN permissions JSON NULL');
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') throw err;
+    }
 
     console.log('Creating products table...');
     await connection.query(`
@@ -130,8 +137,8 @@ async function setup() {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash('admin123', salt);
       await connection.query(
-        'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-        ['admin', hashedPassword, 'admin']
+        'INSERT INTO users (username, password, role, permissions) VALUES (?, ?, ?, ?)',
+        ['admin', hashedPassword, 'admin', JSON.stringify(['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing'])]
       );
       console.log('Default admin created: admin / admin123');
     }
@@ -143,11 +150,17 @@ async function setup() {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash('cashier123', salt);
       await connection.query(
-        'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-        ['cashier', hashedPassword, 'cashier']
+        'INSERT INTO users (username, password, role, permissions) VALUES (?, ?, ?, ?)',
+        ['cashier', hashedPassword, 'cashier', JSON.stringify(['pos_billing'])]
       );
       console.log('Default cashier created: cashier / cashier123');
     }
+
+    await connection.query(
+      `UPDATE users SET permissions = ?
+       WHERE username = 'cashier' AND (permissions IS NULL OR JSON_LENGTH(permissions) = 0)`,
+      [JSON.stringify(['pos_billing'])]
+    );
 
     console.log('Database setup complete!');
   } catch (err) {

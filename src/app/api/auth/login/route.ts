@@ -12,6 +12,21 @@ type UserRow = RowDataPacket & {
   permissions: string[] | string | null;
 };
 
+function normalizePermissions(value: UserRow['permissions'], role: UserRow['role']) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      return [];
+    }
+  }
+  return role === 'admin'
+    ? ['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing']
+    : ['pos_billing'];
+}
+
 export async function POST(request: Request) {
   try {
     const { username, password } = await request.json();
@@ -38,11 +53,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    const token = signToken({ id: user.id, username: user.username, role: user.role, permissions: user.permissions });
+    const permissions = normalizePermissions(user.permissions, user.role);
+    const token = signToken({ id: user.id, username: user.username, role: user.role, permissions });
 
     const response = NextResponse.json({
       message: 'Login successful',
-      user: { id: user.id, username: user.username, role: user.role, permissions: user.permissions }
+      user: { id: user.id, username: user.username, role: user.role, permissions }
     });
 
     // Set cookie

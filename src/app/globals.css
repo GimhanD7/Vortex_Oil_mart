@@ -653,7 +653,8 @@ body {
 .topbar-control:nth-child(2)>button{width:184px;max-width:18vw}
 .bell{flex:0 0 42px;width:42px!important;height:42px!important;border-radius:10px!important;background:#fff!important;border:1px solid transparent!important}
 .bell:hover,.admin-profile:hover{background:#f8fafc!important;border-color:#dfe4ea!important}
-.bell i{right:4px!important;top:1px!important;width:18px;height:18px;font-size:11px;font-weight:800}
+.bell i,.pos-bell i{right:-4px!important;top:-5px!important;width:20px!important;height:20px!important;border:2px solid #fff!important;border-radius:999px!important;background:#ffbd00!important;color:#111827!important;font-size:11px!important;font-style:normal!important;font-weight:800!important;line-height:1!important;display:grid!important;place-items:center!important;box-shadow:0 3px 8px rgba(15,23,42,.18)!important;z-index:2}
+.bell svg,.pos-bell svg{position:relative;z-index:1}
 .notification-control{position:relative;display:grid;place-items:center}
 .notification-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:70;width:286px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 16px 34px rgba(15,23,42,.14);padding:8px}
 .notification-menu header{display:flex;align-items:center;justify-content:space-between;padding:8px 8px 12px;border-bottom:1px solid #eef2f7;margin-bottom:6px}
