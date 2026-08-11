@@ -270,7 +270,6 @@ export default function PosBilling() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [settings, setSettings] = useState<PosSettings>(defaultPosSettings);
-<<<<<<< HEAD
   const [lastInvoice, setLastInvoice] = useState<LastInvoice | null>(null);
   const [cashCycle, setCashCycle] = useState<CashCycle | null>(null);
   const [openingBalance, setOpeningBalance] = useState("");
@@ -284,11 +283,6 @@ export default function PosBilling() {
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closingBalance, setClosingBalance] = useState("");
   const [closingNotice, setClosingNotice] = useState("");
-=======
-  const [lastInvoice, setLastInvoice] = useState<{ id: number; date: string; items: CartItem[]; total: number; tax: number; subtotal: number; customerName: string } | null>(null);
-  const [shiftState, setShiftState] = useState<"loading" | "unstarted" | "active" | "closing">("loading");
-  const [cashAmount, setCashAmount] = useState("");
->>>>>>> 48e80046d9588aa36ee00fa3ecf599fa925516ce
 
   const fetchProducts = async () => {
     const response = await fetch("/api/products", { cache: "no-store" });
@@ -335,12 +329,6 @@ export default function PosBilling() {
           router.push("/");
         } else {
           setUser(data);
-          const saved = localStorage.getItem(`pos_shift_${data.id}`);
-          if (saved) {
-            setShiftState("active");
-          } else {
-            setShiftState("unstarted");
-          }
           setLoadingAuth(false);
         }
       })
@@ -624,24 +612,15 @@ export default function PosBilling() {
     }
   };
 
-  const initiateSignOut = () => {
-    setShiftState("closing");
-    setCashAmount("");
-    setShowProfile(false);
-  };
-
-  const confirmSignOut = () => {
-    if (!cashAmount) return;
-    if (user) localStorage.removeItem(`pos_shift_${user.id}`);
+  const signOut = () => {
     document.cookie = "auth_token=; Max-Age=0; path=/";
     router.push("/");
   };
 
-  if (loadingAuth || !user || shiftState === "loading") {
+  if (loadingAuth || !user) {
     return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>Loading POS...</div>;
   }
 
-<<<<<<< HEAD
   const isAdmin = user.role === "admin";
   const isCashier = !isAdmin;
   const shiftLabel = cashCycle?.id || "Open Shift";
@@ -658,71 +637,13 @@ export default function PosBilling() {
 
   const filteredNav = navItems.filter((item) => {
     if (isAdmin) return true;
-=======
-  if (shiftState === "unstarted" || shiftState === "closing") {
-    return (
-      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, backdropFilter: "blur(4px)" }}>
-        <div style={{ background: "white", padding: "32px", borderRadius: "12px", width: "100%", maxWidth: "420px", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
-          <h2 style={{ marginTop: 0, marginBottom: "16px", fontSize: "22px", color: "#0f172a" }}>
-            {shiftState === "unstarted" ? "Open Cash Drawer" : "Close Cash Drawer"}
-          </h2>
-          <p style={{ marginBottom: "24px", color: "#64748b", fontSize: "15px", lineHeight: 1.5 }}>
-            {shiftState === "unstarted" 
-              ? "Please enter the starting cash amount in the drawer to begin your shift."
-              : "Please enter the final cash amount in the drawer before logging out."}
-          </p>
-          <div style={{ marginBottom: "24px" }}>
-            <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: 600, color: "#334155" }}>Cash Amount (Rs.)</label>
-            <input 
-              type="number" 
-              value={cashAmount} 
-              onChange={(e) => setCashAmount(e.target.value)}
-              placeholder="e.g. 5000"
-              style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "2px solid #e2e8f0", fontSize: "16px", outline: "none", transition: "border-color 0.2s" }}
-              autoFocus
-            />
-          </div>
-          <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-            {shiftState === "closing" && (
-              <button onClick={() => setShiftState("active")} style={{ padding: "10px 18px", border: "1px solid #cbd5e1", background: "white", color: "#475569", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}>Cancel</button>
-            )}
-            <button 
-              onClick={() => {
-                if (!cashAmount) return;
-                if (shiftState === "unstarted") {
-                  localStorage.setItem(`pos_shift_${user.id}`, JSON.stringify({ status: "active", openingCash: Number(cashAmount), startTime: Date.now() }));
-                  setShiftState("active");
-                  setCashAmount("");
-                } else {
-                  confirmSignOut();
-                }
-              }} 
-              disabled={!cashAmount}
-              style={{ padding: "10px 18px", background: cashAmount ? "#2563eb" : "#94a3b8", color: "white", border: "none", borderRadius: "6px", cursor: cashAmount ? "pointer" : "not-allowed", fontWeight: 600, transition: "background 0.2s" }}
-            >
-              {shiftState === "unstarted" ? "Start Shift" : "Confirm & Logout"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const filteredNav = navItems.filter((item) => {
-    if (user.role === "admin") return true;
->>>>>>> 48e80046d9588aa36ee00fa3ecf599fa925516ce
     const req = PERMISSION_MAP[item.href];
     return !req || user.permissions.includes(req);
   });
 
   return (
-<<<<<<< HEAD
     <div className={`pos-shell ${isCashier ? "cashier-pos-shell" : ""}`}>
       {isAdmin && (
-=======
-    <div className="pos-shell">
-      {user.role === "admin" && (
->>>>>>> 48e80046d9588aa36ee00fa3ecf599fa925516ce
         <aside className="pos-sidebar">
           <div className="pos-logo">
             <span className="admin-logo-mark" aria-hidden="true"><i /></span>
@@ -741,11 +662,7 @@ export default function PosBilling() {
           </nav>
           <div className="pos-side-bottom">
             <button><CircleHelp className="pos-nav-icon" aria-hidden="true" /> Help &amp; Support</button>
-<<<<<<< HEAD
             <button onClick={signOut}>
-=======
-            <button onClick={initiateSignOut}>
->>>>>>> 48e80046d9588aa36ee00fa3ecf599fa925516ce
               <LogOut className="pos-nav-icon" aria-hidden="true" /> Logout
             </button>
           </div>
@@ -788,7 +705,6 @@ export default function PosBilling() {
                     <b>Notifications</b>
                     <small>Today</small>
                   </header>
-<<<<<<< HEAD
                   <button onClick={() => isAdmin && router.push("/admin/inventory")}>
                     <PackageCheck size={16} aria-hidden="true" />
                     <span><b>Low stock alert</b><small>{lowStockCount} items need reorder</small></span>
@@ -801,26 +717,6 @@ export default function PosBilling() {
                     <ShoppingCart size={16} aria-hidden="true" />
                     <span><b>Out of stock</b><small>{outOfStockCount} items need purchase stock</small></span>
                   </button>
-=======
-                  {(user.role === "admin" || user.permissions.includes("manage_inventory")) && (
-                    <button onClick={() => router.push("/admin/inventory")}>
-                      <PackageCheck size={16} aria-hidden="true" />
-                      <span><b>Low stock alert</b><small>{lowStockCount} items need reorder</small></span>
-                    </button>
-                  )}
-                  {(user.role === "admin" || user.permissions.includes("view_sales")) && (
-                    <button onClick={() => router.push("/admin/sales")}>
-                      <Receipt size={16} aria-hidden="true" />
-                      <span><b>Sales history</b><small>Review latest invoices</small></span>
-                    </button>
-                  )}
-                  {(user.role === "admin" || user.permissions.includes("manage_inventory")) && (
-                    <button onClick={() => router.push("/admin/purchases")}>
-                      <ShoppingCart size={16} aria-hidden="true" />
-                      <span><b>Out of stock</b><small>{outOfStockCount} items need purchase stock</small></span>
-                    </button>
-                  )}
->>>>>>> 48e80046d9588aa36ee00fa3ecf599fa925516ce
                 </div>
               )}
             </div>
@@ -847,11 +743,7 @@ export default function PosBilling() {
                       <small>{user.role === "admin" ? "Super Admin" : "Cashier"}</small>
                     </p>
                   </div>
-<<<<<<< HEAD
                   {isAdmin && (
-=======
-                  {user.role === "admin" && (
->>>>>>> 48e80046d9588aa36ee00fa3ecf599fa925516ce
                     <>
                       <button onClick={() => router.push("/admin/dashboard")}>
                         <LayoutDashboard size={16} aria-hidden="true" /> Admin Dashboard
@@ -861,14 +753,10 @@ export default function PosBilling() {
                       </button>
                     </>
                   )}
-<<<<<<< HEAD
                   <button>
                     <CircleHelp size={16} aria-hidden="true" /> Help &amp; Support
                   </button>
                   <button className="danger" onClick={signOut}>
-=======
-                  <button className="danger" onClick={initiateSignOut}>
->>>>>>> 48e80046d9588aa36ee00fa3ecf599fa925516ce
                     <LogOut size={16} aria-hidden="true" /> Logout
                   </button>
                 </div>
