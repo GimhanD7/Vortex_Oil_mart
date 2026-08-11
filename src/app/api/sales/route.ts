@@ -104,6 +104,7 @@ export async function GET(request: Request) {
     const cashier = searchParams.get('cashier');
     const paymentMethod = searchParams.get('payment_method');
     const status = searchParams.get('status');
+    const cycleId = searchParams.get('cycle_id');
 
     if (dateFrom) {
       where.push('COALESCE(s.business_date, DATE(s.created_at)) >= ?');
@@ -124,6 +125,10 @@ export async function GET(request: Request) {
     if (status && status !== 'All Status') {
       where.push('s.status = ?');
       values.push(status.toLowerCase());
+    }
+    if (cycleId) {
+      where.push('s.sales_cycle_id = ?');
+      values.push(cycleId);
     }
 
     const [rows] = await pool.query(`

@@ -9,6 +9,7 @@ import {
   Boxes,
   ChevronDown,
   CircleHelp,
+  ClipboardList,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -25,6 +26,7 @@ import {
 const allNav = [
   ["dashboard", "Dashboard", "/admin/dashboard"],
   ["sales", "Sales", "/admin/sales"],
+  ["cycles", "Sales Cycles", "/admin/sales-cycles"],
   ["products", "Products", "/admin/products"],
   ["inventory", "Inventory", "/admin/inventory"],
   ["customers", "Customers", "/admin/customers"],
@@ -36,6 +38,7 @@ const allNav = [
 
 const PERMISSION_MAP: Record<string, string> = {
   "/admin/sales": "view_sales",
+  "/admin/sales-cycles": "view_sales",
   "/admin/products": "manage_products",
   "/admin/inventory": "manage_inventory",
   "/admin/customers": "manage_customers",
@@ -51,6 +54,7 @@ type NavIcon = (typeof allNav)[number][0];
 const navIcons: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
   sales: TrendingUp,
+  cycles: ClipboardList,
   products: Package,
   inventory: Boxes,
   customers: Users,
@@ -69,21 +73,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
 
-  const [showShift, setShowShift] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [user, setUser] = useState<{ username: string; role: string; permissions: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [notificationSummary, setNotificationSummary] = useState({ lowStock: 0, recentOrders: 0, outOfStock: 0 });
-
-  const today = new Date();
-  const nextWeek = new Date(today);
-  nextWeek.setDate(today.getDate() + 6);
-
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(nextWeek);
 
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
@@ -140,29 +135,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const req = PERMISSION_MAP[item[2]];
     return !req || user.permissions.includes(req);
   });
-
-  const formatDate = (d: Date) => {
-    if (isNaN(d.getTime())) return "Invalid Date";
-    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-  };
-
-  const pageTitle = pathname.includes("products")
-    ? "Product Management"
-    : pathname.includes("purchases")
-      ? "Purchase Management"
-    : pathname.includes("inventory")
-      ? "Inventory"
-      : pathname.includes("customers")
-        ? "Customers"
-        : pathname.includes("sales")
-          ? "Sales"
-          : pathname.includes("users")
-            ? "Users"
-            : pathname.includes("reports")
-              ? "Reports & Analytics"
-              : pathname.includes("settings")
-                ? "Settings"
-                : "Dashboard";
 
   const signOut = () => {
     document.cookie = "auth_token=; Max-Age=0; path=/";
@@ -221,56 +193,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           >
             <Menu aria-hidden="true" size={24} strokeWidth={2} />
           </button>
-          <div className="page-title">
-            <h1>{pageTitle}</h1>
-            <p>Welcome back, {user.username}</p>
-          </div>
 
           <div className="topbar-actions">
-            <div className="topbar-control">
-              <button onClick={() => {
-                setShowDatePicker(!showDatePicker);
-                setShowShift(false);
-                setShowProfile(false);
-                setShowNotifications(false);
-              }}>
-                {formatDate(startDate)} - {formatDate(endDate)}
-                <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
-              </button>
-              {showDatePicker && (
-                <div className="topbar-menu date-menu">
-                  <label>
-                    Start Date
-                    <input type="date" value={startDate.toISOString().split("T")[0]} onChange={(e) => setStartDate(new Date(e.target.value))} />
-                  </label>
-                  <label>
-                    End Date
-                    <input type="date" value={endDate.toISOString().split("T")[0]} onChange={(e) => setEndDate(new Date(e.target.value))} />
-                  </label>
-                  <button onClick={() => setShowDatePicker(false)}>Apply</button>
-                </div>
-              )}
-            </div>
-
-            <div className="topbar-control">
-              <button onClick={() => {
-                setShowShift(!showShift);
-                setShowDatePicker(false);
-                setShowProfile(false);
-                setShowNotifications(false);
-              }}>
-                Shift #CSH-001
-                <ChevronDown aria-hidden="true" size={16} strokeWidth={2} />
-              </button>
-              {showShift && (
-                <div className="topbar-menu shift-menu">
-                  <button onClick={() => setShowShift(false)}>Shift #CSH-001 (Active)</button>
-                  <button onClick={() => setShowShift(false)}>Shift #CSH-002</button>
-                  <button className="danger" onClick={() => setShowShift(false)}>Close Shift</button>
-                </div>
-              )}
-            </div>
-
             <div className="notification-control">
               <button
                 className="bell"
@@ -278,8 +202,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 aria-expanded={showNotifications}
                 onClick={() => {
                   setShowNotifications((current) => !current);
-                  setShowDatePicker(false);
-                  setShowShift(false);
                   setShowProfile(false);
                 }}
               >
@@ -321,8 +243,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 aria-expanded={showProfile}
                 onClick={() => {
                   setShowProfile(!showProfile);
-                  setShowDatePicker(false);
-                  setShowShift(false);
                   setShowNotifications(false);
                 }}
               >

@@ -60,6 +60,12 @@ function CategoryIcon({ category, className = "" }: { category: string; classNam
   return <Box {...props} />;
 }
 
+function stockBadge(stockQuantity: number) {
+  if (stockQuantity === 0) return { className: "out", label: "Out of Stock" };
+  if (stockQuantity < 10) return { className: "low", label: "Low Stock" };
+  return { className: "", label: "In Stock" };
+}
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [dbCategories, setDbCategories] = useState<{id: number, name: string}[]>([]);
@@ -269,19 +275,20 @@ export default function ProductsPage() {
       <section className="product-overview">
         <h2>Product Overview</h2>
         <div>
-          {shown.slice(0, 7).map((p) => (
-            <article key={p.id}>
-              <CategoryIcon category={p.category || "General"} className="product-card-icon" />
-              <b>{p.name}</b>
-              <small>SKU: {p.sku}</small>
-              <em className={p.stock_quantity < 10 ? "low" : ""}>
-                {p.stock_quantity ? "In Stock" : "Out of Stock"}
-              </em>
-              <strong>
-                Rs. {Number(p.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </strong>
-            </article>
-          ))}
+          {shown.slice(0, 7).map((p) => {
+            const status = stockBadge(p.stock_quantity);
+            return (
+              <article key={p.id}>
+                <CategoryIcon category={p.category || "General"} className="product-card-icon" />
+                <b>{p.name}</b>
+                <small>SKU: {p.sku}</small>
+                <em className={status.className}>{status.label}</em>
+                <strong>
+                  Rs. {Number(p.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </strong>
+              </article>
+            );
+          })}
         </div>
       </section>
 
@@ -371,9 +378,7 @@ export default function ProductsPage() {
                   )}
                   {cols.status && (
                     <td>
-                      <em className={p.stock_quantity === 0 ? "out" : p.stock_quantity < 10 ? "low" : ""}>
-                        {p.stock_quantity === 0 ? "Out of Stock" : p.stock_quantity < 10 ? "Low Stock" : "In Stock"}
-                      </em>
+                      <em className={stockBadge(p.stock_quantity).className}>{stockBadge(p.stock_quantity).label}</em>
                     </td>
                   )}
                   {cols.actions && (

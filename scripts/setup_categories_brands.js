@@ -45,6 +45,11 @@ async function setupCategoriesAndBrands() {
       await connection.query(`INSERT IGNORE INTO categories (name) VALUES (?)`, [c]);
     }
 
+    const defaultBrands = ["Shell India", "ExxonMobil", "Castrol India", "Bosch Ltd.", "Amaron", "Brembo India", "NGK India", "Mann+Hummel", "Generic"];
+    for (const b of defaultBrands) {
+      await connection.query(`INSERT IGNORE INTO brands (name) VALUES (?)`, [b]);
+    }
+
     console.log('Categories and Brands successfully migrated to dedicated tables.');
   } catch (err) {
     console.error('Migration failed:', err);

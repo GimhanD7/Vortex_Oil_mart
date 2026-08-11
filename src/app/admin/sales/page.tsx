@@ -47,6 +47,104 @@ function downloadFile(name: string, text: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+function invoiceNo(saleId: number) {
+  return `INV-${String(saleId).padStart(6, "0")}`;
+}
+
+function escapeHtml(value: string | number | null | undefined) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function buildReceiptHtml(sale: Sale, items: SaleItem[]) {
+  const subtotal = money(sale.subtotal_amount || sale.total_amount);
+  const discount = money(sale.discount_amount || 0);
+  const tax = money(sale.tax_amount || 0);
+  const total = money(sale.total_amount);
+  const invoice = invoiceNo(sale.id);
+  const itemRows = items.length
+    ? items.map((item) => `
+        <tr>
+          <td>${escapeHtml(item.product_name)}</td>
+          <td>${escapeHtml(item.quantity)}</td>
+          <td>${escapeHtml(money(item.price_at_time))}</td>
+          <td>${escapeHtml(money(Number(item.price_at_time) * item.quantity))}</td>
+        </tr>
+      `).join("")
+    : `<tr><td colspan="4" class="empty">No item rows found.</td></tr>`;
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(invoice)} Receipt</title>
+  <style>
+    @page { size: 80mm auto; margin: 4mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #fff; color: #111827; font-family: "Courier New", monospace; font-size: 11px; }
+    .receipt { width: 72mm; margin: 0 auto; padding: 4mm 0; }
+    .brand { text-align: center; border-bottom: 1px dashed #9ca3af; padding-bottom: 10px; margin-bottom: 10px; }
+    .brand h1 { margin: 0 0 4px; font: 800 20px Arial, sans-serif; letter-spacing: 0; }
+    .brand h1 span { color: #eaa600; }
+    .brand p { margin: 0; line-height: 1.45; }
+    .meta { border-bottom: 1px dashed #9ca3af; padding-bottom: 8px; margin-bottom: 8px; }
+    .row { display: flex; justify-content: space-between; gap: 10px; margin: 5px 0; }
+    .row b { text-align: right; font-weight: 700; overflow-wrap: anywhere; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th { border-bottom: 1px dashed #9ca3af; padding: 5px 2px; text-align: left; }
+    td { border-bottom: 1px dotted #d1d5db; padding: 6px 2px; vertical-align: top; }
+    th:nth-child(n+2), td:nth-child(n+2) { text-align: right; }
+    td:first-child { text-align: left; }
+    .empty { text-align: center !important; color: #6b7280; }
+    .totals { border-top: 1px dashed #9ca3af; margin-top: 9px; padding-top: 7px; }
+    .total { border-top: 1px dashed #9ca3af; padding-top: 7px; margin-top: 7px; font-size: 15px; font-weight: 800; }
+    .thanks { text-align: center; margin-top: 14px; line-height: 1.5; color: #475569; }
+    @media screen {
+      body { background: #f3f4f6; padding: 16px; }
+      .receipt { background: #fff; box-shadow: 0 12px 35px #0002; padding: 8mm; }
+    }
+  </style>
+</head>
+<body>
+  <main class="receipt">
+    <section class="brand">
+      <h1>OIL <span>MART</span></h1>
+      <p>Oil &amp; Spare Parts Store<br />123, Industrial Area, New Delhi</p>
+    </section>
+    <section class="meta">
+      <div class="row"><span>Invoice No.</span><b>${escapeHtml(invoice)}</b></div>
+      <div class="row"><span>Date</span><b>${escapeHtml(new Date(sale.created_at).toLocaleString())}</b></div>
+      <div class="row"><span>Business Date</span><b>${escapeHtml(sale.business_date ? new Date(sale.business_date).toLocaleDateString() : new Date(sale.created_at).toLocaleDateString())}</b></div>
+      <div class="row"><span>Sales Cycle</span><b>${escapeHtml(sale.sales_cycle_id || "-")}</b></div>
+      <div class="row"><span>Cashier</span><b>${escapeHtml(sale.cashier_name || "Admin")}</b></div>
+      <div class="row"><span>Customer</span><b>${escapeHtml(sale.customer_name || "Walk-in Customer")}</b></div>
+      <div class="row"><span>Payment</span><b>${escapeHtml(sale.payment_method || "Cash")}</b></div>
+      <div class="row"><span>Status</span><b>${escapeHtml(sale.status || "completed")}</b></div>
+    </section>
+    <table>
+      <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+      <tbody>${itemRows}</tbody>
+    </table>
+    <section class="totals">
+      <div class="row"><span>Subtotal</span><b>${escapeHtml(subtotal)}</b></div>
+      <div class="row"><span>Discount (${escapeHtml(Number(sale.discount_rate || 0))}%)</span><b>- ${escapeHtml(discount)}</b></div>
+      <div class="row"><span>Tax (${escapeHtml(Number(sale.tax_rate || 0))}% GST)</span><b>${escapeHtml(tax)}</b></div>
+      ${sale.payment_method === "Cash" ? `
+        <div class="row"><span>Cash Received</span><b>${escapeHtml(money(sale.cash_received || 0))}</b></div>
+        <div class="row"><span>Balance Returned</span><b>${escapeHtml(money(sale.cash_balance || 0))}</b></div>
+      ` : ""}
+      <div class="row total"><span>Total</span><b>${escapeHtml(total)}</b></div>
+    </section>
+    <p class="thanks">Thank you for your visit!<br />Drive safe. Stay protected.</p>
+  </main>
+</body>
+</html>`;
+}
+
 export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [selected, setSelected] = useState<Sale | null>(null);
@@ -96,22 +194,53 @@ export default function SalesPage() {
     };
   }, [loadSales]);
 
+  const loadSaleItems = useCallback(async (saleId: number) => {
+    const response = await fetch(`/api/sales/${saleId}`, { cache: "no-store" });
+    const data = await response.json();
+    const rows = Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : [];
+    setSaleItems(rows);
+    return rows as SaleItem[];
+  }, []);
+
   useEffect(() => {
     if (!selected) {
       return;
     }
 
-    fetch(`/api/sales/${selected.id}`, { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => setSaleItems(Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : []))
+    setSaleItems([]);
+    loadSaleItems(selected.id)
       .catch(() => setSaleItems([]));
-  }, [selected]);
+  }, [loadSaleItems, selected]);
+
+  const printReceipt = async (sale = selected) => {
+    if (!sale) return;
+    setSelected(sale);
+    const items = await loadSaleItems(sale.id).catch(() => []);
+    const printWindow = window.open("", "_blank", "width=420,height=720");
+    if (!printWindow) {
+      setMessage("Please allow pop-ups to print the receipt.");
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(buildReceiptHtml(sale, items));
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  };
+
+  const downloadReceipt = async () => {
+    if (!selected) return;
+    const items = await loadSaleItems(selected.id).catch(() => []);
+    downloadFile(`${invoiceNo(selected.id)}-receipt.html`, buildReceiptHtml(selected, items), "text/html");
+  };
 
   const exportSales = () => {
     const rows = [
       ["Invoice No", "Date", "Cashier", "Customer", "Payment Method", "Items", "Total", "Status"],
       ...sales.map((sale) => [
-        `INV-${String(sale.id).padStart(6, "0")}`,
+        invoiceNo(sale.id),
         new Date(sale.created_at).toLocaleString(),
         sale.cashier_name || "Admin",
         sale.customer_name || "Walk-in Customer",
@@ -124,15 +253,9 @@ export default function SalesPage() {
     downloadFile("oil-mart-sales.csv", rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n"), "text/csv");
   };
 
-  const exportInvoice = () => {
-    if (!selected) return;
-    const payload = { invoice: selected, items: saleItems };
-    downloadFile(`invoice-${selected.id}.json`, JSON.stringify(payload, null, 2), "application/json");
-  };
-
   const refundInvoice = async () => {
     if (!selected || selected.status === "refunded") return;
-    if (!confirm(`Refund invoice INV-${String(selected.id).padStart(6, "0")}? Stock will be returned.`)) return;
+    if (!confirm(`Refund invoice ${invoiceNo(selected.id)}? Stock will be returned.`)) return;
     const response = await fetch(`/api/sales/${selected.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -224,7 +347,7 @@ export default function SalesPage() {
                 <tbody>
                   {sales.map((sale) => (
                     <tr key={sale.id} onClick={() => setSelected(sale)} className={selected?.id === sale.id ? "selected" : ""}>
-                      {cols.inv && <td><b>INV-{String(sale.id).padStart(6, "0")}</b></td>}
+                      {cols.inv && <td><b>{invoiceNo(sale.id)}</b></td>}
                       {cols.date && <td>{new Date(sale.created_at).toLocaleString()}</td>}
                       {cols.cashier && <td>{sale.cashier_name || "Admin"}</td>}
                       {cols.cust && <td>{sale.customer_name || "Walk-in Customer"}</td>}
@@ -235,7 +358,7 @@ export default function SalesPage() {
                       {cols.actions && (
                         <td>
                           <button aria-label="View invoice" onClick={(event) => { event.stopPropagation(); setSelected(sale); }}><Eye size={15} aria-hidden="true" /></button>
-                          <button aria-label="Print invoice" onClick={(event) => { event.stopPropagation(); setSelected(sale); setTimeout(() => window.print(), 50); }}><Printer size={15} aria-hidden="true" /></button>
+                          <button aria-label="Print invoice" onClick={(event) => { event.stopPropagation(); void printReceipt(sale); }}><Printer size={15} aria-hidden="true" /></button>
                         </td>
                       )}
                     </tr>
@@ -253,14 +376,14 @@ export default function SalesPage() {
               <h2>Invoice Preview</h2>
               <button onClick={() => setSelected(null)}><X size={20} aria-label="Close" /></button>
             </header>
-            <div className="preview-paper">
+            <div className="preview-paper printable-invoice sales-print-receipt">
               <div className="preview-brand">
                 <h3>OIL <b>MART</b></h3>
                 <p>Oil &amp; Spare Parts Store<br />123, Industrial Area, New Delhi</p>
               </div>
               <dl>
                 {[
-                  ["Invoice No.", `INV-${String(selected.id).padStart(6, "0")}`],
+                  ["Invoice No.", invoiceNo(selected.id)],
                   ["Date", new Date(selected.created_at).toLocaleString()],
                   ["Business Date", selected.business_date ? new Date(selected.business_date).toLocaleDateString() : new Date(selected.created_at).toLocaleDateString()],
                   ["Sales Cycle", selected.sales_cycle_id || "-"],
@@ -299,8 +422,8 @@ export default function SalesPage() {
               <p className="thanks">Thank you for your visit!<br />Drive safe. Stay protected.</p>
             </div>
             <footer>
-              <button onClick={() => window.print()}><Printer size={15} aria-hidden="true" /> Print</button>
-              <button onClick={exportInvoice}><Download size={15} aria-hidden="true" /> Export</button>
+              <button onClick={() => void printReceipt()}><Printer size={15} aria-hidden="true" /> Print</button>
+              <button onClick={() => void downloadReceipt()}><Download size={15} aria-hidden="true" /> Download Receipt</button>
               <button className="danger" onClick={refundInvoice} disabled={selected.status === "refunded"}><RotateCcw size={15} aria-hidden="true" /> Refund</button>
             </footer>
           </aside>

@@ -891,3 +891,67 @@ body {
   .admin-footer{grid-template-columns:1fr;justify-items:center;min-height:44px!important;padding:8px 12px!important}
   .admin-footer>span,.admin-footer p,.admin-footer nav{display:none!important}
 }
+
+/* Product overview card readability */
+.products-page .product-overview{overflow:visible}
+.products-page .product-overview>div{grid-template-columns:repeat(auto-fit,minmax(165px,1fr));align-items:stretch}
+.products-page .product-overview article{height:auto;min-height:238px;padding:14px 12px 13px;justify-content:flex-start;gap:0}
+.products-page .product-card-icon{width:58px;height:58px;margin:8px 0 18px}
+.products-page .product-overview article>b{
+  display:-webkit-box;
+  min-height:38px;
+  max-width:100%;
+  overflow:hidden;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  white-space:normal;
+  text-align:center;
+  text-overflow:clip;
+  font-size:13px;
+  line-height:1.35;
+  letter-spacing:0;
+}
+.products-page .product-overview article small{margin:7px 0 10px;line-height:1.2;text-align:center}
+.products-page .product-overview article em{margin-top:0}
+.products-page .product-overview article em.out,.products-page .management-table td em.out{background:#ffe8e8;color:#dc2626}
+.products-page .product-overview article em.low,.products-page .management-table td em.low{background:#fff3d9;color:#e49b00}
+.products-page .product-overview article em:not(.low):not(.out),.products-page .management-table td em:not(.low):not(.out){background:#eaf9ef;color:#168c42}
+.products-page .product-overview article strong{margin-top:12px;line-height:1.2;text-align:center}
+@media(max-width:900px){
+  .products-page .product-overview>div{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))}
+  .products-page .product-overview article{min-height:226px}
+}
+
+/* Sales cycle admin history */
+.cycle-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.cycle-kpis article{background:#fff;border:1px solid #e3e6e9;border-radius:9px;padding:16px;display:grid;gap:7px;min-width:0}
+.cycle-kpis small{font-size:12px;color:#667085}
+.cycle-kpis b{font-size:21px;line-height:1.1;overflow-wrap:anywhere}
+.cycle-kpis em{font-size:11px;color:#7b8190;font-style:normal}
+.cycle-filters{display:grid;grid-template-columns:1fr 1fr 1.1fr 1fr auto;gap:10px;margin-bottom:14px}
+.cycle-filters label,.cycle-filters select{height:42px;background:#fff;border:1px solid #dfe4ea;border-radius:8px;display:flex;align-items:center;gap:8px;padding:0 12px;color:#344054}
+.cycle-filters input,.cycle-filters select{min-width:0;width:100%;border:0;background:transparent;outline:0;font:inherit;font-size:13px;color:#344054}
+.cycle-filters select{border:1px solid #dfe4ea;background:#fff}
+.cycle-filters button{height:42px}
+.cycle-layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.55fr);gap:14px;margin-bottom:14px;align-items:start}
+.cycle-list table{min-width:900px}
+.cycle-list tr.selected-row{background:#fffaf0}
+.cycle-detail{background:#fff;border:1px solid #e3e6e9;border-radius:9px;padding:16px;position:sticky;top:84px}
+.cycle-detail header{display:grid;gap:5px;margin-bottom:12px}
+.cycle-detail header small{font-size:11px;color:#667085}
+.cycle-detail h2{font-size:16px;line-height:1.25;word-break:break-word}
+.cycle-detail header span{width:max-content;border-radius:999px;background:#eaf9ef;color:#168c42;padding:5px 9px;font-size:11px;text-transform:capitalize}
+.cycle-detail header span.open{background:#fff3d9;color:#e49b00}
+.cycle-detail dl{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0}
+.cycle-detail div{border:1px solid #edf0f3;border-radius:8px;padding:10px;min-width:0}
+.cycle-detail dt{font-size:11px;color:#667085;margin-bottom:5px}
+.cycle-detail dd{margin:0;font-size:12px;font-weight:800;color:#111827;overflow-wrap:anywhere}
+@media(max-width:1180px){
+  .cycle-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .cycle-layout{grid-template-columns:1fr}
+  .cycle-detail{position:static}
+}
+@media(max-width:760px){
+  .cycle-kpis,.cycle-filters{grid-template-columns:1fr}
+  .cycle-detail dl{grid-template-columns:1fr}
+}
