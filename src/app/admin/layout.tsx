@@ -32,7 +32,6 @@ const allNav = [
   ["users", "Users", "/admin/users"],
   ["purchases", "Purchases", "/admin/purchases"],
   ["settings", "Settings", "/admin/settings"],
-  ["pos", "POS Billing", "/dashboard"],
 ] as const;
 
 const PERMISSION_MAP: Record<string, string> = {
@@ -59,7 +58,6 @@ const navIcons: Record<NavIcon, LucideIcon> = {
   users: UserCog,
   purchases: PackageCheck,
   settings: Settings,
-  pos: ShoppingCart,
 };
 
 function AdminNavIcon({ name }: { name: NavIcon }) {
@@ -139,7 +137,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const nav = allNav.filter((item) => {
     if (user.role === "admin") return true;
-    if (item[1] === "Settings") return true;
     const req = PERMISSION_MAP[item[2]];
     return !req || user.permissions.includes(req);
   });
@@ -295,18 +292,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <b>Notifications</b>
                     <small>Live admin alerts</small>
                   </header>
-                  <button onClick={() => router.push("/admin/inventory")}>
-                    <PackageCheck size={16} aria-hidden="true" />
-                    <span><b>{notificationSummary.lowStock} low stock items</b><small>Open inventory reorder alerts</small></span>
-                  </button>
-                  <button onClick={() => router.push("/admin/sales")}>
-                    <TrendingUp size={16} aria-hidden="true" />
-                    <span><b>{notificationSummary.recentOrders} recent orders</b><small>Review sales and invoices</small></span>
-                  </button>
-                  <button onClick={() => router.push("/admin/products")}>
-                    <Package size={16} aria-hidden="true" />
-                    <span><b>{notificationSummary.outOfStock} out of stock items</b><small>Update unavailable products</small></span>
-                  </button>
+                  {(user.role === "admin" || user.permissions.includes("manage_inventory")) && (
+                    <button onClick={() => router.push("/admin/inventory")}>
+                      <PackageCheck size={16} aria-hidden="true" />
+                      <span><b>{notificationSummary.lowStock} low stock items</b><small>Open inventory reorder alerts</small></span>
+                    </button>
+                  )}
+                  {(user.role === "admin" || user.permissions.includes("view_sales")) && (
+                    <button onClick={() => router.push("/admin/sales")}>
+                      <TrendingUp size={16} aria-hidden="true" />
+                      <span><b>{notificationSummary.recentOrders} recent orders</b><small>Review sales and invoices</small></span>
+                    </button>
+                  )}
+                  {(user.role === "admin" || user.permissions.includes("manage_products")) && (
+                    <button onClick={() => router.push("/admin/products")}>
+                      <Package size={16} aria-hidden="true" />
+                      <span><b>{notificationSummary.outOfStock} out of stock items</b><small>Update unavailable products</small></span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -339,9 +342,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       <small>{user.role === "admin" ? "Super Admin" : "Cashier"}</small>
                     </p>
                   </div>
-                  <button onClick={() => router.push("/admin/settings")}>
-                    <Settings size={16} aria-hidden="true" /> Settings
-                  </button>
+                  {user.role === "admin" && (
+                    <button onClick={() => router.push("/admin/settings")}>
+                      <Settings size={16} aria-hidden="true" /> Settings
+                    </button>
+                  )}
                   <button onClick={() => router.push("/dashboard")}>
                     <ShoppingCart size={16} aria-hidden="true" /> POS Billing
                   </button>
