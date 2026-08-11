@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Download, PackageCheck, Receipt, Wallet } from "lucide-react";
 
 type ReportData = {
   daily: { date: string; total: string; orders: number }[];
@@ -9,6 +10,14 @@ type ReportData = {
   brands: { brand: string; total: string; items_sold: string }[];
   categories: { category: string; total: string; items_sold: string }[];
   staff: { cashier: string; total: string; orders: number }[];
+};
+
+type TimelineRow = {
+  date?: string;
+  month?: string;
+  year?: number;
+  total: string;
+  orders: number;
 };
 
 function Panel({ title, action, children, className = "", style }: { title: string; action?: React.ReactNode; children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
@@ -52,7 +61,7 @@ export default function ReportsPage() {
   const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
   const currentTimelineData = data[timelineView] || [];
-  const maxTimelineTotal = Math.max(...currentTimelineData.map((d: any) => Number(d.total)), 1);
+  const maxTimelineTotal = Math.max(...(currentTimelineData as TimelineRow[]).map((row) => Number(row.total)), 1);
 
   const exportCSV = () => {
     if (!data) return;
@@ -62,7 +71,7 @@ export default function ReportsPage() {
     // Revenue Timeline (Current View)
     csvContent += `--- ${timelineView.toUpperCase()} SALES ---\n`;
     csvContent += timelineView === 'daily' ? "Date,Total Revenue,Orders\n" : timelineView === 'monthly' ? "Month,Total Revenue,Orders\n" : "Year,Total Revenue,Orders\n";
-    currentTimelineData.forEach((row: any) => {
+    (currentTimelineData as TimelineRow[]).forEach((row) => {
       csvContent += `${row.date || row.month || row.year},${row.total},${row.orders}\n`;
     });
     
@@ -100,21 +109,21 @@ export default function ReportsPage() {
     <div className="dashboard-grid">
       <section className="metric-row">
         <article className="metric-card">
-          <span className="green">◉</span>
+          <span className="green"><Wallet size={22} aria-hidden="true" /></span>
           <div>
             <small>All-Time Revenue</small>
             <strong>Rs. {totalRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong>
           </div>
         </article>
         <article className="metric-card">
-          <span className="blue">▤</span>
+          <span className="blue"><Receipt size={22} aria-hidden="true" /></span>
           <div>
             <small>Total Orders</small>
             <strong>{totalOrders}</strong>
           </div>
         </article>
         <article className="metric-card">
-          <span className="purple">♙</span>
+          <span className="purple"><PackageCheck size={22} aria-hidden="true" /></span>
           <div>
             <small>Average Order Value</small>
             <strong>Rs. {avgOrderValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong>
@@ -129,9 +138,9 @@ export default function ReportsPage() {
         action={
           <div style={{ display: 'flex', gap: '8px' }}>
             <button onClick={exportCSV} style={{ padding: '6px 12px', background: 'var(--brand)', color: 'var(--brand-text)', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 'bold' }}>
-              ⇩ Export CSV
+              <Download size={14} aria-hidden="true" /> Export CSV
             </button>
-            <select value={timelineView} onChange={(e) => setTimelineView(e.target.value as any)} style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+            <select value={timelineView} onChange={(e) => setTimelineView(e.target.value as "daily" | "monthly" | "yearly")} style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
               <option value="daily">Daily (Last 30 Days)</option>
               <option value="monthly">Monthly (Last 12 Months)</option>
               <option value="yearly">Yearly</option>
@@ -139,26 +148,19 @@ export default function ReportsPage() {
           </div>
         }
       >
-        <div style={{ display: 'flex', height: '250px', alignItems: 'flex-end', gap: '8px', padding: '20px 0', overflowX: 'auto' }}>
+        <div className="report-timeline-bars">
           {currentTimelineData.length === 0 ? (
             <div style={{ width: '100%', textAlign: 'center', color: '#94a3b8', alignSelf: 'center' }}>No sales data available for this period.</div>
           ) : (
-            currentTimelineData.map((item: any, i: number) => {
+            (currentTimelineData as TimelineRow[]).map((item) => {
               const val = Number(item.total);
               const heightPct = Math.max((val / maxTimelineTotal) * 100, 2);
               const label = item.date || item.month || item.year;
               return (
-                <div key={label} style={{ flex: '1', minWidth: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                  <div 
-                    title={`Rs. ${val.toLocaleString("en-IN")} (${item.orders} orders)`}
-                    style={{ 
-                      width: '100%', 
-                      height: `${heightPct}%`, 
-                      background: 'var(--accent)', 
-                      borderRadius: '4px 4px 0 0',
-                      transition: 'height 0.3s ease'
-                    }} 
-                  />
+                <div key={label} style={{ flex: '1', minWidth: '46px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                  <div className="report-bar-track">
+                    <i title={`Rs. ${val.toLocaleString("en-IN")} (${item.orders} orders)`} style={{ height: `${heightPct}%` }} />
+                  </div>
                   <small style={{ fontSize: '10px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
                     {String(label).split('-').slice(-2).join('/')}
                   </small>

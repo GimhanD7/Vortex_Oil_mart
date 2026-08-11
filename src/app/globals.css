@@ -621,7 +621,7 @@ body {
 .settings-form-card{grid-column:span 1}
 .settings-form{display:grid;gap:10px}
 .settings-form label{display:grid;gap:5px;font-size:12px;font-weight:700;color:#344054}
-.settings-form input,.settings-form textarea{width:100%;border:1px solid #dfe3e8;border-radius:7px;padding:9px 10px;font:inherit;font-size:13px;color:#111827;background:#fff}
+.settings-form input,.settings-form textarea,.settings-form select{width:100%;border:1px solid #dfe3e8;border-radius:7px;padding:9px 10px;font:inherit;font-size:13px;color:#111827;background:#fff}
 .settings-form textarea{min-height:72px;resize:vertical}
 .payment-checks{display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:10px 14px;margin:2px 0 4px}
 .payment-checks label{height:34px;display:flex!important;align-items:center;justify-content:flex-start;gap:9px;border:1px solid #e5e8ec;border-radius:7px;padding:0 10px;font-weight:600;background:#fff}
@@ -719,3 +719,175 @@ body {
 
 @media(max-width:1100px){.purchase-detail,.movement-filters{grid-template-columns:1fr 1fr}.payments>div{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:700px){.purchase-detail,.movement-filters,.payment-checks{grid-template-columns:1fr}}
+
+/* Cashier POS flow */
+.cashier-pos-shell .pos-workspace{margin-left:0;width:100%}
+.cashier-pos-shell .admin-mode-bar{padding-inline:34px}
+.cashier-pos-shell .pos-page-title{min-width:280px}
+.cashier-pos-shell .pos-main{grid-template-columns:minmax(660px,1.65fr) minmax(390px,.85fr)}
+.cashier-pos-shell .catalog{padding:20px 22px}
+.cashier-pos-shell .cart-pane{border-left:1px solid #e4e6e9}
+.cashier-shift-chip{height:38px;border:1px solid #e4e6e9;background:#fff;border-radius:8px;padding:0 13px;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:700;color:#273241;white-space:nowrap}
+.cashier-shift-chip svg{color:#16a34a}
+.cashier-summary-card{margin-top:14px;background:#fff;border:1px solid #dfe4ea;border-radius:10px;padding:14px;box-shadow:0 8px 22px rgba(15,23,42,.05)}
+.cashier-summary-card header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.cashier-summary-card h2{font-size:16px;display:flex;align-items:center;gap:8px;margin:0}
+.cashier-summary-card h2 svg{color:#f0a800}
+.cashier-summary-card header p{font-size:12px;color:#667085;margin-top:4px}
+.summary-tabs{height:34px;border:1px solid #e2e5e8;border-radius:8px;padding:3px;display:flex;align-items:center;background:#f8fafc}
+.summary-tabs button{height:26px;border:0;border-radius:6px;background:transparent;padding:0 11px;font-size:12px;font-weight:800;color:#667085;cursor:pointer}
+.summary-tabs button.active{background:#ffbd00;color:#111827}
+.summary-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.summary-metrics p{border:1px solid #e5e7eb;border-radius:8px;padding:10px;display:grid;gap:5px;min-width:0}
+.summary-metrics small{font-size:11px;color:#667085}
+.summary-metrics b{font-size:14px;color:#111827;line-height:1.2;word-break:break-word}
+.cashier-summary-card footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;border-top:1px solid #eef2f7;padding-top:12px}
+.cashier-summary-card footer span{font-size:13px;color:#667085}
+.cashier-summary-card footer button{height:36px;border:1px solid #fecaca;background:#fff1f1;color:#dc2626;border-radius:8px;padding:0 12px;display:inline-flex;align-items:center;gap:7px;font-weight:800;cursor:pointer}
+.cash-opening-shell{min-height:calc(100vh - 68px);display:grid;place-items:center;padding:32px;background:linear-gradient(180deg,#f8fafc,#eef2f7)}
+.cash-opening-card{width:min(520px,100%);background:#fff;border:1px solid #dfe4ea;border-radius:12px;box-shadow:0 20px 48px rgba(15,23,42,.11);padding:28px;display:grid;gap:18px}
+.cash-opening-icon,.cash-modal-icon{width:52px;height:52px;border-radius:12px;background:#fff5d6;color:#f0a800;display:grid;place-items:center}
+.cash-opening-card h2,.cash-modal h2{font-size:24px;line-height:1.1;margin:0}
+.cash-opening-card p,.cash-modal p{color:#667085;margin:0;line-height:1.5}
+.cash-opening-card dl{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0}
+.cash-opening-card dl div{border:1px solid #e5e7eb;border-radius:8px;padding:11px}
+.cash-opening-card dt{font-size:11px;color:#667085;margin-bottom:5px}
+.cash-opening-card dd{margin:0;font-size:14px;font-weight:800;color:#111827;word-break:break-word}
+.cash-opening-card form{display:grid;gap:14px}
+.cash-opening-card label,.cash-modal label{display:grid;gap:8px;font-size:13px;font-weight:800;color:#273241}
+.cash-opening-card label span{height:46px;border:1px solid #dfe4ea;border-radius:8px;display:flex;align-items:center;gap:10px;padding:0 12px}
+.cash-opening-card input,.cash-modal input{width:100%;height:100%;border:0;background:transparent;outline:0;font:inherit;font-size:18px;font-weight:800;color:#111827}
+.cash-opening-card button,.cash-modal footer button:last-child{height:44px;border:0;border-radius:8px;background:linear-gradient(100deg,#ffb800,#ffc91b);font-weight:800;color:#111827;cursor:pointer}
+.cash-opening-notice{border-radius:8px;background:#fff1f1;color:#dc2626;padding:10px 12px;font-size:13px;font-weight:700}
+.discount-row{min-height:38px;display:grid!important;grid-template-columns:minmax(0,1fr) 64px 26px!important;align-items:center;gap:0;margin-bottom:13px!important;color:#273241;font-size:13px;font-weight:700}
+.discount-row span{display:inline-flex;align-items:center;gap:7px;min-width:0}
+.discount-row span svg{color:#f0a800}
+.discount-row input{height:38px;border:1px solid #dfe4ea;border-radius:7px 0 0 7px;text-align:right;font-weight:800}
+.discount-row em{height:38px;border:1px solid #dfe4ea;border-left:0;border-radius:0 7px 7px 0;display:grid;place-items:center;font-style:normal;color:#667085;background:#f8fafc}
+.cash-modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:120;display:grid;place-items:center;padding:20px}
+.cash-modal{width:min(410px,100%);background:#fff;border-radius:12px;border:1px solid #dfe4ea;box-shadow:0 24px 60px rgba(15,23,42,.24);padding:22px;display:grid;gap:14px}
+.cash-modal-total,.cash-return{border:1px solid #e5e7eb;border-radius:9px;padding:13px;display:flex;align-items:center;justify-content:space-between}
+.cash-modal-total span,.cash-return span{font-size:13px;color:#667085}
+.cash-modal-total b,.cash-return b{font-size:20px;color:#111827}
+.cash-modal label input{height:44px;border:1px solid #dfe4ea;border-radius:8px;padding:0 12px}
+.cash-return{background:#ecfdf3;border-color:#bbf7d0}
+.cash-return.negative{background:#fff1f1;border-color:#fecaca}
+.cash-modal footer{display:grid;grid-template-columns:1fr 1.4fr;gap:10px}
+.cash-modal footer button{height:40px;border-radius:8px;border:1px solid #dfe4ea;background:#fff;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.cash-modal footer button:disabled{opacity:.5;cursor:not-allowed}
+.close-cycle-modal{width:min(520px,100%)}
+.close-cycle-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.close-cycle-grid p{border:1px solid #e5e7eb;border-radius:8px;padding:10px;display:grid;gap:5px}
+.close-cycle-grid small{font-size:11px;color:#667085}
+.close-cycle-grid b{font-size:13px;color:#111827;word-break:break-word}
+.dot-matrix-invoice{margin:18px!important;padding:14px!important;border:1px dashed #94a3b8!important;border-radius:0!important;background:#fff!important;color:#111827;font-family:"Courier New",monospace;box-shadow:none!important}
+.dot-matrix-invoice>header{display:flex!important;align-items:flex-start!important;justify-content:space-between!important;border-bottom:1px dashed #94a3b8!important;padding-bottom:10px!important;margin-bottom:10px!important}
+.invoice-store-head{display:flex;align-items:center;gap:10px;min-width:0}
+.invoice-logo-mark{width:42px;height:42px;border:2px solid #111827;border-radius:50%;display:grid;place-items:center;background:#ffbd00;color:#111827;font-size:13px;font-weight:900;letter-spacing:0}
+.invoice-store-head p{display:grid;gap:3px;min-width:0;margin:0!important}
+.invoice-store-head b{font-size:16px!important;line-height:1!important}
+.invoice-store-head small{font-size:10px!important;color:#111827!important;line-height:1.35!important}
+.dot-matrix-invoice>header aside{text-align:right;font-size:10px;line-height:1.4}
+.dot-matrix-invoice>header h2{font-size:15px!important;margin:0 0 5px!important;letter-spacing:1px}
+.dot-matrix-invoice>header aside b{font-size:12px!important;color:#008236!important}
+.dot-matrix-invoice .invoice-brand{height:auto!important;display:flex!important;align-items:flex-start!important;border-bottom:1px dashed #94a3b8!important;padding-bottom:9px!important;margin-bottom:8px!important;font-size:10px!important}
+.dot-matrix-invoice .invoice-brand p{display:grid!important;gap:2px!important;margin:0!important}
+.dot-matrix-invoice .invoice-brand aside{margin-left:auto!important;text-align:right!important;font-size:10px!important;line-height:1.5!important}
+.dot-matrix-invoice table{width:100%!important;border-collapse:collapse!important;font-size:11px!important;margin-top:0!important}
+.dot-matrix-invoice th{border-bottom:1px dashed #94a3b8!important;padding:6px 3px!important;text-align:left!important}
+.dot-matrix-invoice td{border-bottom:1px dotted #cbd5e1!important;padding:6px 3px!important;text-align:left!important}
+.dot-matrix-invoice th:nth-child(n+2),.dot-matrix-invoice td:nth-child(n+2){text-align:right!important}
+.dot-matrix-invoice .invoice-total{border-top:1px dashed #94a3b8!important;margin-top:9px!important;padding-top:8px!important}
+.dot-matrix-invoice .invoice-total p,.dot-matrix-invoice .invoice-total h3{display:flex!important;justify-content:space-between!important;margin:4px 0!important;font-size:11px!important}
+.dot-matrix-invoice .invoice-total h3{font-size:16px!important;border-top:1px dashed #94a3b8!important;padding-top:7px!important}
+.dot-matrix-invoice .thanks{display:block!important;text-align:center!important;margin-top:12px!important;font-size:10px!important;color:#475569!important;line-height:1.5!important}
+.invoice-print-actions{text-align:center;margin-top:14px}
+.invoice-print-actions button{height:34px;border:0;border-radius:7px;background:#2563eb;color:#fff;padding:0 12px;font-size:12px;display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+@media(max-width:1000px){
+  .cashier-pos-shell .pos-main{display:block}
+  .cashier-pos-shell .cart-pane{border-left:0;border-top:1px solid #e4e6e9}
+  .summary-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media print{
+  body *{visibility:hidden!important}
+  .printable-invoice,.printable-invoice *{visibility:visible!important}
+  .invoice.printable-invoice{display:block!important}
+  .printable-invoice{position:absolute!important;left:0!important;top:0!important;width:80mm!important;max-width:80mm!important;margin:0!important;padding:6mm!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:#fff!important;color:#111827!important}
+  .no-print{display:none!important}
+}
+
+/* Reports chart visibility */
+.report-timeline-bars{display:flex;height:250px;align-items:flex-end;gap:10px;padding:18px 0;overflow-x:auto}
+.report-bar-track{width:100%;height:205px;background:linear-gradient(180deg,#f8fafc,#eef2f7);border:1px solid #e5e7eb;border-radius:7px 7px 4px 4px;display:flex;align-items:flex-end;padding:3px}
+.report-bar-track i{width:100%;min-height:8px;background:linear-gradient(180deg,#ffcc32,#f0a800);border-radius:5px 5px 2px 2px;display:block;transition:height .2s ease}
+
+/* Compact responsive footer and navigation polish */
+.admin-sidebar{display:flex!important;flex-direction:column!important;overflow:hidden!important}
+.admin-sidebar .admin-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:2px 2px 8px 0;scrollbar-width:thin}
+.admin-logo{padding:0 8px 14px}
+.admin-logo b{font-size:18px;line-height:1}
+.admin-logo small{font-size:11px;line-height:1.25}
+.admin-nav a{height:36px;font-size:14px;gap:11px;padding:0 12px;border-radius:8px}
+.admin-nav-icon{width:17px;height:17px;flex:0 0 17px}
+.sidebar-bottom{flex:0 0 auto;margin-top:8px!important;padding-top:8px!important;gap:4px!important}
+.sidebar-bottom a,.sidebar-bottom button{height:30px!important;min-height:30px!important;padding:5px 8px!important;font-size:12px!important;border-radius:7px!important}
+.sidebar-action-icon{width:15px;height:15px;flex:0 0 15px}
+.admin-shell.sidebar-collapsed .admin-nav a{width:48px;height:44px;padding:0;font-size:0;justify-content:center}
+.admin-shell.sidebar-collapsed .admin-nav-icon{width:18px;height:18px;flex-basis:18px}
+.admin-shell.sidebar-collapsed .sidebar-bottom a,.admin-shell.sidebar-collapsed .sidebar-bottom button{width:48px;height:36px!important;min-height:36px!important;padding:0!important;justify-content:center}
+.admin-footer{min-height:48px!important;height:auto!important;padding:6px 20px!important;display:grid!important;grid-template-columns:minmax(160px,1fr) auto minmax(130px,1fr);align-items:center;gap:8px 12px!important;font-size:11px!important}
+.admin-footer>span{justify-self:start;line-height:1.25;white-space:normal!important}
+.admin-footer>.designer-credit{justify-self:center;min-height:26px;padding:2px 10px;font-size:11px}
+.admin-footer>.designer-credit img{width:18px;height:18px;flex-basis:18px}
+.admin-footer p{justify-self:end;margin:0!important;font-size:11px;white-space:nowrap}
+.admin-footer p b,.admin-footer p i{width:7px!important;height:7px!important;flex:0 0 7px!important}
+.admin-footer nav{grid-column:1/-1;justify-self:center;font-size:10px;color:#667085;line-height:1}
+.login-page{min-height:100svh}
+.login-page .login-intro{top:20.5%;width:310px}
+.login-page .login-intro h1{font-size:1.95rem;line-height:1.18}
+.login-page .login-intro>i{margin:18px 0 15px}
+.login-page .login-intro>p{font-size:.84rem;line-height:1.55}
+.login-page .feature-list{gap:13px;margin-top:18px}
+.login-page .feature-list>div{gap:12px}
+.login-page .feature-list>div>span{width:40px;height:40px;border-radius:10px;flex:0 0 40px}
+.login-page .feature-list p{font-size:.8rem}
+.login-page .feature-list small{font-size:.68rem;line-height:1.35;margin-top:3px}
+.login-page .product-scene{bottom:60px;height:64%}
+.login-footer{height:60px!important;grid-template-columns:minmax(210px,1fr) minmax(230px,auto) minmax(210px,1fr)!important;grid-template-rows:24px 28px!important;padding:4px 3%!important;gap:0 14px!important}
+.login-footer>.designer-credit{min-height:25px!important;padding:2px 9px!important;font-size:11px!important}
+.login-footer>.designer-credit img{width:17px!important;height:17px!important;flex-basis:17px}
+.login-footer>.footer-values{font-size:10px!important}
+.login-footer>.footer-values b,.login-footer>.footer-values i{width:7px!important;height:7px!important;flex-basis:7px!important}
+.login-footer>p:first-of-type{font-size:10.5px}
+.login-footer>nav a{padding:0 12px!important;font-size:10.5px}
+@media(max-width:1280px) and (min-width:821px){
+  .login-brand{top:5%;left:4%}
+  .login-page .login-intro{top:19%;left:5%;width:270px}
+  .login-page .login-intro h1{font-size:1.72rem}
+  .login-page .login-intro>p{font-size:.78rem}
+  .login-page .feature-list{gap:10px;margin-top:14px}
+  .login-page .feature-list>div>span{width:38px;height:38px;flex-basis:38px}
+  .login-page .feature-list small{font-size:.64rem}
+  .login-card{width:390px;min-height:540px;padding:34px 30px 24px}
+  .login-page .product-scene{bottom:58px;right:-12%;height:60%}
+  .login-footer{grid-template-columns:1fr auto 1fr!important}
+  .login-footer>nav a{padding:0 8px!important}
+}
+@media(max-width:1180px){
+  .admin-footer{grid-template-columns:1fr auto 1fr}
+  .admin-footer nav{display:none}
+}
+@media(max-height:720px) and (min-width:561px){
+  .admin-logo{padding-bottom:10px}
+  .admin-nav a{height:32px;font-size:12px}
+  .admin-nav-icon{width:15px;height:15px;flex-basis:15px}
+  .sidebar-bottom a,.sidebar-bottom button{height:28px!important;min-height:28px!important;font-size:11px!important}
+}
+@media(max-width:820px){
+  .login-page{min-height:100svh;overflow:auto!important;padding-bottom:96px}
+  .login-footer{position:fixed;height:auto!important;min-height:58px!important}
+}
+@media(max-width:760px){
+  .admin-footer{grid-template-columns:1fr;justify-items:center;min-height:44px!important;padding:8px 12px!important}
+  .admin-footer>span,.admin-footer p,.admin-footer nav{display:none!important}
+}

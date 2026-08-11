@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Columns3, Download, Eye, Printer, RotateCcw, X } from "lucide-react";
 
 type Sale = {
   id: number;
+  subtotal_amount?: string;
+  discount_rate?: string;
+  discount_amount?: string;
+  tax_rate?: string;
+  tax_amount?: string;
+  cash_received?: string | null;
+  cash_balance?: string | null;
+  sales_cycle_id?: string | null;
+  opening_cash_balance?: string | null;
+  business_date?: string | null;
   total_amount: string;
   payment_method: string;
   status: string;
@@ -21,7 +31,7 @@ type SaleItem = {
   price_at_time: string;
 };
 
-const paymentMethods = ["All Payment Methods", "Cash", "Card", "UPI", "Wallet", "Bank Transfer", "Credit"];
+const paymentMethods = ["All Payment Methods", "Cash", "Card", "Wallet", "Bank Transfer", "Credit"];
 const statuses = ["All Status", "Completed", "Refunded", "Cancelled"];
 
 function money(value: string | number) {
@@ -56,7 +66,7 @@ export default function SalesPage() {
   const cashiers = useMemo(() => ["All Cashiers", ...Array.from(new Set(sales.map((sale) => sale.cashier_name || "Admin")))], [sales]);
   const total = sales.reduce((sum, sale) => sum + Number(sale.total_amount), 0);
 
-  const loadSales = (showLoading = true) => {
+  const loadSales = useCallback((showLoading = true) => {
     if (showLoading) setLoading(true);
     const params = new URLSearchParams();
     if (filters.from) params.set("date_from", filters.from);
@@ -75,19 +85,16 @@ export default function SalesPage() {
       })
       .catch(() => setMessage("Unable to load sales."))
       .finally(() => showLoading && setLoading(false));
-  };
+  }, [filters]);
 
   useEffect(() => {
-    fetch("/api/sales", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setSales(data);
-          setSelected(data[0] || null);
-        }
-      })
-      .catch(() => setMessage("Unable to load sales."));
-  }, []);
+    const firstLoad = window.setTimeout(() => loadSales(), 0);
+    const timer = window.setInterval(() => loadSales(false), 15000);
+    return () => {
+      window.clearTimeout(firstLoad);
+      window.clearInterval(timer);
+    };
+  }, [loadSales]);
 
   useEffect(() => {
     if (!selected) {
@@ -255,6 +262,8 @@ export default function SalesPage() {
                 {[
                   ["Invoice No.", `INV-${String(selected.id).padStart(6, "0")}`],
                   ["Date", new Date(selected.created_at).toLocaleString()],
+                  ["Business Date", selected.business_date ? new Date(selected.business_date).toLocaleDateString() : new Date(selected.created_at).toLocaleDateString()],
+                  ["Sales Cycle", selected.sales_cycle_id || "-"],
                   ["Cashier", selected.cashier_name || "Admin"],
                   ["Customer", selected.customer_name || "Walk-in Customer"],
                   ["Payment Method", selected.payment_method || "Cash"],
@@ -276,9 +285,16 @@ export default function SalesPage() {
                 </tbody>
               </table>
               <div className="preview-total">
-                <p>Subtotal <b>{money(selected.total_amount)}</b></p>
-                <p>Tax (18% GST) <b>{money(Number(selected.total_amount) * 0.18)}</b></p>
-                <h3>Total <b>{money(Number(selected.total_amount) * 1.18)}</b></h3>
+                <p>Subtotal <b>{money(selected.subtotal_amount || selected.total_amount)}</b></p>
+                <p>Discount ({Number(selected.discount_rate || 0)}%) <b>- {money(selected.discount_amount || 0)}</b></p>
+                <p>Tax ({Number(selected.tax_rate || 0)}% GST) <b>{money(selected.tax_amount || 0)}</b></p>
+                {selected.payment_method === "Cash" && (
+                  <>
+                    <p>Cash Received <b>{money(selected.cash_received || 0)}</b></p>
+                    <p>Balance Returned <b>{money(selected.cash_balance || 0)}</b></p>
+                  </>
+                )}
+                <h3>Total <b>{money(selected.total_amount)}</b></h3>
               </div>
               <p className="thanks">Thank you for your visit!<br />Drive safe. Stay protected.</p>
             </div>

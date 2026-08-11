@@ -12,8 +12,14 @@ const defaultSettings = {
   tax_rate: '18',
   invoice_prefix: 'INV',
   invoice_footer: 'Thank you for your visit! Drive safe. Stay protected.',
-  payment_methods: ['Cash', 'Card', 'UPI'],
+  invoice_logo_text: 'OM',
+  invoice_print_style: 'Dot Matrix',
+  payment_methods: ['Cash', 'Card', 'Bank Transfer'],
 };
+
+function normalizePaymentMethods(methods: string[]) {
+  return Array.from(new Set(methods.map((method) => method === 'UPI' ? 'Bank Transfer' : method))).filter((method) => method !== 'UPI');
+}
 
 async function ensureSettingsTable() {
   await pool.query(`
@@ -32,7 +38,7 @@ export async function GET() {
     const values = { ...defaultSettings };
     for (const row of rows) {
       if (row.setting_key === 'payment_methods') {
-        values.payment_methods = JSON.parse(row.setting_value);
+        values.payment_methods = normalizePaymentMethods(JSON.parse(row.setting_value));
       } else {
         values[row.setting_key as keyof typeof values] = row.setting_value as never;
       }
@@ -49,6 +55,7 @@ export async function POST(request: Request) {
     await ensureSettingsTable();
     const body = await request.json();
     const settings = { ...defaultSettings, ...body };
+    settings.payment_methods = normalizePaymentMethods(Array.isArray(settings.payment_methods) ? settings.payment_methods : defaultSettings.payment_methods);
     const entries = Object.entries(settings);
 
     for (const [key, value] of entries) {

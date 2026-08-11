@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -356,23 +355,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </header>
 
         <main className="admin-content">{children}</main>
-        <footer className="admin-footer">
-          <span>Copyright 2026 Oil Mart POS. All rights reserved.</span>
-          <a
-            className="designer-credit"
-            href="https://www.facebook.com/profile.php?id=61590307577386"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <small>Design By</small>
-            <Image src="/vortex-mark.png" alt="" width={22} height={22} />
-            <b>Vortex Digital Labs</b>
-          </a>
-          <p>
-            <b /> Secure <i /> Reliable <i /> Efficient
-          </p>
-          <nav>Privacy Policy&nbsp;&nbsp; Terms of Service&nbsp;&nbsp; Help &amp; Support</nav>
-        </footer>
       </div>
     </div>
   );

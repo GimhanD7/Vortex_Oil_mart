@@ -14,8 +14,36 @@ async function safeQuery<T = any>(sql: string, values: Array<string | number> = 
   }
 }
 
+async function ensureDashboardColumns() {
+  const [columns]: any = await pool.query(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sales' AND COLUMN_NAME = 'business_date'`
+  );
+  if (!columns.length) {
+    await pool.query('ALTER TABLE sales ADD COLUMN business_date DATE NULL');
+    await pool.query('UPDATE sales SET business_date = DATE(created_at) WHERE business_date IS NULL');
+  }
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS customers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(150) NOT NULL,
+      phone VARCHAR(40) NULL,
+      email VARCHAR(150) NULL,
+      address TEXT NULL,
+      company_notes TEXT NULL,
+      customer_type VARCHAR(60) NOT NULL DEFAULT 'Regular Customer',
+      status VARCHAR(30) NOT NULL DEFAULT 'Active',
+      credit_limit DECIMAL(10,2) NOT NULL DEFAULT 0,
+      total_purchases DECIMAL(10,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+}
+
 export async function GET() {
   try {
+    await ensureDashboardColumns();
     const [metrics] = await safeQuery(`
       SELECT
         COALESCE(SUM(s.total_amount), 0) AS revenue,
@@ -88,11 +116,11 @@ export async function GET() {
     `);
 
     const daily = await safeQuery(`
-      SELECT DATE(created_at) AS date, COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS orders
+      SELECT COALESCE(business_date, DATE(created_at)) AS date, COALESCE(SUM(total_amount), 0) AS total, COUNT(*) AS orders
       FROM sales
-      WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+      WHERE COALESCE(business_date, DATE(created_at)) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
         AND (status IS NULL OR status != 'refunded')
-      GROUP BY DATE(created_at)
+      GROUP BY COALESCE(business_date, DATE(created_at))
       ORDER BY date ASC
     `);
 

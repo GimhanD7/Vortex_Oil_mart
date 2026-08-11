@@ -27,6 +27,8 @@ type Settings = {
   tax_rate: string;
   invoice_prefix: string;
   invoice_footer: string;
+  invoice_logo_text: string;
+  invoice_print_style: string;
   payment_methods: string[];
 };
 
@@ -38,10 +40,16 @@ const defaultSettings: Settings = {
   tax_rate: "18",
   invoice_prefix: "INV",
   invoice_footer: "Thank you for your visit. Drive safe. Stay protected.",
-  payment_methods: ["Cash", "Card", "UPI"],
+  invoice_logo_text: "OM",
+  invoice_print_style: "Dot Matrix",
+  payment_methods: ["Cash", "Card", "Bank Transfer"],
 };
 
-const paymentOptions = ["Cash", "Card", "UPI", "Bank Transfer", "Credit"];
+const paymentOptions = ["Cash", "Card", "Bank Transfer", "Credit"];
+
+function normalizePaymentMethods(methods: string[]) {
+  return Array.from(new Set(methods.map((method) => method === "UPI" ? "Bank Transfer" : method))).filter((method) => method !== "UPI");
+}
 
 function countPreview(payload: Record<string, unknown>) {
   const count = (key: string) => Array.isArray(payload[key]) ? (payload[key] as unknown[]).length : 0;
@@ -70,7 +78,7 @@ export default function SettingsPage() {
   useEffect(() => {
     fetch("/api/settings", { cache: "no-store" })
       .then((response) => response.json())
-      .then((data) => setSettings({ ...defaultSettings, ...data }))
+      .then((data) => setSettings({ ...defaultSettings, ...data, payment_methods: normalizePaymentMethods(Array.isArray(data.payment_methods) ? data.payment_methods : defaultSettings.payment_methods) }))
       .catch(() => setMessage("Unable to load saved settings."));
   }, []);
 
@@ -94,13 +102,15 @@ export default function SettingsPage() {
     event.preventDefault();
     setSaving(true);
     setMessage("");
+    const normalizedSettings = { ...settings, payment_methods: normalizePaymentMethods(settings.payment_methods) };
     const response = await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(settings),
+      body: JSON.stringify(normalizedSettings),
     });
     const data = await response.json();
     setSaving(false);
+    if (data.settings) setSettings({ ...normalizedSettings, ...data.settings, payment_methods: normalizePaymentMethods(data.settings.payment_methods || normalizedSettings.payment_methods) });
     setMessage(data.message || data.error || "Settings saved.");
   };
 
@@ -188,6 +198,8 @@ export default function SettingsPage() {
           <form onSubmit={saveSettings} className="settings-form">
             <label>Tax Rate (%)<input type="number" min="0" step="0.01" value={settings.tax_rate} onChange={(event) => updateSetting("tax_rate", event.target.value)} /></label>
             <label>Invoice Prefix<input value={settings.invoice_prefix} onChange={(event) => updateSetting("invoice_prefix", event.target.value)} /></label>
+            <label>Invoice Logo Text<input maxLength={8} value={settings.invoice_logo_text} onChange={(event) => updateSetting("invoice_logo_text", event.target.value.toUpperCase())} /></label>
+            <label>Invoice Print Style<select value={settings.invoice_print_style} onChange={(event) => updateSetting("invoice_print_style", event.target.value)}><option>Dot Matrix</option><option>Standard</option></select></label>
             <label>Invoice Footer<textarea value={settings.invoice_footer} onChange={(event) => updateSetting("invoice_footer", event.target.value)} /></label>
             <div className="payment-checks">
               {paymentOptions.map((method) => (
