@@ -1019,7 +1019,11 @@ export default function PosBilling() {
                   {settings.invoice_footer}
                 </small>
                 <div className="no-print invoice-print-actions">
-                  <button onClick={() => window.print()}>
+                  <button onClick={() => {
+                    setNotice("Print command sent successfully.");
+                    window.print();
+                    setTimeout(() => setNotice(""), 4000);
+                  }}>
                     <Printer size={15} aria-hidden="true" /> Print Invoice
                   </button>
                 </div>

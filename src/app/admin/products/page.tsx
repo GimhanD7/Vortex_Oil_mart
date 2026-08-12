@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Armchair,
   BatteryCharging,
@@ -196,6 +196,89 @@ export default function ProductsPage() {
     load();
   };
 
+  const importFileRef = useRef<HTMLInputElement>(null);
+
+  const exportProducts = () => {
+    let csv = "Name,SKU,Category,Brand,Description,Price,Stock Quantity\n";
+    products.forEach((p) => {
+      const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
+      csv += `${escape(p.name)},${escape(p.sku || "")},${escape(p.category || "")},${escape(p.brand || "")},${escape(p.description || "")},${p.price},${p.stock_quantity}\n`;
+    });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `products_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSaving(true);
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter((line) => line.trim() !== "");
+    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+
+    if (!headers.includes("name") || !headers.includes("price") || !headers.includes("stock quantity")) {
+      alert("Invalid CSV format. Missing required columns (Name, Price, Stock Quantity).");
+      setSaving(false);
+      if (importFileRef.current) importFileRef.current.value = "";
+      return;
+    }
+
+    let importedCount = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const row = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((v) => v.replace(/^"|"$/g, "").replace(/""/g, '"').trim());
+      if (row.length < headers.length) continue;
+
+      const getCol = (name: string) => row[headers.indexOf(name)] || "";
+
+      const name = getCol("name");
+      if (!name) continue;
+      const price = Number(getCol("price"));
+      const stock = Number(getCol("stock quantity"));
+      const category = getCol("category") || "General";
+      const brand = getCol("brand") || "Generic";
+
+      const sku = getCol("sku") || generateSku(name, category);
+      const existingProduct = products.find((p) => p.sku === sku || p.name.toLowerCase() === name.toLowerCase());
+
+      const payload = {
+        name,
+        sku,
+        category,
+        brand,
+        description: getCol("description"),
+        price: isNaN(price) ? 0 : price,
+        stock_quantity: isNaN(stock) ? 0 : stock,
+      };
+
+      if (existingProduct) {
+        await fetch(`/api/products/${existingProduct.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await fetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+      importedCount++;
+    }
+
+    alert(`Successfully imported ${importedCount} products.`);
+    if (importFileRef.current) importFileRef.current.value = "";
+    load();
+    setSaving(false);
+  };
+
   const openEdit = (p: Product) => {
     setForm({
       name: p.name,
@@ -224,10 +307,17 @@ export default function ProductsPage() {
           <p>Dashboard / Products</p>
         </div>
         <aside>
-          <button>
-            <Upload size={15} aria-hidden="true" /> Import
+          <input
+            type="file"
+            accept=".csv"
+            style={{ display: "none" }}
+            ref={importFileRef}
+            onChange={handleImport}
+          />
+          <button onClick={() => importFileRef.current?.click()} disabled={saving}>
+            <Upload size={15} aria-hidden="true" /> {saving ? "Importing..." : "Import"}
           </button>
-          <button>
+          <button onClick={exportProducts}>
             <Download size={15} aria-hidden="true" /> Export
           </button>
           <button className="gold-btn" onClick={() => { setEditId(null); setForm({ name: "", description: "", price: "", stock_quantity: "", sku: "", category: "Engine Oils", brand: "Generic" }); setShow(true); }}>
