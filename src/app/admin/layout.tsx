@@ -32,7 +32,7 @@ const allNav = [
   ["customers", "Customers", "/admin/customers"],
   ["reports", "Reports", "/admin/reports"],
   ["users", "Users", "/admin/users"],
-  ["purchases", "Purchases", "/admin/purchases"],
+  // ["purchases", "Purchases", "/admin/purchases"],
   ["settings", "Settings", "/admin/settings"],
 ] as const;
 
@@ -60,7 +60,7 @@ const navIcons: Record<NavIcon, LucideIcon> = {
   customers: Users,
   reports: BarChart3,
   users: UserCog,
-  purchases: PackageCheck,
+  // purchases: PackageCheck,
   settings: Settings,
 };
 
@@ -267,9 +267,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       <Settings size={16} aria-hidden="true" /> Settings
                     </button>
                   )}
-                  <button onClick={() => router.push("/dashboard")}>
-                    <ShoppingCart size={16} aria-hidden="true" /> POS Billing
-                  </button>
                   <button className="danger" onClick={signOut}>
                     <LogOut size={16} aria-hidden="true" /> Logout
                   </button>
