@@ -29,12 +29,17 @@ if ($method === 'GET' && !$id) {
     try {
         ensureInventoryMovementTable();
         
-        $stmt = $pdo->query('
-            SELECT id, name, description, price, stock_quantity, sku, barcode, category, brand,
-                   reorder_level, location, batch_no, supplier, updated_at
-            FROM products
-            ORDER BY name ASC
-        ');
+        $stmt = $pdo->query("
+            SELECT p.id, p.name, p.description, p.price, p.stock_quantity, p.sku, p.barcode, p.category, p.brand,
+                   p.reorder_level, p.location, p.batch_no, p.supplier, p.updated_at,
+                   COALESCE(SUM(CASE WHEN m.quantity_change > 0 THEN m.quantity_change ELSE 0 END), 0) AS monthly_in,
+                   COALESCE(SUM(CASE WHEN m.quantity_change < 0 THEN ABS(m.quantity_change) ELSE 0 END), 0) AS monthly_out,
+                   (p.stock_quantity - COALESCE(SUM(m.quantity_change), 0)) AS monthly_start_stock
+            FROM products p
+            LEFT JOIN inventory_movements m ON p.id = m.product_id AND m.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+            GROUP BY p.id
+            ORDER BY p.name ASC
+        ");
         $items = $stmt->fetchAll();
 
         $stmt = $pdo->query('

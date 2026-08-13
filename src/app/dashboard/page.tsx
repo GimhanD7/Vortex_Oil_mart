@@ -59,6 +59,7 @@ type Product = {
   price: number;
   stock_quantity: number;
   category?: string;
+  sub_category?: string;
   sku?: string;
 };
 
@@ -265,6 +266,7 @@ export default function PosBilling() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All Items");
+  const [subCategory, setSubCategory] = useState("All");
   const [payment, setPayment] = useState("Cash");
   const [customerId, setCustomerId] = useState<number | "">("");
   const [checking, setChecking] = useState(false);
@@ -293,6 +295,7 @@ export default function PosBilling() {
       return (data as Product[]).map((product) => ({
         ...product,
         category: product.category || "Uncategorized",
+        sub_category: product.sub_category || "General",
         sku: product.sku || `SKU-${String(product.id).padStart(3, "0")}`,
       }));
     }
@@ -389,15 +392,21 @@ export default function PosBilling() {
   const shown = useMemo(() => {
     return products.filter((product) => {
       const matchCategory = category === "All Items" || product.category === category;
+      const matchSubCategory = subCategory === "All" || product.sub_category === subCategory;
       const matchQuery = !query || `${product.name} ${product.sku}`.toLowerCase().includes(query.toLowerCase());
-      return matchCategory && matchQuery;
+      return matchCategory && matchSubCategory && matchQuery;
     });
-  }, [products, category, query]);
+  }, [products, category, subCategory, query]);
 
   const productCategories = useMemo(() => {
     const values = Array.from(new Set(products.map((product) => product.category || "Uncategorized")));
     return ["All Items", ...values];
   }, [products]);
+
+  const productSubCategories = useMemo(() => {
+    const values = Array.from(new Set(products.filter((p) => p.category === category || category === "All Items").map((p) => p.sub_category).filter(Boolean)));
+    return ["All", ...values];
+  }, [products, category]);
   const paymentMethods = normalizePaymentMethods(settings.payment_methods.length ? settings.payment_methods : defaultPosSettings.payment_methods);
   const taxRate = Number(settings.tax_rate || 0);
   const lowStockCount = products.filter((product) => product.stock_quantity > 0 && product.stock_quantity < 10).length;
@@ -836,11 +845,26 @@ export default function PosBilling() {
 
             <div className="category-tabs" style={{ overflowX: "auto", whiteSpace: "nowrap" }}>
               {productCategories.map((item) => (
-                <button className={category === item ? "active" : ""} onClick={() => setCategory(item)} key={item}>
+                <button className={category === item ? "active" : ""} onClick={() => { setCategory(item); setSubCategory("All"); }} key={item}>
                   {item}
                 </button>
               ))}
             </div>
+
+            {category !== "All Items" && productSubCategories.length > 1 && (
+              <div className="category-tabs" style={{ paddingTop: 0, paddingBottom: 10, borderBottom: '1px solid #e3e6e9', marginBottom: 12, overflowX: "auto", whiteSpace: "nowrap" }}>
+                {productSubCategories.map((item) => (
+                  <button
+                    key={item as string}
+                    className={subCategory === item ? "active" : ""}
+                    onClick={() => setSubCategory(item as string)}
+                    style={{ height: '30px', padding: '0 12px', fontSize: '12px', borderRadius: '15px' }}
+                  >
+                    {item as string}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="product-grid">
               {shown.map((product) => (

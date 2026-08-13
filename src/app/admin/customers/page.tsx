@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { cachedFetch } from "@/lib/api-client";
 
 type Customer = {
   id: number;
@@ -58,7 +59,7 @@ export default function CustomersPage() {
   const loadCustomers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/customers", { cache: "no-store" });
+      const res = await cachedFetch("/api/customers", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setCustomers(data);
@@ -74,7 +75,7 @@ export default function CustomersPage() {
   }, [selected]);
 
   useEffect(() => {
-    fetch("/api/customers", { cache: "no-store" })
+    cachedFetch("/api/customers", { cache: "no-store" })
       .then((res) => res.ok ? res.json() : [])
       .then((data) => {
         if (Array.isArray(data)) {

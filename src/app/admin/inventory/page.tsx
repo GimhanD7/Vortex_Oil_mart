@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { cachedFetch } from "@/lib/api-client";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -44,6 +45,9 @@ type Product = {
   supplier?: string;
   updated_at?: string;
   visual?: string;
+  monthly_in?: number;
+  monthly_out?: number;
+  monthly_start_stock?: number;
 };
 
 type MovementSummary = {
@@ -102,7 +106,7 @@ export default function InventoryPage() {
   const [movementFrom, setMovementFrom] = useState("");
   const [movementTo, setMovementTo] = useState("");
   const [showCols, setShowCols] = useState(false);
-  const [cols, setCols] = useState({ check: true, prod: true, sku: true, cat: true, stock: true, reorder: true, loc: true, batch: true, price: true, supplier: true, status: true, updated: true, actions: true });
+  const [cols, setCols] = useState({ check: true, prod: true, sku: true, cat: true, start_stock: true, monthly_in: true, monthly_out: true, stock: true, reorder: true, loc: true, batch: true, price: true, supplier: true, status: true, updated: true, actions: true });
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [openActions, setOpenActions] = useState<number | null>(null);
 
@@ -113,14 +117,14 @@ export default function InventoryPage() {
     if (movementFrom) params.set("date_from", movementFrom);
     if (movementTo) params.set("date_to", movementTo);
 
-    fetch(`/api/inventory/movements?${params.toString()}`, { cache: "no-store" })
+    cachedFetch(`/api/inventory/movements?${params.toString()}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => Array.isArray(d) && setMovements(d))
       .catch(() => setMovements([]));
   }, [movementFrom, movementProduct, movementTo, movementType]);
 
   const load = useCallback(() => {
-    fetch("/api/inventory")
+    cachedFetch("/api/inventory")
       .then((r) => r.json())
       .then((d) => {
         if (Array.isArray(d.items)) {
@@ -132,7 +136,11 @@ export default function InventoryPage() {
               brand: p.brand || "Generic",
               supplier: p.supplier || p.brand || "Not Assigned",
               location: p.location || "Main Store",
+              stock_quantity: Number(p.stock_quantity || 0),
               reorder_level: Number(p.reorder_level || 10),
+              monthly_in: Number(p.monthly_in || 0),
+              monthly_out: Number(p.monthly_out || 0),
+              monthly_start_stock: Number(p.monthly_start_stock || 0),
             }))
           );
         }
@@ -269,6 +277,11 @@ export default function InventoryPage() {
     setAmount(0);
   };
 
+  const globalStartStock = products.reduce((sum, p) => sum + (p.monthly_start_stock || 0), 0);
+  const globalMonthlyIn = products.reduce((sum, p) => sum + (p.monthly_in || 0), 0);
+  const globalMonthlyOut = products.reduce((sum, p) => sum + (p.monthly_out || 0), 0);
+  const globalCurrentStock = products.reduce((sum, p) => sum + Number(p.stock_quantity), 0);
+
   return (
     <div className="management-page inventory-page">
       <div className="inventory-title">
@@ -290,7 +303,26 @@ export default function InventoryPage() {
             </span>
           </article>
         ))}
-      </section>
+        </section>
+
+        <section className="inventory-stats analysis-grid" style={{ marginTop: "1rem" }}>
+          <div>
+            <small>Monthly Start Stock (Units)</small>
+            <b>{globalStartStock}</b>
+          </div>
+          <div>
+            <small>Stock Increases (In)</small>
+            <b className="good">+{globalMonthlyIn}</b>
+          </div>
+          <div>
+            <small>Stock Decreases (Out)</small>
+            <b className="bad">-{globalMonthlyOut}</b>
+          </div>
+          <div>
+            <small>Monthly End Stock (Current)</small>
+            <b>{globalCurrentStock}</b>
+          </div>
+        </section>
 
       <section className="inventory-board">
         <header>
@@ -336,7 +368,10 @@ export default function InventoryPage() {
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.check} onChange={(e) => setCols({...cols, check: e.target.checked})} /> Checkbox</label>
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.prod} onChange={(e) => setCols({...cols, prod: e.target.checked})} /> Product</label>
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.sku} onChange={(e) => setCols({...cols, sku: e.target.checked})} /> SKU / Barcode</label>
-                  <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.cat} onChange={(e) => setCols({...cols, cat: e.target.checked})} /> Category</label>
+                  <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.cat} onChange={(e) => setCols({...cols, cat: e.target.checked})} /> Category / Brand</label>
+                  <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.start_stock} onChange={(e) => setCols({...cols, start_stock: e.target.checked})} /> Start Stock</label>
+                  <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.monthly_in} onChange={(e) => setCols({...cols, monthly_in: e.target.checked})} /> Stock In</label>
+                  <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.monthly_out} onChange={(e) => setCols({...cols, monthly_out: e.target.checked})} /> Stock Out</label>
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.stock} onChange={(e) => setCols({...cols, stock: e.target.checked})} /> Current Stock</label>
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.reorder} onChange={(e) => setCols({...cols, reorder: e.target.checked})} /> Reorder Level</label>
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.loc} onChange={(e) => setCols({...cols, loc: e.target.checked})} /> Location</label>
@@ -370,9 +405,12 @@ export default function InventoryPage() {
                     />
                   </th>
                 )}
-                {cols.prod && <th>Product</th>}
+                {cols.prod && <th>Item Details</th>}
                 {cols.sku && <th>SKU / Barcode</th>}
-                {cols.cat && <th>Category</th>}
+                {cols.cat && <th>Category / Brand</th>}
+                {cols.start_stock && <th style={{ textAlign: 'right' }}>Start Stock</th>}
+                {cols.monthly_in && <th style={{ textAlign: 'right' }}>In</th>}
+                {cols.monthly_out && <th style={{ textAlign: 'right' }}>Out</th>}
                 {cols.stock && <th>Current Stock</th>}
                 {cols.reorder && <th>Reorder Level</th>}
                 {cols.loc && <th>Location</th>}
@@ -402,6 +440,7 @@ export default function InventoryPage() {
                     <td>
                       <CategoryIcon category={p.category || "General"} />
                       <b>{p.name}</b>
+                      <small>{p.brand}</small>
                     </td>
                   )}
                   {cols.sku && (
@@ -410,7 +449,15 @@ export default function InventoryPage() {
                       <small>8901040900{String(i).padStart(3, "0")}</small>
                     </td>
                   )}
-                  {cols.cat && <td>{p.category}</td>}
+                  {cols.cat && (
+                    <td>
+                      <b>{p.category}</b>
+                      <small>{p.brand}</small>
+                    </td>
+                  )}
+                  {cols.start_stock && <td style={{ textAlign: 'right' }}>{p.monthly_start_stock}</td>}
+                  {cols.monthly_in && <td style={{ textAlign: 'right', color: '#16a34a' }}>+{p.monthly_in}</td>}
+                  {cols.monthly_out && <td style={{ textAlign: 'right', color: '#dc2626' }}>-{p.monthly_out}</td>}
                   {cols.stock && (
                     <td>
                       <b className={p.stock_quantity < 10 ? "danger" : "success"}>

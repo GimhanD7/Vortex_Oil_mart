@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { cachedFetch } from "@/lib/api-client";
 import {
   Armchair,
   BatteryCharging,
@@ -118,7 +119,7 @@ export default function ProductsPage() {
   };
 
   const load = () => {
-    fetch("/api/products")
+    cachedFetch("/api/products")
       .then((r) => r.json())
       .then((d) => {
         if (Array.isArray(d) && d.length) {
@@ -134,8 +135,8 @@ export default function ProductsPage() {
       })
       .catch(() => {});
       
-    fetch("/api/categories").then(r => r.json()).then(d => { if (Array.isArray(d)) setDbCategories(d) }).catch(()=>{});
-    fetch("/api/brands").then(r => r.json()).then(d => { if (Array.isArray(d)) setDbBrands(d) }).catch(()=>{});
+    cachedFetch("/api/categories").then(r => r.json()).then(d => { if (Array.isArray(d)) setDbCategories(d) }).catch(()=>{});
+    cachedFetch("/api/brands").then(r => r.json()).then(d => { if (Array.isArray(d)) setDbBrands(d) }).catch(()=>{});
   };
 
   useEffect(() => {
