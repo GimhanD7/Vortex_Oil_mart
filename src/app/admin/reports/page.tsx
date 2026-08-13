@@ -204,27 +204,29 @@ export default function ReportsPage() {
       </Panel>
 
       <Panel title="Staff Performance" className="recent-sales-panel">
-        <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-              <th style={{ padding: '12px 8px', color: '#64748b', fontWeight: 500 }}>Cashier</th>
-              <th style={{ padding: '12px 8px', color: '#64748b', fontWeight: 500 }}>Total Orders</th>
-              <th style={{ padding: '12px 8px', color: '#64748b', fontWeight: 500 }}>Total Revenue</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.staff.length === 0 && (
-              <tr><td colSpan={3} style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>No staff data available.</td></tr>
-            )}
-            {data.staff.map(s => (
-              <tr key={s.cashier} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={{ padding: '12px 8px', fontWeight: 500 }}>{s.cashier || "Admin"}</td>
-                <td style={{ padding: '12px 8px' }}>{s.orders}</td>
-                <td style={{ padding: '12px 8px', fontWeight: 'bold' }}>Rs. {Number(s.total).toLocaleString("en-IN")}</td>
+        <div className="table-scroll">
+          <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                <th style={{ padding: '12px 8px', color: '#64748b', fontWeight: 500 }}>Cashier</th>
+                <th style={{ padding: '12px 8px', color: '#64748b', fontWeight: 500 }}>Total Orders</th>
+                <th style={{ padding: '12px 8px', color: '#64748b', fontWeight: 500 }}>Total Revenue</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {data.staff.length === 0 && (
+                <tr><td colSpan={3} style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>No staff data available.</td></tr>
+              )}
+              {data.staff.map(s => (
+                <tr key={s.cashier} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '12px 8px', fontWeight: 500 }}>{s.cashier || "Admin"}</td>
+                  <td style={{ padding: '12px 8px' }}>{s.orders}</td>
+                  <td style={{ padding: '12px 8px', fontWeight: 'bold' }}>Rs. {Number(s.total).toLocaleString("en-IN")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Panel>
     </div>
   );

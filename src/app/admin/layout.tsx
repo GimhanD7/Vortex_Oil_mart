@@ -166,7 +166,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               href={href} 
               className={pathname === href || (label === "Dashboard" && pathname === "/admin/dashboard") ? "active" : ""}
               onClick={() => {
-                if (typeof window !== 'undefined' && window.innerWidth <= 850) {
+                if (typeof window !== 'undefined' && window.innerWidth <= 520) {
                   setMobileNavOpen(false);
                 }
               }}
@@ -201,7 +201,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-expanded={!sidebarCollapsed}
             onClick={() => {
-              if (typeof window !== 'undefined' && window.innerWidth <= 850) {
+              if (typeof window !== 'undefined' && window.innerWidth <= 520) {
                 setMobileNavOpen(!mobileNavOpen);
               } else {
                 setSidebarCollapsed(!sidebarCollapsed);

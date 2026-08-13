@@ -262,6 +262,7 @@ export default function PosBilling() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const router = useRouter();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All Items");
   const [payment, setPayment] = useState("Cash");
@@ -643,7 +644,7 @@ export default function PosBilling() {
   });
 
   return (
-    <div className={`pos-shell ${isCashier ? "cashier-pos-shell" : ""} ${mobileNavOpen ? " sidebar-mobile-open" : ""}`}>
+    <div className={`pos-shell${sidebarCollapsed ? " sidebar-collapsed" : ""} ${isCashier ? "cashier-pos-shell" : ""} ${mobileNavOpen ? " sidebar-mobile-open" : ""}`}>
       <div className="mobile-backdrop" aria-hidden="true" onClick={() => setMobileNavOpen(false)} />
       {isAdmin && (
         <aside className="pos-sidebar">
@@ -685,8 +686,15 @@ export default function PosBilling() {
           {isAdmin && (
             <button 
               className="pos-menu" 
-              aria-label="Menu"
-              onClick={() => setMobileNavOpen(!mobileNavOpen)}
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-expanded={!sidebarCollapsed}
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.innerWidth <= 560) {
+                  setMobileNavOpen(!mobileNavOpen);
+                } else {
+                  setSidebarCollapsed(!sidebarCollapsed);
+                }
+              }}
             >
               <Menu aria-hidden="true" size={22} />
             </button>

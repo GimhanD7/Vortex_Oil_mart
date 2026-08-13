@@ -325,21 +325,23 @@ export default function AdminDashboard() {
       </Panel>
 
       <Panel title="Recent Sales" action="View All" onAction={() => router.push("/admin/sales")} className="recent-sales-panel">
-        <table>
-          <thead><tr><th>Invoice No.</th><th>Date &amp; Time</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
-          <tbody>
-            {data.recent_orders.map((order) => (
-              <tr key={order.id}>
-                <td>INV-{String(order.id).padStart(6, "0")}</td>
-                <td>{new Date(order.created_at).toLocaleString()}</td>
-                <td>{order.customer_name || "Walk-in Customer"}</td>
-                <td>{Number(order.item_count || 0)}</td>
-                <td>{money(order.total_amount)}</td>
-                <td><span>{order.status || "Completed"}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="table-scroll">
+          <table>
+            <thead><tr><th>Invoice No.</th><th>Date &amp; Time</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
+            <tbody>
+              {data.recent_orders.map((order) => (
+                <tr key={order.id}>
+                  <td>INV-{String(order.id).padStart(6, "0")}</td>
+                  <td>{new Date(order.created_at).toLocaleString()}</td>
+                  <td>{order.customer_name || "Walk-in Customer"}</td>
+                  <td>{Number(order.item_count || 0)}</td>
+                  <td>{money(order.total_amount)}</td>
+                  <td><span>{order.status || "Completed"}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Panel>
 
       <Panel title="Quick Actions" className="quick-panel">
