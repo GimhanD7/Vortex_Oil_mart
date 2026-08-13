@@ -32,7 +32,7 @@ const allNav = [
   ["customers", "Customers", "/admin/customers"],
   ["reports", "Reports", "/admin/reports"],
   ["users", "Users", "/admin/users"],
-  // ["purchases", "Purchases", "/admin/purchases"],
+  ["purchases", "Purchases", "/admin/purchases"],
   ["settings", "Settings", "/admin/settings"],
 ] as const;
 
@@ -60,7 +60,7 @@ const navIcons: Record<NavIcon, LucideIcon> = {
   customers: Users,
   reports: BarChart3,
   users: UserCog,
-  // purchases: PackageCheck,
+  purchases: PackageCheck,
   settings: Settings,
 };
 
