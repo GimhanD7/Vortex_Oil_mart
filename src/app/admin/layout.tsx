@@ -76,6 +76,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [user, setUser] = useState<{ username: string; role: string; permissions: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [notificationSummary, setNotificationSummary] = useState({ lowStock: 0, recentOrders: 0, outOfStock: 0 });
@@ -143,7 +144,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const notificationCount = notificationSummary.lowStock + notificationSummary.recentOrders + notificationSummary.outOfStock;
 
   return (
-    <div className={`admin-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+    <div className={`admin-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}${mobileNavOpen ? " sidebar-mobile-open" : ""}`}>
+      <div className="mobile-backdrop" aria-hidden="true" onClick={() => setMobileNavOpen(false)} />
       <aside className="admin-sidebar">
         <div className="admin-logo">
           <span className="admin-logo-mark" aria-hidden="true">
@@ -159,7 +161,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <nav className="admin-nav">
           {nav.map(([icon, label, href]) => (
-            <Link key={label} href={href} className={pathname === href || (label === "Dashboard" && pathname === "/admin/dashboard") ? "active" : ""}>
+            <Link 
+              key={label} 
+              href={href} 
+              className={pathname === href || (label === "Dashboard" && pathname === "/admin/dashboard") ? "active" : ""}
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.innerWidth <= 850) {
+                  setMobileNavOpen(false);
+                }
+              }}
+            >
               <AdminNavIcon name={icon} />
               {label}
             </Link>
@@ -189,7 +200,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             className="menu-button"
             aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-expanded={!sidebarCollapsed}
-            onClick={() => setSidebarCollapsed((current) => !current)}
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.innerWidth <= 850) {
+                setMobileNavOpen(!mobileNavOpen);
+              } else {
+                setSidebarCollapsed(!sidebarCollapsed);
+              }
+            }}
           >
             <Menu aria-hidden="true" size={24} strokeWidth={2} />
           </button>

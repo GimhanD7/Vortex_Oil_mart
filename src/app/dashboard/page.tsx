@@ -255,12 +255,13 @@ function ProductIcon({ product, className = "" }: { product: Product; className?
 }
 
 export default function PosBilling() {
-  const router = useRouter();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [user, setUser] = useState<{ id: number; username: string; role: string; permissions: string[] } | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All Items");
   const [payment, setPayment] = useState("Cash");
@@ -642,7 +643,8 @@ export default function PosBilling() {
   });
 
   return (
-    <div className={`pos-shell ${isCashier ? "cashier-pos-shell" : ""}`}>
+    <div className={`pos-shell ${isCashier ? "cashier-pos-shell" : ""} ${mobileNavOpen ? " sidebar-mobile-open" : ""}`}>
+      <div className="mobile-backdrop" aria-hidden="true" onClick={() => setMobileNavOpen(false)} />
       {isAdmin && (
         <aside className="pos-sidebar">
           <div className="pos-logo">
@@ -654,7 +656,16 @@ export default function PosBilling() {
           </div>
           <nav>
             {filteredNav.map(({ Icon, label, href }) => (
-              <button className={href === "/dashboard" ? "active" : ""} key={href} onClick={() => href !== "/dashboard" && router.push(href)}>
+              <button 
+                className={href === "/dashboard" ? "active" : ""} 
+                key={href} 
+                onClick={() => {
+                  if (href !== "/dashboard") router.push(href);
+                  if (typeof window !== 'undefined' && window.innerWidth <= 900) {
+                    setMobileNavOpen(false);
+                  }
+                }}
+              >
                 <Icon className="pos-nav-icon" aria-hidden="true" strokeWidth={1.9} />
                 {label}
               </button>
@@ -671,7 +682,15 @@ export default function PosBilling() {
 
       <div className="pos-workspace" style={user.role !== "admin" ? { marginLeft: 0, width: "100%" } : {}}>
         <header className="pos-topbar admin-mode-bar">
-          {isAdmin && <button className="pos-menu" aria-label="Menu"><Menu aria-hidden="true" size={22} /></button>}
+          {isAdmin && (
+            <button 
+              className="pos-menu" 
+              aria-label="Menu"
+              onClick={() => setMobileNavOpen(!mobileNavOpen)}
+            >
+              <Menu aria-hidden="true" size={22} />
+            </button>
+          )}
           <div className="page-title pos-page-title">
             <h1>POS Billing</h1>
             <p>{isCashier ? "Cashier workspace" : "Admin billing workspace"} / Welcome back, {user.username}</p>
