@@ -1004,3 +1004,32 @@ body {
   .pos-main { grid-template-columns: 1fr !important; display: block; }
   .cart-pane { border-left: none; border-top: 1px solid #e4e6e9; }
 }
+
+/* Comprehensive Responsive Grids & Layouts */
+@media (max-width: 1200px) {
+  .crm-layout, .sales-layout { grid-template-columns: 1fr; }
+  .roles-board { grid-template-columns: 1fr; }
+}
+@media (max-width: 992px) {
+  .sales-filters { grid-template-columns: 1fr 1fr; }
+  .management-filters { grid-template-columns: 1fr 1fr; }
+  .crm-kpis, .user-kpis, .purchase-kpis, .settings-grid { grid-template-columns: repeat(2, 1fr); }
+  .module-access { grid-template-columns: repeat(2, 1fr); }
+  .catalog-cats { grid-template-columns: repeat(4, 1fr); }
+  .user-access-summary { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .customer-actions { grid-template-columns: repeat(2, 1fr); }
+  .purchase-detail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .sales-filters { grid-template-columns: 1fr; }
+  .management-filters { grid-template-columns: 1fr; }
+  .crm-kpis, .user-kpis, .purchase-kpis, .settings-grid { grid-template-columns: 1fr; }
+  .module-access { grid-template-columns: 1fr; }
+  .catalog-cats { grid-template-columns: repeat(2, 1fr); }
+  .customer-actions { grid-template-columns: 1fr; }
+  .purchase-detail { grid-template-columns: 1fr; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e3e5e8; border-radius: 8px; }
+  .table-scroll table { min-width: 600px; }
+}
