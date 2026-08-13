@@ -108,7 +108,7 @@ export default function UsersPage() {
     setSaving(true);
     setError("");
     try {
-      const url = modal === "edit" ? `/api/users/${editingId}` : "/api/users";
+      const url = modal === "edit" ? "/api/users/${editingId}" : "/api/users";
       const res = await fetch(url, {
         method: modal === "edit" ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },

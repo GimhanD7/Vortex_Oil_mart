@@ -124,7 +124,7 @@ export default function CustomersPage() {
     setError("");
 
     try {
-      const url = modal === "edit" && selected ? `/api/customers/${selected.id}` : "/api/customers";
+      const url = modal === "edit" && selected ? "/api/customers/${selected.id}" : "/api/customers";
       const method = modal === "edit" ? "PUT" : "POST";
 
       const res = await fetch(url, {

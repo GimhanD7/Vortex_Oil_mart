@@ -176,7 +176,7 @@ export default function ProductsPage() {
     if (form.brand) await fetch("/api/brands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.brand }) });
 
     const method = editId ? "PUT" : "POST";
-    const url = editId ? `/api/products/${editId}` : "/api/products";
+    const url = editId ? "/api/products/${editId}" : "/api/products";
 
     await fetch(url, {
       method,

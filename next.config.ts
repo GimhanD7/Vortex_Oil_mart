@@ -1,13 +1,29 @@
 import type { NextConfig } from "next";
 
+const isProd = process.env.NODE_ENV === 'production';
+
 const nextConfig: NextConfig = {
   /* config options here */
+  output: isProd ? "export" : undefined,
+  images: {
+    unoptimized: true,
+  },
   reactCompiler: true,
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
+  },
+  async rewrites() {
+    if (isProd) return [];
+    return [
+      {
+        source: '/api/:path*',
+        // Route API calls to the XAMPP PHP backend during local development
+        destination: 'http://localhost/Vortex_Oil_mart/api/:path*',
+      },
+    ];
   },
 };
 
