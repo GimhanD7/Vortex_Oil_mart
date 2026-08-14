@@ -24,6 +24,9 @@ switch ($resource) {
     case 'categories':
         require_once 'routes/categories.php';
         break;
+    case 'sub_categories':
+        require_once 'routes/sub_categories.php';
+        break;
     case 'brands':
         require_once 'routes/brands.php';
         break;

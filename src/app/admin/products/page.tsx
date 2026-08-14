@@ -13,6 +13,8 @@ import {
   Cog,
   Columns3,
   Download,
+  Eye,
+  EyeOff,
   Filter,
   Lightbulb,
   Link,
@@ -37,28 +39,29 @@ type Product = {
   stock_quantity: number;
   sku?: string;
   category?: string;
+  sub_category?: string;
   brand?: string;
   visual?: string;
 };
 
 function CategoryIcon({ category, className = "" }: { category: string; className?: string }) {
   const props = { className: className || "catalog-icon", "aria-hidden": true, size: 22, strokeWidth: 1.9 };
-  if (category === "All") return <PackageSearch {...props} />;
+  if (category === "All") return <PackageSearch {...props} color="#3b82f6" />;
   const c = category.toLowerCase();
-  if (c.includes("engine") || c.includes("oil")) return <Package {...props} />;
-  if (c.includes("gear") || c.includes("lubricant") || c.includes("grease")) return <Cog {...props} />;
-  if (c.includes("filter")) return <Filter {...props} />;
-  if (c.includes("brake") || c.includes("pad") || c.includes("shoe")) return <CircleStop {...props} />;
-  if (c.includes("batter")) return <BatteryCharging {...props} />;
-  if (c.includes("spark") || c.includes("ignition") || c.includes("plug")) return <Zap {...props} />;
-  if (c.includes("coolant") || c.includes("radiator") || c.includes("wiper") || c.includes("wash")) return <CloudRain {...props} />;
-  if (c.includes("bulb") || c.includes("light") || c.includes("lamp")) return <Lightbulb {...props} />;
-  if (c.includes("tire") || c.includes("tyre") || c.includes("wheel")) return <CircleStop {...props} />;
-  if (c.includes("belt") || c.includes("chain")) return <Link {...props} />;
-  if (c.includes("suspension") || c.includes("shock") || c.includes("spring") || c.includes("tool") || c.includes("equipment")) return <Wrench {...props} />;
-  if (c.includes("polish") || c.includes("wax") || c.includes("cleaner") || c.includes("shampoo")) return <Sparkles {...props} />;
-  if (c.includes("accessory") || c.includes("mat") || c.includes("cover")) return <Armchair {...props} />;
-  return <Box {...props} />;
+  if (c.includes("engine") || c.includes("oil")) return <Package {...props} color="#f59e0b" />;
+  if (c.includes("gear") || c.includes("lubricant") || c.includes("grease")) return <Cog {...props} color="#64748b" />;
+  if (c.includes("filter")) return <Filter {...props} color="#10b981" />;
+  if (c.includes("brake") || c.includes("pad") || c.includes("shoe")) return <CircleStop {...props} color="#ef4444" />;
+  if (c.includes("batter")) return <BatteryCharging {...props} color="#eab308" />;
+  if (c.includes("spark") || c.includes("ignition") || c.includes("plug")) return <Zap {...props} color="#8b5cf6" />;
+  if (c.includes("coolant") || c.includes("radiator") || c.includes("wiper") || c.includes("wash")) return <CloudRain {...props} color="#0ea5e9" />;
+  if (c.includes("bulb") || c.includes("light") || c.includes("lamp")) return <Lightbulb {...props} color="#fcd34d" />;
+  if (c.includes("tire") || c.includes("tyre") || c.includes("wheel")) return <CircleStop {...props} color="#334155" />;
+  if (c.includes("belt") || c.includes("chain")) return <Link {...props} color="#d97706" />;
+  if (c.includes("suspension") || c.includes("shock") || c.includes("spring") || c.includes("tool") || c.includes("equipment")) return <Wrench {...props} color="#6366f1" />;
+  if (c.includes("polish") || c.includes("wax") || c.includes("cleaner") || c.includes("shampoo")) return <Sparkles {...props} color="#ec4899" />;
+  if (c.includes("accessory") || c.includes("mat") || c.includes("cover")) return <Armchair {...props} color="#14b8a6" />;
+  return <Box {...props} color="#94a3b8" />;
 }
 
 function stockBadge(stockQuantity: number) {
@@ -70,9 +73,11 @@ function stockBadge(stockQuantity: number) {
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [dbCategories, setDbCategories] = useState<{id: number, name: string}[]>([]);
+  const [dbSubCategories, setDbSubCategories] = useState<{id: number, category_name: string, name: string}[]>([]);
   const [dbBrands, setDbBrands] = useState<{id: number, name: string}[]>([]);
   const [query, setQuery] = useState("");
   const [cat, setCat] = useState("All");
+  const [subCatFilter, setSubCatFilter] = useState("All Sub-Categories");
   const [brandFilter, setBrandFilter] = useState("All Brands");
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [currentPage, setCurrentPage] = useState(1);
@@ -83,6 +88,7 @@ export default function ProductsPage() {
   const [cols, setCols] = useState({ prod: true, sku: true, cat: true, brand: true, pack: true, price: true, status: true, actions: true });
   const [showCols, setShowCols] = useState(false);
   const [isNewCat, setIsNewCat] = useState(false);
+  const [isNewSubCat, setIsNewSubCat] = useState(false);
   const [isNewBrand, setIsNewBrand] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -91,8 +97,24 @@ export default function ProductsPage() {
     stock_quantity: "",
     sku: "",
     category: "Engine Oils",
+    sub_category: "General",
     brand: "Generic",
   });
+
+  const [showIcons, setShowIcons] = useState(true);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('showProductIcons');
+    if (saved !== null) {
+      setShowIcons(saved === 'true');
+    }
+  }, []);
+
+  const toggleIcons = () => {
+    const next = !showIcons;
+    setShowIcons(next);
+    localStorage.setItem('showProductIcons', String(next));
+  };
   
   const catsList = ["All", ...Array.from(new Set(dbCategories.map(c => c.name)))];
   const brandsList = ["All Brands", ...Array.from(new Set(dbBrands.map(b => b.name)))];
@@ -128,6 +150,7 @@ export default function ProductsPage() {
               ...p,
               sku: p.sku || `SKU-${String(p.id).padStart(3, "0")}`,
               category: p.category || "General",
+              sub_category: p.sub_category || "General",
               brand: p.brand || "Generic",
             }))
           );
@@ -136,6 +159,7 @@ export default function ProductsPage() {
       .catch(() => {});
       
     cachedFetch("/api/categories").then(r => r.json()).then(d => { if (Array.isArray(d)) setDbCategories(d) }).catch(()=>{});
+    cachedFetch("/api/sub_categories").then(r => r.json()).then(d => { if (Array.isArray(d)) setDbSubCategories(d) }).catch(()=>{});
     cachedFetch("/api/brands").then(r => r.json()).then(d => { if (Array.isArray(d)) setDbBrands(d) }).catch(()=>{});
   };
 
@@ -147,6 +171,7 @@ export default function ProductsPage() {
     let result = products.filter(
       (p) =>
         (cat === "All" || p.category === cat) &&
+        (subCatFilter === "All Sub-Categories" || p.sub_category === subCatFilter) &&
         (brandFilter === "All Brands" || p.brand === brandFilter) &&
         `${p.name} ${p.sku}`.toLowerCase().includes(query.toLowerCase())
     );
@@ -160,7 +185,7 @@ export default function ProductsPage() {
     }
 
     return result;
-  }, [products, query, cat, brandFilter, statusFilter]);
+  }, [products, query, cat, subCatFilter, brandFilter, statusFilter]);
 
 
 
@@ -172,12 +197,13 @@ export default function ProductsPage() {
     e.preventDefault();
     setSaving(true);
     
-    // Auto-create category and brand if they don't exist
-    if (form.category) await fetch("/api/categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.category }) });
-    if (form.brand) await fetch("/api/brands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.brand }) });
+    // Auto-create category, sub-category, and brand if they don't exist
+    if (form.category && isNewCat) await fetch("/api/categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.category }) });
+    if (form.sub_category && isNewSubCat) await fetch("/api/sub_categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category_name: form.category, name: form.sub_category }) });
+    if (form.brand && isNewBrand) await fetch("/api/brands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.brand }) });
 
     const method = editId ? "PUT" : "POST";
-    const url = editId ? "/api/products/${editId}" : "/api/products";
+    const url = editId ? `/api/products/${editId}` : "/api/products";
 
     await fetch(url, {
       method,
@@ -192,8 +218,9 @@ export default function ProductsPage() {
     setShow(false);
     setEditId(null);
     setIsNewCat(false);
+    setIsNewSubCat(false);
     setIsNewBrand(false);
-    setForm({ name: "", description: "", price: "", stock_quantity: "", sku: "", category: "Engine Oils", brand: "Generic" });
+    setForm({ name: "", description: "", price: "", stock_quantity: "", sku: "", category: "Engine Oils", sub_category: "General", brand: "Generic" });
     load();
   };
 
@@ -288,6 +315,7 @@ export default function ProductsPage() {
       stock_quantity: String(p.stock_quantity),
       sku: p.sku || "",
       category: p.category || "General",
+      sub_category: p.sub_category || "General",
       brand: p.brand || "Generic"
     });
     setEditId(p.id);
@@ -321,7 +349,7 @@ export default function ProductsPage() {
           <button onClick={exportProducts}>
             <Download size={15} aria-hidden="true" /> Export
           </button>
-          <button className="gold-btn" onClick={() => { setEditId(null); setForm({ name: "", description: "", price: "", stock_quantity: "", sku: "", category: "Engine Oils", brand: "Generic" }); setShow(true); }}>
+          <button className="gold-btn" onClick={() => { setEditId(null); setForm({ name: "", description: "", price: "", stock_quantity: "", sku: "", category: "Engine Oils", sub_category: "General", brand: "Generic" }); setShow(true); }}>
             <Plus size={15} aria-hidden="true" /> Add Product
           </button>
         </aside>
@@ -336,9 +364,15 @@ export default function ProductsPage() {
             placeholder="Search by product name, SKU or part number..."
           />
         </label>
-        <select value={cat} onChange={(e) => setCat(e.target.value)}>
+        <select value={cat} onChange={(e) => { setCat(e.target.value); setSubCatFilter("All Sub-Categories"); }}>
           {catsList.map(c => <option key={c} value={c}>{c === "All" ? "All Categories" : c}</option>)}
         </select>
+        {cat !== "All" && (
+          <select value={subCatFilter} onChange={(e) => setSubCatFilter(e.target.value)}>
+            <option value="All Sub-Categories">All Sub-Categories</option>
+            {dbSubCategories.filter(sc => sc.category_name === cat).map(sc => <option key={sc.id} value={sc.name}>{sc.name}</option>)}
+          </select>
+        )}
         <select value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}>
           {brandsList.map(b => <option key={b} value={b}>{b}</option>)}
         </select>
@@ -354,7 +388,7 @@ export default function ProductsPage() {
         {catsList.map((c) => (
           <button
             key={c}
-            onClick={() => setCat(c)}
+            onClick={() => { setCat(c); setSubCatFilter("All Sub-Categories"); }}
             className={cat === c ? "active" : ""}
           >
             <CategoryIcon category={c} />
@@ -363,16 +397,72 @@ export default function ProductsPage() {
         ))}
       </div>
 
+      
+
       <section className="product-overview">
-        <h2>Product Overview</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h2>Product Overview</h2>
+          
+          <button 
+            onClick={toggleIcons} 
+            style={{ display: 'flex', gap: '6px', alignItems: 'center', padding: '6px 12px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', color: '#475569', cursor: 'pointer' }}
+          >
+            {showIcons ? <EyeOff size={16} /> : <Eye size={16} />}
+            {showIcons ? "Hide Icons" : "Show Icons"}
+          </button>
+        </div>
+        {cat !== "All" && dbSubCategories.filter(sc => sc.category_name === cat).length > 0 && (
+        <div className="catalog-sub-cats" style={{ display: 'flex', gap: '8px', padding: '0 25px 20px', overflowX: 'auto' }}>
+          <button 
+            onClick={() => setSubCatFilter("All Sub-Categories")}
+            style={{ 
+              padding: '6px 14px', 
+              borderRadius: '20px', 
+              border: '1px solid #cbd5e1', 
+              background: subCatFilter === "All Sub-Categories" ? '#0f172a' : '#f8fafc', 
+              color: subCatFilter === "All Sub-Categories" ? '#fff' : '#334155', 
+              fontSize: '13px', 
+              fontWeight: 500,
+              cursor: 'pointer', 
+              whiteSpace: 'nowrap',
+              transition: 'all 0.2s'
+            }}
+          >
+            All Sub-Categories
+          </button>
+          {dbSubCategories.filter(sc => sc.category_name === cat).map(sc => (
+            <button
+              key={sc.id}
+              onClick={() => setSubCatFilter(sc.name)}
+              style={{ 
+                padding: '6px 14px', 
+                borderRadius: '20px', 
+                border: '1px solid #cbd5e1', 
+                background: subCatFilter === sc.name ? '#0f172a' : '#f8fafc', 
+                color: subCatFilter === sc.name ? '#fff' : '#334155', 
+                fontSize: '13px', 
+                fontWeight: 500,
+                cursor: 'pointer', 
+                whiteSpace: 'nowrap',
+                transition: 'all 0.2s'
+              }}
+            >
+              {sc.name}
+            </button>
+          ))}
+        </div>
+      )}
         <div>
           {shown.slice(0, 7).map((p) => {
             const status = stockBadge(p.stock_quantity);
             return (
               <article key={p.id}>
-                <CategoryIcon category={p.category || "General"} className="product-card-icon" />
+                {showIcons && <CategoryIcon category={p.category || "General"} className="product-card-icon" />}
                 <b>{p.name}</b>
                 <small>SKU: {p.sku}</small>
+                {/* <small style={{ color: '#64748b', fontSize: '0.8em', marginTop: '-4px', marginBottom: '4px' }}>
+                  {p.category} {p.sub_category && `> ${p.sub_category}`}
+                </small> */}
                 <em className={status.className}>{status.label}</em>
                 <strong>
                   Rs. {Number(p.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
@@ -459,7 +549,12 @@ export default function ProductsPage() {
                     </td>
                   )}
                   {cols.sku && <td>{p.sku}</td>}
-                  {cols.cat && <td>{p.category}</td>}
+                  {cols.cat && (
+                    <td>
+                      <div>{p.category}</div>
+                      <small style={{ color: "#64748b" }}>{p.sub_category}</small>
+                    </td>
+                  )}
                   {cols.brand && <td>{p.brand}</td>}
                   {cols.pack && <td>1 Unit</td>}
                   {cols.price && (
@@ -523,7 +618,7 @@ export default function ProductsPage() {
               </label>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
               <label>
                 Category
                 {!isNewCat ? (
@@ -554,6 +649,40 @@ export default function ProductsPage() {
                       style={{ flex: 1 }}
                     />
                     <button type="button" onClick={() => { setIsNewCat(false); setForm({ ...form, category: dbCategories[0]?.name || "General" }) }} style={{ padding: '0 10px', border: '1px solid #ccc', borderRadius: '7px', background: '#fff' }}>✕</button>
+                  </div>
+                )}
+              </label>
+
+              <label>
+                Sub-Category
+                {!isNewSubCat ? (
+                  <select
+                    value={form.sub_category}
+                    onChange={(e) => {
+                      if (e.target.value === "++NEW++") {
+                        setIsNewSubCat(true);
+                        setForm({ ...form, sub_category: "" });
+                      } else {
+                        setForm({ ...form, sub_category: e.target.value });
+                      }
+                    }}
+                    style={{ border: '1px solid #dfe2e5', borderRadius: '7px', padding: '11px', font: 'inherit', width: '100%', outline: 'none' }}
+                  >
+                    <option value="" disabled>Select a sub-category</option>
+                    {dbSubCategories.filter(sc => sc.category_name === form.category).map(sc => <option key={sc.id} value={sc.name}>{sc.name}</option>)}
+                    <option value="++NEW++">+ Create New Sub-Category...</option>
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: '5px' }}>
+                    <input
+                      required
+                      autoFocus
+                      value={form.sub_category}
+                      onChange={(e) => setForm({ ...form, sub_category: e.target.value })}
+                      placeholder="Type new sub-category..."
+                      style={{ flex: 1 }}
+                    />
+                    <button type="button" onClick={() => { setIsNewSubCat(false); setForm({ ...form, sub_category: "General" }) }} style={{ padding: '0 10px', border: '1px solid #ccc', borderRadius: '7px', background: '#fff' }}>✕</button>
                   </div>
                 )}
               </label>
