@@ -23,7 +23,6 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { showToast } = useToast();
@@ -85,10 +84,6 @@ export default function LoginPage() {
           <div className="login-input"><Icon name="user" /><input id="username" type="text" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter your username" required /></div>
           <label htmlFor="password">Password</label>
           <div className="login-input"><Icon name="lock" /><input id="password" type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" required /><button type="button" className="show-password" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}><Icon name="eye" /></button></div>
-          <div className="login-options">
-            <label className="remember"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> <span>Remember me</span></label>
-            <a href="#">Forgot password?</a>
-          </div>
           <button className="login-submit" type="submit" disabled={loading}><Icon name="arrow" />{loading ? "Signing in..." : "Sign In"}</button>
         </form>
         <div className="secure-note"><Icon name="shield" /> Secure access to your business</div>
@@ -117,7 +112,6 @@ export default function LoginPage() {
         </a>
         <p><Icon name="shield" /> &copy; 2026 Oil Mart POS. All rights reserved.</p>
         <p className="footer-values"><b aria-hidden="true" /> Secure <i aria-hidden="true" /> Reliable <i aria-hidden="true" /> Efficient</p>
-        <nav><a href="#">Privacy Policy</a><a href="#">Terms of Service</a><a href="#">Help &amp; Support</a></nav>
       </footer>
     </main>
   );
