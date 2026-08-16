@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { HelpSupportButton } from "@/components/HelpSupport";
+import { NotificationCenter } from "@/components/NotificationCenter";
 import {
   BarChart3,
-  Bell,
   Boxes,
   ChevronDown,
-  CircleHelp,
   ClipboardList,
   LayoutDashboard,
   LogOut,
@@ -16,7 +16,6 @@ import {
   Package,
   PackageCheck,
   Settings,
-  ShoppingCart,
   TrendingUp,
   UserCog,
   Users,
@@ -74,12 +73,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
 
   const [showProfile, setShowProfile] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [user, setUser] = useState<{ username: string; role: string; permissions: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [notificationSummary, setNotificationSummary] = useState({ lowStock: 0, recentOrders: 0, outOfStock: 0 });
 
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
@@ -109,20 +106,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [loading, pathname, router, user]);
 
-  useEffect(() => {
-    if (!user) return;
-    fetch("/api/dashboard", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => {
-        setNotificationSummary({
-          lowStock: Number(data?.inventory?.low_stock || data?.low_stock?.length || 0),
-          recentOrders: Number(data?.recent_orders?.length || 0),
-          outOfStock: Number(data?.inventory?.out_of_stock || 0),
-        });
-      })
-      .catch(() => {});
-  }, [user]);
-
   if (loading || !user) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: "#f8fafc" }}>
@@ -141,7 +124,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     document.cookie = "auth_token=; Max-Age=0; path=/";
     router.push("/");
   };
-  const notificationCount = notificationSummary.lowStock + notificationSummary.recentOrders + notificationSummary.outOfStock;
 
   return (
     <div className={`admin-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}${mobileNavOpen ? " sidebar-mobile-open" : ""}`}>
@@ -178,10 +160,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
 
         <div className="sidebar-bottom">
-          <a href="#">
-            <CircleHelp className="sidebar-action-icon" aria-hidden="true" strokeWidth={1.9} />
-            <span>Help &amp; Support</span>
-          </a>
+          <HelpSupportButton iconClassName="sidebar-action-icon" />
           <button
             onClick={() => {
               document.cookie = "auth_token=; Max-Age=0; path=/";
@@ -212,56 +191,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </button>
 
           <div className="topbar-actions">
-            <div className="notification-control">
-              <button
-                className="bell"
-                aria-label="Notifications"
-                aria-expanded={showNotifications}
-                onClick={() => {
-                  setShowNotifications((current) => !current);
-                  setShowProfile(false);
-                }}
-              >
-                <Bell aria-hidden="true" size={22} strokeWidth={1.9} />
-                <i>{notificationCount || 0}</i>
-              </button>
-              {showNotifications && (
-                <div className="notification-menu">
-                  <header>
-                    <b>Notifications</b>
-                    <small>Live admin alerts</small>
-                  </header>
-                  {(user.role === "admin" || user.permissions.includes("manage_inventory")) && (
-                    <button onClick={() => router.push("/admin/inventory")}>
-                      <PackageCheck size={16} aria-hidden="true" />
-                      <span><b>{notificationSummary.lowStock} low stock items</b><small>Open inventory reorder alerts</small></span>
-                    </button>
-                  )}
-                  {(user.role === "admin" || user.permissions.includes("view_sales")) && (
-                    <button onClick={() => router.push("/admin/sales")}>
-                      <TrendingUp size={16} aria-hidden="true" />
-                      <span><b>{notificationSummary.recentOrders} recent orders</b><small>Review sales and invoices</small></span>
-                    </button>
-                  )}
-                  {(user.role === "admin" || user.permissions.includes("manage_products")) && (
-                    <button onClick={() => router.push("/admin/products")}>
-                      <Package size={16} aria-hidden="true" />
-                      <span><b>{notificationSummary.outOfStock} out of stock items</b><small>Update unavailable products</small></span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+            <NotificationCenter />
 
             <div className="profile-control">
               <button
                 className="admin-profile"
                 aria-label="Open profile menu"
                 aria-expanded={showProfile}
-                onClick={() => {
-                  setShowProfile(!showProfile);
-                  setShowNotifications(false);
-                }}
+                onClick={() => setShowProfile(!showProfile)}
               >
                 <span>{user.username.charAt(0).toUpperCase()}</span>
                 <p>

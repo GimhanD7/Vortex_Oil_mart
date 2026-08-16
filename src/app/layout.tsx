@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { PWASetup } from "@/components/PWASetup";
+import { ToastProvider } from "@/components/ToastProvider";
 
 export const metadata: Metadata = {
   title: "Oil Mart - Role Based Portal",
@@ -23,7 +24,9 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <PWASetup />
         <ThemeProvider>
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>

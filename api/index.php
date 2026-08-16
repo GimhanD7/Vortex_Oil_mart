@@ -48,6 +48,9 @@ switch ($resource) {
     case 'dashboard':
         require_once 'routes/dashboard.php';
         break;
+    case 'notifications':
+        require_once 'routes/notifications.php';
+        break;
     case 'users':
         require_once 'routes/users.php';
         break;

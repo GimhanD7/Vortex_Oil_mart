@@ -4,6 +4,20 @@ $user = requireAuth(); // Require auth for purchases
 
 function ensurePurchaseTables() {
     global $pdo;
+    foreach ([
+        "ALTER TABLE products ADD COLUMN product_type VARCHAR(30) NOT NULL DEFAULT 'packaged'",
+        "ALTER TABLE products ADD COLUMN unit VARCHAR(20) NOT NULL DEFAULT 'Unit'",
+        "ALTER TABLE products ADD COLUMN barrel_capacity_liters DECIMAL(10,3) NULL",
+        "ALTER TABLE products MODIFY COLUMN stock_quantity DECIMAL(12,3) NOT NULL DEFAULT 0",
+        "ALTER TABLE products MODIFY COLUMN reorder_level DECIMAL(12,3) NOT NULL DEFAULT 10",
+    ] as $query) {
+        try {
+            $pdo->exec($query);
+        } catch (PDOException $e) {
+            // Existing databases may already match this shape
+        }
+    }
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS purchases (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -23,7 +37,10 @@ function ensurePurchaseTables() {
             id INT AUTO_INCREMENT PRIMARY KEY,
             purchase_id INT NOT NULL,
             product_id INT NOT NULL,
-            quantity INT NOT NULL,
+            quantity DECIMAL(12,3) NOT NULL,
+            purchase_unit VARCHAR(20) NOT NULL DEFAULT 'Unit',
+            barrel_count DECIMAL(10,3) NULL,
+            barrel_capacity_liters DECIMAL(10,3) NULL,
             unit_cost DECIMAL(10, 2) NOT NULL,
             FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
             FOREIGN KEY (product_id) REFERENCES products(id)
@@ -35,9 +52,9 @@ function ensurePurchaseTables() {
             id INT AUTO_INCREMENT PRIMARY KEY,
             product_id INT NOT NULL,
             movement_type ENUM('in', 'out', 'adjustment', 'sale', 'purchase') NOT NULL,
-            quantity_change INT NOT NULL,
-            stock_before INT NOT NULL,
-            stock_after INT NOT NULL,
+            quantity_change DECIMAL(12,3) NOT NULL,
+            stock_before DECIMAL(12,3) NOT NULL,
+            stock_after DECIMAL(12,3) NOT NULL,
             unit_price DECIMAL(10, 2) NOT NULL,
             reference_no VARCHAR(100),
             notes VARCHAR(500),
@@ -49,12 +66,30 @@ function ensurePurchaseTables() {
             FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         )
     ");
+
+    foreach ([
+        "ALTER TABLE purchase_items MODIFY COLUMN quantity DECIMAL(12,3) NOT NULL",
+        "ALTER TABLE purchase_items ADD COLUMN purchase_unit VARCHAR(20) NOT NULL DEFAULT 'Unit'",
+        "ALTER TABLE purchase_items ADD COLUMN barrel_count DECIMAL(10,3) NULL",
+        "ALTER TABLE purchase_items ADD COLUMN barrel_capacity_liters DECIMAL(10,3) NULL",
+        "ALTER TABLE inventory_movements MODIFY COLUMN quantity_change DECIMAL(12,3) NOT NULL",
+        "ALTER TABLE inventory_movements MODIFY COLUMN stock_before DECIMAL(12,3) NOT NULL",
+        "ALTER TABLE inventory_movements MODIFY COLUMN stock_after DECIMAL(12,3) NOT NULL",
+    ] as $query) {
+        try {
+            $pdo->exec($query);
+        } catch (PDOException $e) {
+            // Column likely exists / already compatible
+        }
+    }
 }
 
 function purchaseItems($purchaseId) {
     global $pdo;
     $stmt = $pdo->prepare("
-        SELECT pi.id, pi.product_id, pi.quantity, pi.unit_cost, p.name AS product_name, p.sku
+        SELECT pi.id, pi.product_id, pi.quantity, pi.purchase_unit, pi.barrel_count,
+               pi.barrel_capacity_liters, pi.unit_cost, p.name AS product_name,
+               p.sku, p.product_type, p.unit
         FROM purchase_items pi
         JOIN products p ON p.id = pi.product_id
         WHERE pi.purchase_id = ?
@@ -72,12 +107,13 @@ function reverseReceivedStock($purchaseId, $createdBy) {
         $stmt->execute([$item['product_id']]);
         $product = $stmt->fetch();
         
-        $stockBefore = (int)$product['stock_quantity'];
-        if ($stockBefore < (int)$item['quantity']) {
+        $stockBefore = (float)$product['stock_quantity'];
+        $quantity = (float)$item['quantity'];
+        if ($stockBefore < $quantity) {
             throw new Exception("Cannot reverse {$item['product_name']}; current stock is below purchase quantity");
         }
         
-        $stockAfter = $stockBefore - (int)$item['quantity'];
+        $stockAfter = $stockBefore - $quantity;
         
         $stmt = $pdo->prepare('UPDATE products SET stock_quantity = ? WHERE id = ?');
         $stmt->execute([$stockAfter, $item['product_id']]);
@@ -88,7 +124,7 @@ function reverseReceivedStock($purchaseId, $createdBy) {
             VALUES (?, 'out', ?, ?, ?, ?, ?, 'Purchase stock reversed', ?)
         ");
         $stmt->execute([
-            $item['product_id'], -$item['quantity'], $stockBefore, $stockAfter, 
+            $item['product_id'], -$quantity, $stockBefore, $stockAfter, 
             $item['unit_cost'], "PUR-CANCEL-{$purchaseId}", $createdBy
         ]);
     }
@@ -140,25 +176,47 @@ if ($method === 'POST' && !$id) {
 
         foreach ($items as $item) {
             $productId = (int)$item['product_id'];
-            $quantity = (int)$item['quantity'];
+            $quantity = isset($item['quantity']) ? (float)$item['quantity'] : 0;
+            $barrelCount = isset($item['barrel_count']) && $item['barrel_count'] !== '' ? (float)$item['barrel_count'] : null;
+            $barrelCapacity = isset($item['barrel_capacity_liters']) && $item['barrel_capacity_liters'] !== '' ? (float)$item['barrel_capacity_liters'] : null;
             $unitCost = (float)$item['unit_cost'];
             
-            if ($productId <= 0 || $quantity <= 0 || $unitCost < 0) {
+            if ($productId <= 0 || $unitCost < 0) {
                 throw new Exception("Purchase items need a product, positive quantity, and valid unit cost");
             }
             
-            $stmt = $pdo->prepare('SELECT stock_quantity FROM products WHERE id = ? FOR UPDATE');
+            $stmt = $pdo->prepare('SELECT stock_quantity, product_type, unit, barrel_capacity_liters FROM products WHERE id = ? FOR UPDATE');
             $stmt->execute([$productId]);
             $product = $stmt->fetch();
             
             if (!$product) throw new Exception("Product {$productId} not found");
+
+            $purchaseUnit = $product['unit'] ?: 'Unit';
+            if ($product['product_type'] === 'loose_oil') {
+                if ($barrelCount !== null || $barrelCapacity !== null) {
+                    $barrelCount = $barrelCount !== null ? $barrelCount : 1;
+                    $barrelCapacity = $barrelCapacity !== null ? $barrelCapacity : (float)($product['barrel_capacity_liters'] ?: 200);
+                    if ($barrelCount <= 0 || $barrelCapacity <= 0) {
+                        throw new Exception("Loose oil barrel count and capacity must be positive");
+                    }
+                    $quantity = $barrelCount * $barrelCapacity;
+                }
+                $purchaseUnit = 'L';
+            }
+
+            if ($quantity <= 0) {
+                throw new Exception("Purchase items need a positive received quantity");
+            }
             
             $total += $quantity * $unitCost;
             $normalized[] = [
                 'product_id' => $productId,
                 'quantity' => $quantity,
+                'purchase_unit' => $purchaseUnit,
+                'barrel_count' => $barrelCount,
+                'barrel_capacity_liters' => $barrelCapacity,
                 'unit_cost' => $unitCost,
-                'stock_before' => (int)$product['stock_quantity']
+                'stock_before' => (float)$product['stock_quantity']
             ];
         }
 
@@ -172,8 +230,20 @@ if ($method === 'POST' && !$id) {
         foreach ($normalized as $item) {
             $stockAfter = $item['stock_before'] + $item['quantity'];
             
-            $stmt = $pdo->prepare('INSERT INTO purchase_items (purchase_id, product_id, quantity, unit_cost) VALUES (?, ?, ?, ?)');
-            $stmt->execute([$purchaseId, $item['product_id'], $item['quantity'], $item['unit_cost']]);
+            $stmt = $pdo->prepare('
+                INSERT INTO purchase_items
+                (purchase_id, product_id, quantity, purchase_unit, barrel_count, barrel_capacity_liters, unit_cost)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ');
+            $stmt->execute([
+                $purchaseId,
+                $item['product_id'],
+                $item['quantity'],
+                $item['purchase_unit'],
+                $item['barrel_count'],
+                $item['barrel_capacity_liters'],
+                $item['unit_cost']
+            ]);
             
             $stmt = $pdo->prepare('UPDATE products SET stock_quantity = ? WHERE id = ?');
             $stmt->execute([$stockAfter, $item['product_id']]);
@@ -185,7 +255,12 @@ if ($method === 'POST' && !$id) {
             ");
             $stmt->execute([
                 $item['product_id'], $item['quantity'], $item['stock_before'], $stockAfter, 
-                $item['unit_cost'], "PUR-{$purchaseId}", "Purchase received from {$supplier}", $created_by
+                $item['unit_cost'],
+                "PUR-{$purchaseId}",
+                $item['barrel_count'] && $item['barrel_capacity_liters']
+                    ? "Purchase received from {$supplier} ({$item['barrel_count']} barrel x {$item['barrel_capacity_liters']}L)"
+                    : "Purchase received from {$supplier}",
+                $created_by
             ]);
         }
 

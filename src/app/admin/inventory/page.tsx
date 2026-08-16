@@ -35,6 +35,9 @@ type Product = {
   description: string;
   price: number;
   stock_quantity: number;
+  product_type?: "packaged" | "loose_oil" | string;
+  unit?: string;
+  barrel_capacity_liters?: number | string | null;
   sku?: string;
   barcode?: string;
   category?: string;
@@ -59,6 +62,7 @@ type MovementSummary = {
 type InventoryMovement = {
   id: number;
   product_name: string;
+  unit?: string | null;
   movement_type: string;
   quantity_change: number;
   stock_before: number;
@@ -85,6 +89,22 @@ function CategoryIcon({ category, className = "" }: { category: string; classNam
   if (c.includes("polish") || c.includes("wax") || c.includes("cleaner") || c.includes("shampoo")) return <Sparkles {...props} />;
   if (c.includes("accessory") || c.includes("mat") || c.includes("cover")) return <Armchair {...props} />;
   return <Box {...props} />;
+}
+
+function formatQty(value: string | number, unit = "Unit") {
+  const quantity = Number(value || 0);
+  const formatted = Number.isInteger(quantity)
+    ? quantity.toLocaleString("en-IN")
+    : quantity.toLocaleString("en-IN", { maximumFractionDigits: 3 });
+  return `${formatted} ${unit || "Unit"}`;
+}
+
+function stockState(product: Pick<Product, "stock_quantity" | "reorder_level">) {
+  const stock = Number(product.stock_quantity || 0);
+  const reorder = Number(product.reorder_level || 10);
+  if (stock <= 0) return { className: "out", label: "Out of Stock" };
+  if (stock <= reorder) return { className: "low", label: "Low Stock" };
+  return { className: "", label: "In Stock" };
 }
 
 export default function InventoryPage() {
@@ -134,6 +154,8 @@ export default function InventoryPage() {
               sku: p.sku || `SKU-${String(p.id).padStart(3, "0")}`,
               category: p.category || "General",
               brand: p.brand || "Generic",
+              product_type: p.product_type || "packaged",
+              unit: p.unit || "Unit",
               supplier: p.supplier || p.brand || "Not Assigned",
               location: p.location || "Main Store",
               stock_quantity: Number(p.stock_quantity || 0),
@@ -169,7 +191,7 @@ export default function InventoryPage() {
     return products.filter(
       (p) =>
         (tab === "All Items" ||
-          (tab === "Low Stock" && p.stock_quantity > 0 && p.stock_quantity < 10) ||
+          (tab === "Low Stock" && p.stock_quantity > 0 && p.stock_quantity <= Number(p.reorder_level || 10)) ||
           (tab === "Out of Stock" && p.stock_quantity === 0) ||
           (tab === "Expiring Soon" && false)) &&
         (catFilter === "All Categories" || p.category === catFilter) &&
@@ -207,7 +229,7 @@ export default function InventoryPage() {
   };
 
   const stockValue = products.reduce((s, p) => s + Number(p.price) * p.stock_quantity, 0);
-  const low = products.filter((p) => p.stock_quantity > 0 && p.stock_quantity < 10).length;
+  const low = products.filter((p) => p.stock_quantity > 0 && p.stock_quantity <= Number(p.reorder_level || 10)).length;
   const out = products.filter((p) => !p.stock_quantity).length;
   const netMovement = movementSummary.total_inward - movementSummary.total_outward;
   const kpiCards = [
@@ -424,7 +446,7 @@ export default function InventoryPage() {
             </thead>
             <tbody>
               {paginatedShown.map((p, i) => (
-                <tr key={p.id} className={p.stock_quantity < 10 ? "warning-row" : ""}>
+                <tr key={p.id} className={stockState(p).className === "low" ? "warning-row" : ""}>
                   {cols.check && (
                     <td className="select-cell">
                       <input
@@ -460,15 +482,11 @@ export default function InventoryPage() {
                   {cols.monthly_out && <td style={{ textAlign: 'right', color: '#dc2626' }}>-{p.monthly_out}</td>}
                   {cols.stock && (
                     <td>
-                      <b className={p.stock_quantity < 10 ? "danger" : "success"}>
-                        {p.stock_quantity}
+                      <b className={stockState(p).className === "" ? "success" : "danger"}>
+                        {formatQty(p.stock_quantity, p.unit)}
                       </b>
-                      <small className={p.stock_quantity < 10 ? "danger" : "success"}>
-                        {p.stock_quantity === 0
-                          ? "Out of Stock"
-                          : p.stock_quantity < 10
-                          ? "Low Stock"
-                          : "In Stock"}
+                      <small className={stockState(p).className === "" ? "success" : "danger"}>
+                        {stockState(p).label}
                       </small>
                     </td>
                   )}
@@ -484,15 +502,9 @@ export default function InventoryPage() {
                   {cols.status && (
                     <td>
                       <em
-                        className={
-                          p.stock_quantity === 0 ? "out" : p.stock_quantity < 10 ? "low" : ""
-                        }
+                        className={stockState(p).className}
                       >
-                        {p.stock_quantity === 0
-                          ? "Out of Stock"
-                          : p.stock_quantity < 10
-                          ? "Low Stock"
-                          : "In Stock"}
+                        {stockState(p).label}
                       </em>
                     </td>
                   )}
@@ -598,7 +610,7 @@ export default function InventoryPage() {
                 <small>{movement.reference_no || movement.movement_type} / {new Date(movement.created_at).toLocaleString()}</small>
               </p>
               <strong className={movement.quantity_change > 0 ? "success" : "danger"}>
-                {movement.quantity_change > 0 ? "+" : ""}{movement.quantity_change}
+                {movement.quantity_change > 0 ? "+" : ""}{formatQty(movement.quantity_change, movement.unit || "Unit")}
               </strong>
             </div>
           ))}
@@ -610,7 +622,7 @@ export default function InventoryPage() {
             Low Stock Alerts <button onClick={() => setTab("Low Stock")}>View All</button>
           </h2>
           {products
-            .filter((p) => p.stock_quantity < 10)
+            .filter((p) => stockState(p).className === "low")
             .slice(0, 4)
             .map((p) => (
               <div key={p.id}>
@@ -618,7 +630,7 @@ export default function InventoryPage() {
                 <p>
                   <b>{p.name}</b>
                   <small>
-                    Current: {p.stock_quantity} | Reorder: 10
+                    Current: {formatQty(p.stock_quantity, p.unit)} | Reorder: {formatQty(p.reorder_level || 10, p.unit)}
                   </small>
                 </p>
                 <em>Low Stock</em>
@@ -638,13 +650,14 @@ export default function InventoryPage() {
             </header>
             <p className="adjust-product">
               <b>{adjust.name}</b>
-              <small>Current stock: {adjust.stock_quantity}</small>
+              <small>Current stock: {formatQty(adjust.stock_quantity, adjust.unit)}</small>
             </p>
             <label>
               Adjustment quantity
               <input
                 type="number"
                 required
+                step={adjust.unit === "L" ? "0.001" : "1"}
                 value={amount}
                 onChange={(e) => setAmount(Number(e.target.value))}
               />

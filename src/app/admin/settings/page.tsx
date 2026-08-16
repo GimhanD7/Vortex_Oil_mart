@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Download, FileUp, ReceiptText, RefreshCcw, Save, ShieldCheck, Store } from "lucide-react";
+import { useToast } from "@/components/ToastProvider";
 
 type ImportResult = {
   message?: string;
@@ -37,7 +38,7 @@ const defaultSettings: Settings = {
   store_address: "123, Industrial Area, New Delhi",
   store_phone: "",
   gst_number: "",
-  tax_rate: "18",
+  tax_rate: "0",
   invoice_prefix: "INV",
   invoice_footer: "Thank you for your visit. Drive safe. Stay protected.",
   invoice_logo_text: "OM",
@@ -67,8 +68,8 @@ function countPreview(payload: Record<string, unknown>) {
 }
 
 export default function SettingsPage() {
+  const { showToast } = useToast();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [message, setMessage] = useState("");
   const [importing, setImporting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
@@ -79,8 +80,8 @@ export default function SettingsPage() {
     fetch("/api/settings", { cache: "no-store" })
       .then((response) => response.json())
       .then((data) => setSettings({ ...defaultSettings, ...data, payment_methods: normalizePaymentMethods(Array.isArray(data.payment_methods) ? data.payment_methods : defaultSettings.payment_methods) }))
-      .catch(() => setMessage("Unable to load saved settings."));
-  }, []);
+      .catch(() => showToast({ type: "error", title: "Settings failed", message: "Unable to load saved settings." }));
+  }, [showToast]);
 
   const updateSetting = (key: keyof Settings, value: string) => {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -101,7 +102,6 @@ export default function SettingsPage() {
   const saveSettings = async (event: React.FormEvent) => {
     event.preventDefault();
     setSaving(true);
-    setMessage("");
     const normalizedSettings = { ...settings, payment_methods: normalizePaymentMethods(settings.payment_methods) };
     const response = await fetch("/api/settings", {
       method: "POST",
@@ -111,7 +111,11 @@ export default function SettingsPage() {
     const data = await response.json();
     setSaving(false);
     if (data.settings) setSettings({ ...normalizedSettings, ...data.settings, payment_methods: normalizePaymentMethods(data.settings.payment_methods || normalizedSettings.payment_methods) });
-    setMessage(data.message || data.error || "Settings saved.");
+    showToast({
+      type: response.ok ? "success" : "error",
+      title: response.ok ? "Settings saved" : "Settings failed",
+      message: data.message || data.error || "Settings saved.",
+    });
   };
 
   const exportBackup = async () => {
@@ -123,19 +127,19 @@ export default function SettingsPage() {
     link.download = `oil-mart-backup-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
+    showToast({ type: "success", title: "Backup exported", message: "Backup file download started." });
   };
 
   const chooseImportFile = async (file: File | null) => {
     if (!file) return;
-    setMessage("");
     try {
       const text = await file.text();
       const payload = JSON.parse(text) as Record<string, unknown>;
       setPendingImport(payload);
       setPreview(countPreview(payload));
-      setMessage("Backup file selected. Review the preview, then import.");
+      showToast({ type: "info", title: "Backup selected", message: "Review the preview, then import." });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to read backup file.");
+      showToast({ type: "error", title: "Backup failed", message: error instanceof Error ? error.message : "Unable to read backup file." });
     } finally {
       if (inputRef.current) inputRef.current.value = "";
     }
@@ -144,7 +148,6 @@ export default function SettingsPage() {
   const importBackup = async () => {
     if (!pendingImport) return;
     setImporting(true);
-    setMessage("");
     try {
       const response = await fetch("/api/settings/backup", {
         method: "POST",
@@ -154,15 +157,18 @@ export default function SettingsPage() {
       const result = (await response.json()) as ImportResult;
       if (!response.ok) throw new Error(result.error || "Import failed");
       const imported = result.imported;
-      setMessage(
+      showToast({
+        type: "success",
+        title: "Import completed",
+        message:
         imported
           ? `${result.message}: ${imported.products} products, ${imported.customers} customers, ${imported.categories} categories, ${imported.brands} brands, ${imported.sales || 0} sales, ${imported.inventory_movements || 0} movements, ${imported.purchases || 0} purchases.`
           : result.message || "Import completed."
-      );
+      });
       setPendingImport(null);
       setPreview(null);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to import backup.");
+      showToast({ type: "error", title: "Import failed", message: error instanceof Error ? error.message : "Unable to import backup." });
     } finally {
       setImporting(false);
     }
@@ -177,8 +183,6 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {message && <div className="user-error">{message}<button onClick={() => setMessage("")}>x</button></div>}
-
       <section className="settings-grid">
         <article className="settings-form-card">
           <span><Store size={24} aria-hidden="true" /></span>
@@ -187,7 +191,6 @@ export default function SettingsPage() {
             <label>Store Name<input value={settings.store_name} onChange={(event) => updateSetting("store_name", event.target.value)} /></label>
             <label>Store Address<textarea value={settings.store_address} onChange={(event) => updateSetting("store_address", event.target.value)} /></label>
             <label>Phone<input value={settings.store_phone} onChange={(event) => updateSetting("store_phone", event.target.value)} /></label>
-            <label>GST Number<input value={settings.gst_number} onChange={(event) => updateSetting("gst_number", event.target.value)} /></label>
             <button className="gold-btn" disabled={saving}><Save size={16} aria-hidden="true" /> {saving ? "Saving..." : "Save Store Settings"}</button>
           </form>
         </article>
@@ -196,7 +199,6 @@ export default function SettingsPage() {
           <span><ReceiptText size={24} aria-hidden="true" /></span>
           <h2>Invoice &amp; Payment</h2>
           <form onSubmit={saveSettings} className="settings-form">
-            <label>Tax Rate (%)<input type="number" min="0" step="0.01" value={settings.tax_rate} onChange={(event) => updateSetting("tax_rate", event.target.value)} /></label>
             <label>Invoice Prefix<input value={settings.invoice_prefix} onChange={(event) => updateSetting("invoice_prefix", event.target.value)} /></label>
             <label>Invoice Logo Text<input maxLength={8} value={settings.invoice_logo_text} onChange={(event) => updateSetting("invoice_logo_text", event.target.value.toUpperCase())} /></label>
             <label>Invoice Print Style<select value={settings.invoice_print_style} onChange={(event) => updateSetting("invoice_print_style", event.target.value)}><option>Dot Matrix</option><option>Standard</option></select></label>
@@ -235,8 +237,8 @@ export default function SettingsPage() {
         <article>
           <span><RefreshCcw size={24} aria-hidden="true" /></span>
           <h2>Recommended Setup</h2>
-          <p>Run the database setup scripts after fresh installation so payment methods, purchase tables, and movement history exist.</p>
-          <code>npm run db:inventory</code>
+          <p>Run the database setup scripts after fresh installation so users, payment methods, purchase tables, and movement history exist.</p>
+          <code>npm run db:start &amp;&amp; npm run db:setup &amp;&amp; npm run db:inventory</code>
         </article>
       </section>
     </div>

@@ -23,6 +23,7 @@ Create and seed the database:
 
 ```bash
 npm run db:start
+npm run db:setup
 npm run db:inventory
 ```
 
@@ -61,11 +62,12 @@ MYSQL_DATABASE=oil_mart
 npm run dev
 npm run build
 npm run lint
+npm run db:setup
 npm run db:inventory
 ```
 
 ## Notes
 
 - Start MySQL before signing in.
-- Run `npm run db:inventory` after a fresh clone or when inventory, purchase, or sales columns are missing.
+- Run `npm run db:setup` after a fresh clone, then run `npm run db:inventory` when inventory, purchase, or sales columns are missing.
 - The login API no longer uses a demo fallback when the database is unavailable.

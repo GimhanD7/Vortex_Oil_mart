@@ -4,16 +4,22 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BatteryCharging,
+  CalendarDays,
+  CalendarRange,
   ClipboardList,
+  CreditCard,
   FileBarChart,
   Filter,
   Gauge,
   PackagePlus,
   Receipt,
+  RotateCcw,
   ShoppingCart,
   SlidersHorizontal,
   Sparkles,
   TrendingUp,
+  Truck,
+  UserCheck,
   UserPlus,
   Users,
   Wrench,
@@ -29,6 +35,17 @@ type DashboardData = {
     average_order_value: number;
     gross_profit: number;
     customers: number;
+    today_revenue: number;
+    today_orders: number;
+    month_revenue: number;
+    month_orders: number;
+    discount_total: number;
+    voided_count: number;
+    voided_amount: number;
+    refund_count: number;
+    refund_amount: number;
+    revocation_records: number;
+    revocation_amount: number;
   };
   inventory: {
     total_products: number;
@@ -38,12 +55,25 @@ type DashboardData = {
     low_stock: number;
     stock_value: number;
   };
+  customers: {
+    outstanding_balance: number;
+    credit_limit: number;
+    credit_customers: number;
+    active_customers: number;
+  };
+  purchases: {
+    purchase_count: number;
+    purchase_value: number;
+    today_purchase_value: number;
+  };
   low_stock: Array<{ id: number; name: string; sku: string | null; category: string | null; stock_quantity: number }>;
   recent_orders: Array<{ id: number; total_amount: string | number; status: string | null; created_at: string; customer_name: string | null; item_count: number }>;
   top_products: Array<{ name: string; category: string | null; quantity: string | number; total: string | number }>;
   payment_methods: Array<{ method: string; orders: number; total: string | number }>;
   categories: Array<{ category: string | null; total: string | number }>;
   daily: Array<{ date: string; total: string | number; orders: number }>;
+  cashiers: Array<{ cashier: string; orders: number; total: string | number; items: string | number }>;
+  selected_sales?: { day: string; month: string };
 };
 
 type MetricKey = "revenue" | "orders" | "items" | "average" | "profit" | "customers";
@@ -98,14 +128,35 @@ const quickTargets: Record<string, string> = {
 };
 
 const fallbackData: DashboardData = {
-  metrics: { revenue: 0, orders: 0, items_sold: 0, average_order_value: 0, gross_profit: 0, customers: 0 },
+  metrics: {
+    revenue: 0,
+    orders: 0,
+    items_sold: 0,
+    average_order_value: 0,
+    gross_profit: 0,
+    customers: 0,
+    today_revenue: 0,
+    today_orders: 0,
+    month_revenue: 0,
+    month_orders: 0,
+    discount_total: 0,
+    voided_count: 0,
+    voided_amount: 0,
+    refund_count: 0,
+    refund_amount: 0,
+    revocation_records: 0,
+    revocation_amount: 0,
+  },
   inventory: { total_products: 0, total_skus: 0, in_stock: 0, out_of_stock: 0, low_stock: 0, stock_value: 0 },
+  customers: { outstanding_balance: 0, credit_limit: 0, credit_customers: 0, active_customers: 0 },
+  purchases: { purchase_count: 0, purchase_value: 0, today_purchase_value: 0 },
   low_stock: [],
   recent_orders: [],
   top_products: [],
   payment_methods: [],
   categories: [],
   daily: [],
+  cashiers: [],
 };
 
 function Panel({ title, action, onAction, children, className = "" }: { title: string; action?: string; onAction?: () => void; children: React.ReactNode; className?: string }) {
@@ -121,11 +172,32 @@ function Panel({ title, action, onAction, children, className = "" }: { title: s
 }
 
 function money(value: number | string) {
-  return `Rs. ${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+  return `Rs. ${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function compactMoney(value: number | string) {
   return `Rs. ${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+function qty(value: number | string) {
+  return Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 });
+}
+
+function inputDateToday() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function inputMonthToday() {
+  return inputDateToday().slice(0, 7);
+}
+
+function readableDate(value: string) {
+  return value ? new Date(`${value}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "";
+}
+
+function readableMonth(value: string) {
+  return value ? new Date(`${value}-01T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : "";
 }
 
 function categoryKey(category?: string | null) {
@@ -149,31 +221,105 @@ function percent(value: number, total: number) {
   return Math.round((value / total) * 100);
 }
 
-function donutBackground(values: number[]) {
-  const colors = ["#ffbd00", "#3f434b", "#79a93d", "#9a56d5", "#4c82d4", "#b3b5b8"];
-  const total = values.reduce((sum, value) => sum + value, 0);
-  if (!total) return undefined;
-  let cursor = 0;
-  const stops = values.map((value, index) => {
-    const start = cursor;
-    cursor += (value / total) * 100;
-    return `${colors[index % colors.length]} ${start}% ${cursor}%`;
+const chartColors = ["#ffbd00", "#3f434b", "#79a93d", "#9a56d5", "#4c82d4", "#b3b5b8"];
+
+type PieDatum = {
+  label: string;
+  value: number;
+  detail: string;
+};
+
+function polarToCartesian(center: number, radius: number, angle: number) {
+  const radians = ((angle - 90) * Math.PI) / 180;
+  return {
+    x: center + radius * Math.cos(radians),
+    y: center + radius * Math.sin(radians),
+  };
+}
+
+function donutSlicePath(center: number, outer: number, inner: number, start: number, end: number) {
+  const safeEnd = end - start >= 359.99 ? start + 359.99 : end;
+  const outerStart = polarToCartesian(center, outer, safeEnd);
+  const outerEnd = polarToCartesian(center, outer, start);
+  const innerStart = polarToCartesian(center, inner, start);
+  const innerEnd = polarToCartesian(center, inner, safeEnd);
+  const largeArc = safeEnd - start > 180 ? 1 : 0;
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${outer} ${outer} 0 ${largeArc} 0 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerStart.x} ${innerStart.y}`,
+    `A ${inner} ${inner} 0 ${largeArc} 1 ${innerEnd.x} ${innerEnd.y}`,
+    "Z",
+  ].join(" ");
+}
+
+function PieChart({ data, selectedIndex, onSelect, label }: { data: PieDatum[]; selectedIndex: number | null; onSelect: (index: number) => void; label: string }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const center = 92;
+  const outer = 78;
+  const inner = 42;
+
+  if (!total) {
+    return (
+      <svg className="interactive-pie" viewBox="0 0 184 184" role="img" aria-label={label}>
+        <circle cx={center} cy={center} r={outer} className="pie-empty-ring" />
+        <circle cx={center} cy={center} r={inner} className="pie-hole" />
+        <text x={center} y={center + 4}>No data</text>
+      </svg>
+    );
+  }
+
+  const segments = data.map((item, index) => {
+    const previousTotal = data.slice(0, index).reduce((sum, entry) => sum + entry.value, 0);
+    const start = (previousTotal / total) * 360;
+    const end = start + (item.value / total) * 360;
+    return { item, index, start, end };
   });
-  return `conic-gradient(${stops.join(",")})`;
+
+  return (
+    <svg className="interactive-pie" viewBox="0 0 184 184" role="img" aria-label={label}>
+      {segments.map(({ item, index, start, end }) => {
+        return (
+          <path
+            key={item.label}
+            d={donutSlicePath(center, outer, inner, start, end)}
+            fill={chartColors[index % chartColors.length]}
+            className={selectedIndex === index ? "pie-slice active" : "pie-slice"}
+            role="button"
+            tabIndex={0}
+            aria-label={`${item.label}, ${percent(item.value, total)} percent`}
+            onClick={() => onSelect(index)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") onSelect(index);
+            }}
+          />
+        );
+      })}
+      <circle cx={center} cy={center} r={inner} className="pie-hole" />
+      <text x={center} y={center - 4}>{data.length}</text>
+      <text x={center} y={center + 17}>types</text>
+    </svg>
+  );
 }
 
 export default function AdminDashboard() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData>(fallbackData);
   const [loading, setLoading] = useState(true);
+  const [salesDay, setSalesDay] = useState(inputDateToday);
+  const [salesMonth, setSalesMonth] = useState(inputMonthToday);
+  const [selectedDailyIndex, setSelectedDailyIndex] = useState<number | null>(null);
+  const [selectedCategoryIndex, setSelectedCategoryIndex] = useState<number | null>(null);
+  const [selectedPaymentIndex, setSelectedPaymentIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch("/api/dashboard", { cache: "no-store" })
+    const params = new URLSearchParams({ sales_day: salesDay, sales_month: salesMonth });
+    fetch(`/api/dashboard?${params.toString()}`, { cache: "no-store" })
       .then((response) => response.json())
       .then((next) => setData({ ...fallbackData, ...next }))
       .catch(() => setData(fallbackData))
       .finally(() => setLoading(false));
-  }, []);
+  }, [salesDay, salesMonth]);
 
   const metrics = metricDefs.map((metric) => {
     const raw = metric.key === "revenue"
@@ -195,8 +341,23 @@ export default function AdminDashboard() {
 
   const categoryTotal = data.categories.reduce((sum, item) => sum + Number(item.total || 0), 0);
   const paymentTotal = data.payment_methods.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  const cashierMax = Math.max(1, ...data.cashiers.map((item) => Number(item.total || 0)));
+  const stockTotal = Math.max(1, data.inventory.total_products);
+  const stockHealth = Math.round((data.inventory.in_stock / stockTotal) * 100);
+  const categoryChart = data.categories.slice(0, 6).map((item) => ({
+    label: item.category || "Others",
+    value: Number(item.total || 0),
+    detail: money(item.total),
+  }));
+  const paymentChart = data.payment_methods.slice(0, 5).map((item) => ({
+    label: item.method,
+    value: Number(item.total || 0),
+    detail: `${money(item.total)} / ${item.orders} invoices`,
+  }));
+  const activeCategoryIndex = selectedCategoryIndex !== null && categoryChart.length ? Math.min(selectedCategoryIndex, categoryChart.length - 1) : null;
+  const activePaymentIndex = selectedPaymentIndex !== null && paymentChart.length ? Math.min(selectedPaymentIndex, paymentChart.length - 1) : null;
   const dailyPoints = useMemo(() => {
-    const rows = data.daily.slice(-7);
+    const rows = data.daily.slice(-14);
     const maxRevenue = Math.max(1, ...rows.map((row) => Number(row.total || 0)));
     const maxOrders = Math.max(1, ...rows.map((row) => Number(row.orders || 0)));
     const xStep = rows.length > 1 ? 504 / (rows.length - 1) : 0;
@@ -204,9 +365,14 @@ export default function AdminDashboard() {
       x: 48 + index * xStep,
       revenueY: 204 - (Number(row.total || 0) / maxRevenue) * 150,
       orderY: 204 - (Number(row.orders || 0) / maxOrders) * 150,
+      total: Number(row.total || 0),
+      orders: Number(row.orders || 0),
+      date: row.date,
       label: new Date(row.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }),
     }));
   }, [data.daily]);
+  const activeDailyIndex = selectedDailyIndex !== null && dailyPoints.length ? Math.min(selectedDailyIndex, dailyPoints.length - 1) : -1;
+  const activeDaily = activeDailyIndex >= 0 ? dailyPoints[activeDailyIndex] : null;
 
   return (
     <div className="dashboard-grid">
@@ -228,38 +394,117 @@ export default function AdminDashboard() {
             </article>
           );
         })}
+        <article className="metric-card dashboard-alert-card" onClick={() => router.push("/admin/customers")} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") router.push("/admin/customers"); }}>
+          <span className="purple">
+            <CreditCard aria-hidden="true" size={24} strokeWidth={1.9} />
+          </span>
+          <div>
+            <small>Customer Outstanding</small>
+            <strong>{money(data.customers.outstanding_balance)}</strong>
+            <em>{data.customers.credit_customers} customers with balance</em>
+          </div>
+        </article>
+        <article className="metric-card dashboard-alert-card" onClick={() => router.push("/admin/sales")} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") router.push("/admin/sales"); }}>
+          <span className="red">
+            <RotateCcw aria-hidden="true" size={24} strokeWidth={1.9} />
+          </span>
+          <div>
+            <small>Void / Refund Watch</small>
+            <strong>{data.metrics.voided_count + data.metrics.refund_count}</strong>
+            <em>{money(data.metrics.voided_amount + data.metrics.refund_amount)} affected</em>
+          </div>
+        </article>
+      </section>
+
+      <section className="sales-period-section">
+        <header>
+          <div>
+            <h2>Sales Day/Month</h2>
+            <p>Select a day or month to view the matching sales totals.</p>
+          </div>
+        </header>
+        <div className="dashboard-insight-row">
+        <article className="sales-picker-card">
+          <span className="orange"><CalendarDays size={22} aria-hidden="true" /></span>
+          <p><small>Day Sales</small><b>{money(data.metrics.today_revenue)}</b><em>{data.metrics.today_orders} invoices / {readableDate(salesDay)}</em></p>
+          <label>
+            Date
+            <input type="date" value={salesDay} onChange={(event) => setSalesDay(event.target.value)} />
+          </label>
+        </article>
+        <article className="sales-picker-card">
+          <span className="blue"><CalendarRange size={22} aria-hidden="true" /></span>
+          <p><small>Month Sales</small><b>{money(data.metrics.month_revenue)}</b><em>{data.metrics.month_orders} invoices / {readableMonth(salesMonth)}</em></p>
+          <label>
+            Month
+            <input type="month" value={salesMonth} onChange={(event) => setSalesMonth(event.target.value)} />
+          </label>
+        </article>
+        </div>
       </section>
 
       <Panel title="Sales Overview" action="By Day" className="sales-chart-panel">
-        <div className="chart-key"><i className="gold" />Revenue (Rs.) <i className="black" /> Orders</div>
-        <svg className="line-chart" viewBox="0 0 600 235" role="img" aria-label="Sales and order trend for seven days">
-          {[30, 75, 120, 165, 210].map((y) => <line key={y} x1="45" y1={y} x2="575" y2={y} className="gridline" />)}
-          {dailyPoints.length ? (
-            <>
-              <polyline points={dailyPoints.map((point) => `${point.x},${point.revenueY}`).join(" ")} className="revenue-line" />
-              <polyline points={dailyPoints.map((point) => `${point.x},${point.orderY}`).join(" ")} className="orders-line" />
-              {dailyPoints.map((point) => (
-                <g key={`${point.x}-${point.label}`}>
-                  <circle cx={point.x} cy={point.revenueY} r="5" className="revenue-dot" />
-                  <circle cx={point.x} cy={point.orderY} r="4" className="order-dot" />
-                  <text x={point.x} y="231">{point.label}</text>
-                </g>
-              ))}
-            </>
-          ) : (
-            <text x="300" y="130">No sales yet</text>
+        <div className="chart-key"><i className="gold" />Revenue (Rs.) <i className="black" /> Orders <span>last 14 days</span></div>
+        <div className="interactive-chart-layout">
+          <svg className="line-chart" viewBox="0 0 600 235" role="img" aria-label="Sales and order trend for fourteen days">
+            {[30, 75, 120, 165, 210].map((y) => <line key={y} x1="45" y1={y} x2="575" y2={y} className="gridline" />)}
+            {dailyPoints.length ? (
+              <>
+                <polyline points={dailyPoints.map((point) => `${point.x},${point.revenueY}`).join(" ")} className="revenue-line" />
+                <polyline points={dailyPoints.map((point) => `${point.x},${point.orderY}`).join(" ")} className="orders-line" />
+                {dailyPoints.map((point, index) => (
+                  <g
+                    key={`${point.x}-${point.label}`}
+                    className={activeDailyIndex === index ? "chart-point active" : "chart-point"}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${point.label}, ${money(point.total)}, ${point.orders} orders`}
+                    onClick={() => setSelectedDailyIndex(index)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") setSelectedDailyIndex(index);
+                    }}
+                  >
+                    <circle cx={point.x} cy={point.revenueY} r="6" className="revenue-dot" />
+                    <circle cx={point.x} cy={point.orderY} r="4" className="order-dot" />
+                    <text x={point.x} y="231">{point.label}</text>
+                  </g>
+                ))}
+              </>
+            ) : (
+              <text x="300" y="130">No sales yet</text>
+            )}
+          </svg>
+          {activeDaily && (
+            <div className="chart-click-detail">
+              <small>Selected Day</small>
+              <b>{activeDaily.label}</b>
+              <p><span>Revenue</span><strong>{money(activeDaily.total)}</strong></p>
+              <p><span>Invoices</span><strong>{activeDaily.orders}</strong></p>
+            </div>
           )}
-        </svg>
+        </div>
       </Panel>
 
       <Panel title="Revenue by Category" className="category-panel">
-        <div className="donut-wrap">
-          <div className="donut large" style={{ background: donutBackground(data.categories.map((item) => Number(item.total || 0))) }} />
-          <ul>
-            {(data.categories.length ? data.categories : [{ category: "No sales yet", total: 0 }]).slice(0, 6).map((item, index) => (
-              <li key={`${item.category || "Other"}-${index}`}><i className={`c${index + 1}`} />{item.category || "Others"} <b>{percent(Number(item.total || 0), categoryTotal)}%</b></li>
+        <div className="donut-wrap visual-donut-wrap">
+          <PieChart data={categoryChart} selectedIndex={activeCategoryIndex} onSelect={setSelectedCategoryIndex} label="Revenue by category" />
+          <ul className="clickable-legend">
+            {(categoryChart.length ? categoryChart : [{ label: "No sales yet", value: 0, detail: money(0) }]).map((item, index) => (
+              <li key={`${item.label}-${index}`}>
+                <button className={activeCategoryIndex === index ? "active" : ""} onClick={() => setSelectedCategoryIndex(index)}>
+                  <i className={`c${index + 1}`} />{item.label} <b>{percent(item.value, categoryTotal)}%</b>
+                </button>
+              </li>
             ))}
           </ul>
+          {activeCategoryIndex !== null && (
+            <div className="chart-click-detail pie-detail">
+              <small>Selected Category</small>
+              <b>{categoryChart[activeCategoryIndex]?.label}</b>
+              <p><span>Revenue</span><strong>{categoryChart[activeCategoryIndex]?.detail}</strong></p>
+              <p><span>Share</span><strong>{percent(categoryChart[activeCategoryIndex]?.value || 0, categoryTotal)}%</strong></p>
+            </div>
+          )}
         </div>
       </Panel>
 
@@ -277,21 +522,55 @@ export default function AdminDashboard() {
       </Panel>
 
       <Panel title="Sales by Payment Method" className="payment-panel">
-        <div className="donut-wrap compact">
-          <div className="donut small" style={{ background: donutBackground(data.payment_methods.map((item) => Number(item.total || 0))) }} />
-          <ul>
-            {(data.payment_methods.length ? data.payment_methods : [{ method: "No sales yet", total: 0, orders: 0 }]).slice(0, 5).map((item, index) => (
-              <li key={item.method}><i className={`c${index + 1}`} />{item.method} <b>{percent(Number(item.total || 0), paymentTotal)}%</b></li>
+        <div className="donut-wrap compact visual-donut-wrap">
+          <PieChart data={paymentChart} selectedIndex={activePaymentIndex} onSelect={setSelectedPaymentIndex} label="Sales by payment method" />
+          <ul className="clickable-legend">
+            {(paymentChart.length ? paymentChart : [{ label: "No sales yet", value: 0, detail: money(0) }]).map((item, index) => (
+              <li key={item.label}>
+                <button className={activePaymentIndex === index ? "active" : ""} onClick={() => setSelectedPaymentIndex(index)}>
+                  <i className={`c${index + 1}`} />{item.label} <b>{percent(item.value, paymentTotal)}%</b>
+                </button>
+              </li>
             ))}
           </ul>
+          {activePaymentIndex !== null && (
+            <div className="chart-click-detail pie-detail">
+              <small>Selected Payment</small>
+              <b>{paymentChart[activePaymentIndex]?.label}</b>
+              <p><span>Total</span><strong>{paymentChart[activePaymentIndex]?.detail}</strong></p>
+              <p><span>Share</span><strong>{percent(paymentChart[activePaymentIndex]?.value || 0, paymentTotal)}%</strong></p>
+            </div>
+          )}
         </div>
       </Panel>
 
       <Panel title="Sales by Store" action="This Week" className="store-panel">
         <div className="store-bars">
-          <div><p>Main Store <b>{compactMoney(data.metrics.revenue)} <small>(100%)</small></b></p><i><span style={{ width: data.metrics.revenue ? "100%" : "0%" }} /></i></div>
-          <div><p>Purchase Value <b>{compactMoney(data.inventory.stock_value)} <small>inventory</small></b></p><i><span style={{ width: data.inventory.stock_value ? "72%" : "0%" }} /></i></div>
+          <div><p>Stock Health <b>{stockHealth}% <small>items available</small></b></p><i><span style={{ width: `${stockHealth}%` }} /></i></div>
+          <div><p>Purchase Value <b>{compactMoney(data.purchases.purchase_value)} <small>this month</small></b></p><i><span style={{ width: data.purchases.purchase_value ? "72%" : "0%" }} /></i></div>
           <div><p>Low Stock Items <b>{data.inventory.low_stock} <small>needs reorder</small></b></p><i><span style={{ width: `${Math.min(100, data.inventory.low_stock * 8)}%` }} /></i></div>
+        </div>
+      </Panel>
+
+      <Panel title="Cashier Performance" action="30 Days" className="cashier-panel">
+        <div className="cashier-bars">
+          {data.cashiers.map((item) => (
+            <div key={item.cashier}>
+              <p><b>{item.cashier}</b><span>{money(item.total)} / {item.orders} invoices</span></p>
+              <i><span style={{ width: `${Math.max(6, Math.round((Number(item.total || 0) / cashierMax) * 100))}%` }} /></i>
+              <small>{qty(item.items)} items sold</small>
+            </div>
+          ))}
+          {!data.cashiers.length && <p className="empty-movement">No cashier sales yet.</p>}
+        </div>
+      </Panel>
+
+      <Panel title="Operations Snapshot" className="operations-panel">
+        <div className="operations-grid">
+          <div><span><Truck size={19} aria-hidden="true" /></span><small>Purchases</small><b>{data.purchases.purchase_count}</b><em>{money(data.purchases.purchase_value)}</em></div>
+          <div><span><ShoppingCart size={19} aria-hidden="true" /></span><small>Today Stock In</small><b>{money(data.purchases.today_purchase_value)}</b><em>purchase value</em></div>
+          <div><span><UserCheck size={19} aria-hidden="true" /></span><small>Active Customers</small><b>{data.customers.active_customers}</b><em>{money(data.customers.credit_limit)} credit limit</em></div>
+          <div><span><RotateCcw size={19} aria-hidden="true" /></span><small>Audit Records</small><b>{data.metrics.revocation_records}</b><em>{money(data.metrics.revocation_amount)}</em></div>
         </div>
       </Panel>
 
@@ -316,7 +595,7 @@ export default function AdminDashboard() {
               <i>{index + 1}</i>
               <ProductMark category={item.category} />
               <b>{item.name}</b>
-              <em>{Number(item.quantity || 0)}</em>
+              <em>{qty(item.quantity)}</em>
               <strong>{money(item.total)}</strong>
             </div>
           ))}

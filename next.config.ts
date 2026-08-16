@@ -9,9 +9,6 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   reactCompiler: true,
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -21,7 +18,7 @@ const nextConfig: NextConfig = {
       {
         source: '/api/:path*',
         // Route API calls to the XAMPP PHP backend during local development
-        destination: 'http://localhost/Vortex_Oil_mart/api/:path*',
+        destination: 'http://localhost/Vortex_Oil_Mart/Vortex_Oil_mart/api/:path*',
       },
     ];
   },

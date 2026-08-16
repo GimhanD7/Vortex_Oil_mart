@@ -4,14 +4,37 @@ $user = requireAuth(); // Require auth
 
 function ensureInventoryMovementTable() {
     global $pdo;
+    foreach ([
+        "ALTER TABLE products ADD COLUMN product_type VARCHAR(30) NOT NULL DEFAULT 'packaged'",
+        "ALTER TABLE products ADD COLUMN unit VARCHAR(20) NOT NULL DEFAULT 'Unit'",
+        "ALTER TABLE products ADD COLUMN barrel_capacity_liters DECIMAL(10,3) NULL",
+    ] as $query) {
+        try {
+            $pdo->exec($query);
+        } catch (PDOException $e) {
+            // Column likely already exists
+        }
+    }
+
+    foreach ([
+        "ALTER TABLE products MODIFY COLUMN stock_quantity DECIMAL(12,3) NOT NULL DEFAULT 0",
+        "ALTER TABLE products MODIFY COLUMN reorder_level DECIMAL(12,3) NOT NULL DEFAULT 10",
+    ] as $query) {
+        try {
+            $pdo->exec($query);
+        } catch (PDOException $e) {
+            // Already compatible
+        }
+    }
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS inventory_movements (
             id INT AUTO_INCREMENT PRIMARY KEY,
             product_id INT NOT NULL,
             movement_type ENUM('in', 'out', 'adjustment', 'sale', 'purchase') NOT NULL,
-            quantity_change INT NOT NULL,
-            stock_before INT NOT NULL,
-            stock_after INT NOT NULL,
+            quantity_change DECIMAL(12,3) NOT NULL,
+            stock_before DECIMAL(12,3) NOT NULL,
+            stock_after DECIMAL(12,3) NOT NULL,
             unit_price DECIMAL(10, 2) NOT NULL,
             reference_no VARCHAR(100),
             notes VARCHAR(500),
@@ -23,6 +46,18 @@ function ensureInventoryMovementTable() {
             FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         )
     ");
+
+    foreach ([
+        "ALTER TABLE inventory_movements MODIFY COLUMN quantity_change DECIMAL(12,3) NOT NULL",
+        "ALTER TABLE inventory_movements MODIFY COLUMN stock_before DECIMAL(12,3) NOT NULL",
+        "ALTER TABLE inventory_movements MODIFY COLUMN stock_after DECIMAL(12,3) NOT NULL",
+    ] as $query) {
+        try {
+            $pdo->exec($query);
+        } catch (PDOException $e) {
+            // Already compatible
+        }
+    }
 }
 
 if ($method === 'GET' && !$id) {
@@ -31,6 +66,7 @@ if ($method === 'GET' && !$id) {
         
         $stmt = $pdo->query("
             SELECT p.id, p.name, p.description, p.price, p.stock_quantity, p.sku, p.barcode, p.category, p.brand,
+                   p.product_type, p.unit, p.barrel_capacity_liters,
                    p.reorder_level, p.location, p.batch_no, p.supplier, p.updated_at,
                    COALESCE(SUM(CASE WHEN m.quantity_change > 0 THEN m.quantity_change ELSE 0 END), 0) AS monthly_in,
                    COALESCE(SUM(CASE WHEN m.quantity_change < 0 THEN ABS(m.quantity_change) ELSE 0 END), 0) AS monthly_out,
@@ -76,12 +112,12 @@ if ($method === 'POST' && !$id) {
         ensureInventoryMovementTable();
         
         $product_id = isset($inputData['product_id']) ? (int)$inputData['product_id'] : 0;
-        $quantity_change = isset($inputData['quantity_change']) ? (int)$inputData['quantity_change'] : 0;
+        $quantity_change = isset($inputData['quantity_change']) ? (float)$inputData['quantity_change'] : 0;
         $notes = !empty($inputData['notes']) ? trim($inputData['notes']) : 'Manual stock adjustment';
         $created_by = isset($inputData['created_by']) ? (int)$inputData['created_by'] : $user['id'];
 
         if ($product_id <= 0 || $quantity_change === 0) {
-            sendJson(["error" => "A valid product and non-zero whole-number adjustment are required"], 400);
+            sendJson(["error" => "A valid product and non-zero adjustment are required"], 400);
         }
 
         $pdo->beginTransaction();
@@ -95,7 +131,7 @@ if ($method === 'POST' && !$id) {
             sendJson(["error" => "Product not found"], 404);
         }
 
-        $stock_before = (int)$product['stock_quantity'];
+        $stock_before = (float)$product['stock_quantity'];
         $stock_after = $stock_before + $quantity_change;
 
         if ($stock_after < 0) {
@@ -169,7 +205,7 @@ if ($method === 'GET' && $id === 'movements') {
         $values[] = $limit;
 
         $stmt = $pdo->prepare("
-            SELECT m.id, m.product_id, p.name AS product_name, p.sku,
+            SELECT m.id, m.product_id, p.name AS product_name, p.sku, p.unit,
                    m.movement_type, m.quantity_change, m.stock_before, m.stock_after,
                    m.unit_price, m.reference_no, m.notes, u.username AS created_by,
                    m.created_at

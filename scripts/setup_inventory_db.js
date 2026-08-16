@@ -26,7 +26,10 @@ async function setupInventory() {
       barcode: "VARCHAR(100) NULL UNIQUE",
       category: "VARCHAR(100) NOT NULL DEFAULT 'Uncategorized'",
       brand: "VARCHAR(100) NOT NULL DEFAULT 'Generic'",
-      reorder_level: "INT NOT NULL DEFAULT 10",
+      product_type: "VARCHAR(30) NOT NULL DEFAULT 'packaged'",
+      unit: "VARCHAR(20) NOT NULL DEFAULT 'Unit'",
+      barrel_capacity_liters: "DECIMAL(10,3) NULL",
+      reorder_level: "DECIMAL(12,3) NOT NULL DEFAULT 10",
       location: "VARCHAR(100) NOT NULL DEFAULT 'Main Store'",
       batch_no: "VARCHAR(100) NULL",
       supplier: "VARCHAR(150) NOT NULL DEFAULT 'Not Assigned'",
@@ -37,6 +40,9 @@ async function setupInventory() {
       await ensureColumn(connection, 'products', name, definition);
     }
 
+    await connection.query('ALTER TABLE products MODIFY COLUMN stock_quantity DECIMAL(12,3) NOT NULL DEFAULT 0');
+    await connection.query('ALTER TABLE products MODIFY COLUMN reorder_level DECIMAL(12,3) NOT NULL DEFAULT 10');
+
     await ensureColumn(connection, 'sales', 'customer_id', 'INT NULL');
     await ensureColumn(connection, 'sales', 'payment_method', "VARCHAR(40) NOT NULL DEFAULT 'Cash'");
     await ensureColumn(connection, 'sales', 'status', "VARCHAR(30) NOT NULL DEFAULT 'completed'");
@@ -46,9 +52,9 @@ async function setupInventory() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         product_id INT NOT NULL,
         movement_type ENUM('in', 'out', 'adjustment', 'sale') NOT NULL,
-        quantity_change INT NOT NULL,
-        stock_before INT NOT NULL,
-        stock_after INT NOT NULL,
+        quantity_change DECIMAL(12,3) NOT NULL,
+        stock_before DECIMAL(12,3) NOT NULL,
+        stock_after DECIMAL(12,3) NOT NULL,
         unit_price DECIMAL(10,2) NOT NULL,
         reference_no VARCHAR(100) NULL,
         notes VARCHAR(500) NULL,
@@ -77,18 +83,29 @@ async function setupInventory() {
         CONSTRAINT fk_purchase_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
       )
     `);
+    await connection.query('ALTER TABLE inventory_movements MODIFY COLUMN quantity_change DECIMAL(12,3) NOT NULL');
+    await connection.query('ALTER TABLE inventory_movements MODIFY COLUMN stock_before DECIMAL(12,3) NOT NULL');
+    await connection.query('ALTER TABLE inventory_movements MODIFY COLUMN stock_after DECIMAL(12,3) NOT NULL');
 
     await connection.query(`
       CREATE TABLE IF NOT EXISTS purchase_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
         purchase_id INT NOT NULL,
         product_id INT NOT NULL,
-        quantity INT NOT NULL,
+        quantity DECIMAL(12,3) NOT NULL,
+        purchase_unit VARCHAR(20) NOT NULL DEFAULT 'Unit',
+        barrel_count DECIMAL(10,3) NULL,
+        barrel_capacity_liters DECIMAL(10,3) NULL,
         unit_cost DECIMAL(10,2) NOT NULL,
         CONSTRAINT fk_purchase_item_purchase FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
         CONSTRAINT fk_purchase_item_product FOREIGN KEY (product_id) REFERENCES products(id)
       )
     `);
+    await connection.query('ALTER TABLE purchase_items MODIFY COLUMN quantity DECIMAL(12,3) NOT NULL');
+    await ensureColumn(connection, 'purchase_items', 'purchase_unit', "VARCHAR(20) NOT NULL DEFAULT 'Unit'");
+    await ensureColumn(connection, 'purchase_items', 'barrel_count', 'DECIMAL(10,3) NULL');
+    await ensureColumn(connection, 'purchase_items', 'barrel_capacity_liters', 'DECIMAL(10,3) NULL');
+    await connection.query('ALTER TABLE sale_items MODIFY COLUMN quantity DECIMAL(12,3) NOT NULL');
 
     const [productCount] = await connection.query('SELECT COUNT(*) AS count FROM products');
     if (Number(productCount[0].count) === 0) {

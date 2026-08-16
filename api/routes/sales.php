@@ -10,6 +10,23 @@ $salesColumns = [
 
 function ensureSalesColumns() {
     global $pdo, $salesColumns;
+    foreach ([
+        "ALTER TABLE products ADD COLUMN product_type VARCHAR(30) NOT NULL DEFAULT 'packaged'",
+        "ALTER TABLE products ADD COLUMN unit VARCHAR(20) NOT NULL DEFAULT 'Unit'",
+        "ALTER TABLE products ADD COLUMN barrel_capacity_liters DECIMAL(10,3) NULL",
+        "ALTER TABLE products MODIFY COLUMN stock_quantity DECIMAL(12,3) NOT NULL DEFAULT 0",
+        "ALTER TABLE products MODIFY COLUMN reorder_level DECIMAL(12,3) NOT NULL DEFAULT 10",
+        "ALTER TABLE sale_items MODIFY COLUMN quantity DECIMAL(12,3) NOT NULL",
+        "ALTER TABLE inventory_movements MODIFY COLUMN quantity_change DECIMAL(12,3) NOT NULL",
+        "ALTER TABLE inventory_movements MODIFY COLUMN stock_before DECIMAL(12,3) NOT NULL",
+        "ALTER TABLE inventory_movements MODIFY COLUMN stock_after DECIMAL(12,3) NOT NULL",
+    ] as $query) {
+        try {
+            $pdo->exec($query);
+        } catch (PDOException $e) {
+            // Existing databases may already match this shape
+        }
+    }
     
     // PHP/PDO version of adding missing columns (simplified check)
     // Normally migrations should be handled separately, but replicating Next.js logic here
@@ -36,6 +53,158 @@ function ensureSalesColumns() {
     
     if (count($alterQueries) > 0) {
         $pdo->exec('ALTER TABLE sales ' . implode(', ', $alterQueries));
+    }
+}
+
+function ensureRevocationAuditTable() {
+    global $pdo;
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS transaction_revocations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            sale_id INT NULL,
+            action_type VARCHAR(60) NOT NULL,
+            cashier_id INT NOT NULL,
+            approver_id INT NULL,
+            reason VARCHAR(255) NOT NULL,
+            affected_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            metadata TEXT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_revocations_sale_id (sale_id),
+            INDEX idx_revocations_cashier_id (cashier_id),
+            INDEX idx_revocations_approver_id (approver_id),
+            INDEX idx_revocations_created_at (created_at)
+        )
+    ");
+}
+
+function supervisorApproval() {
+    global $pdo, $inputData;
+    $username = isset($inputData['approver_username']) ? trim($inputData['approver_username']) : '';
+    $pin = isset($inputData['approver_pin']) ? $inputData['approver_pin'] : '';
+
+    if ($username === '' || $pin === '') {
+        sendJson(["error" => "Supervisor/admin approval is required"], 400);
+    }
+
+    $stmt = $pdo->prepare("SELECT id, username, password, role FROM users WHERE username = ? LIMIT 1");
+    $stmt->execute([$username]);
+    $approver = $stmt->fetch();
+
+    if (!$approver || $approver['role'] !== 'admin' || !password_verify($pin, $approver['password'])) {
+        sendJson(["error" => "Invalid supervisor/admin PIN"], 403);
+    }
+
+    return $approver;
+}
+
+function recordRevocation($saleId, $actionType, $cashierId, $approverId, $reason, $affectedAmount, $metadata = []) {
+    global $pdo;
+    ensureRevocationAuditTable();
+
+    $stmt = $pdo->prepare("
+        INSERT INTO transaction_revocations
+        (sale_id, action_type, cashier_id, approver_id, reason, affected_amount, metadata)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ");
+    $stmt->execute([
+        $saleId,
+        $actionType,
+        $cashierId,
+        $approverId,
+        $reason,
+        $affectedAmount,
+        json_encode($metadata)
+    ]);
+
+    return $pdo->lastInsertId();
+}
+
+function saleItems($saleId) {
+    global $pdo;
+    $stmt = $pdo->prepare("
+        SELECT
+            si.product_id,
+            si.quantity,
+            si.price_at_time,
+            COALESCE(p.name, CONCAT('Product #', si.product_id)) AS product_name,
+            p.sku
+            ,p.unit
+            ,p.product_type
+        FROM sale_items si
+        LEFT JOIN products p ON p.id = si.product_id
+        WHERE si.sale_id = ?
+        ORDER BY si.id ASC
+    ");
+    $stmt->execute([$saleId]);
+    return $stmt->fetchAll();
+}
+
+if ($method === 'POST' && $id === 'revocations') {
+    try {
+        ensureSalesColumns();
+        ensureRevocationAuditTable();
+
+        $actionType = isset($inputData['action_type']) ? trim($inputData['action_type']) : '';
+        $reason = isset($inputData['reason']) ? trim($inputData['reason']) : '';
+        $affectedAmount = isset($inputData['affected_amount']) ? (float)$inputData['affected_amount'] : 0;
+        $metadata = isset($inputData['metadata']) && is_array($inputData['metadata']) ? $inputData['metadata'] : [];
+        $saleId = isset($inputData['sale_id']) && $inputData['sale_id'] !== null ? (int)$inputData['sale_id'] : null;
+        $approvalRequired = in_array($actionType, ['completed_sale_voided', 'refund_return_cancelled']);
+        $approver = $approvalRequired ? supervisorApproval() : null;
+
+        if ($actionType === '' || $reason === '') {
+            sendJson(["error" => "Revocation type and reason are required"], 400);
+        }
+
+        $auditId = recordRevocation(
+            $saleId,
+            $actionType,
+            $user['id'],
+            $approver ? $approver['id'] : null,
+            $reason,
+            $affectedAmount,
+            $metadata
+        );
+
+        sendJson(["message" => "Revocation recorded", "audit_id" => $auditId], 201);
+    } catch (PDOException $e) {
+        sendJson(["error" => "Internal server error"], 500);
+    }
+}
+
+if ($method === 'GET' && $id === 'revocations') {
+    try {
+        ensureSalesColumns();
+        ensureRevocationAuditTable();
+
+        $stmt = $pdo->prepare("
+            SELECT
+                tr.id,
+                tr.sale_id,
+                tr.action_type,
+                tr.reason,
+                tr.affected_amount,
+                tr.metadata,
+                tr.created_at,
+                cashier.username AS cashier_name,
+                approver.username AS approver_name,
+                s.status AS sale_status,
+                s.payment_method,
+                s.total_amount,
+                s.created_at AS sale_created_at,
+                c.name AS customer_name
+            FROM transaction_revocations tr
+            LEFT JOIN users cashier ON cashier.id = tr.cashier_id
+            LEFT JOIN users approver ON approver.id = tr.approver_id
+            LEFT JOIN sales s ON s.id = tr.sale_id
+            LEFT JOIN customers c ON c.id = s.customer_id
+            ORDER BY tr.created_at DESC, tr.id DESC
+            LIMIT 300
+        ");
+        $stmt->execute();
+        sendJson($stmt->fetchAll());
+    } catch (PDOException $e) {
+        sendJson(["error" => "Internal server error"], 500);
     }
 }
 
@@ -118,7 +287,6 @@ if ($method === 'POST' && !$id) {
         $items = isset($inputData['items']) ? $inputData['items'] : [];
         $payment_method = !empty($inputData['payment_method']) ? $inputData['payment_method'] : 'Cash';
         $discount_rate = isset($inputData['discount_rate']) ? (float)$inputData['discount_rate'] : 0;
-        $tax_rate = isset($inputData['tax_rate']) ? (float)$inputData['tax_rate'] : 0;
         $business_date = !empty($inputData['business_date']) ? $inputData['business_date'] : null;
         $cash_received = isset($inputData['cash_received']) && $inputData['cash_received'] !== null ? (float)$inputData['cash_received'] : null;
         $cash_balance = isset($inputData['cash_balance']) && $inputData['cash_balance'] !== null ? (float)$inputData['cash_balance'] : null;
@@ -138,6 +306,11 @@ if ($method === 'POST' && !$id) {
 
         $subtotalAmount = 0;
         foreach ($items as $item) {
+            $quantity = isset($item['quantity']) ? (float)$item['quantity'] : 0;
+            if ($quantity <= 0) {
+                throw new Exception("Sale items need a positive quantity");
+            }
+
             $stmt = $pdo->prepare('SELECT price, stock_quantity FROM products WHERE id = ?');
             $stmt->execute([$item['product_id']]);
             $product = $stmt->fetch();
@@ -145,20 +318,18 @@ if ($method === 'POST' && !$id) {
             if (!$product) {
                 throw new Exception("Product {$item['product_id']} not found");
             }
-            if ($product['stock_quantity'] < $item['quantity']) {
+            if ((float)$product['stock_quantity'] < $quantity) {
                 throw new Exception("Insufficient stock for product ID {$item['product_id']}");
             }
-            $subtotalAmount += $product['price'] * $item['quantity'];
+            $subtotalAmount += (float)$product['price'] * $quantity;
         }
 
         $normalizedDiscountRate = min(100, max(0, $discount_rate));
         $discountAmount = $subtotalAmount * ($normalizedDiscountRate / 100);
         
-        $normalizedTaxRate = max(0, $tax_rate);
-        $taxableAmount = max(0, $subtotalAmount - $discountAmount);
-        $taxAmount = $taxableAmount * ($normalizedTaxRate / 100);
-        
-        $totalAmount = $taxableAmount + $taxAmount;
+        $normalizedTaxRate = 0;
+        $taxAmount = 0;
+        $totalAmount = max(0, $subtotalAmount - $discountAmount);
 
         $stmt = $pdo->prepare("
             INSERT INTO sales
@@ -180,19 +351,24 @@ if ($method === 'POST' && !$id) {
         }
 
         foreach ($items as $item) {
+            $quantity = isset($item['quantity']) ? (float)$item['quantity'] : 0;
             $stmt = $pdo->prepare('SELECT price, stock_quantity FROM products WHERE id = ? FOR UPDATE');
             $stmt->execute([$item['product_id']]);
             $product = $stmt->fetch();
             
             $price_at_time = $product['price'];
-            $stockBefore = (int)$product['stock_quantity'];
-            $stockAfter = $stockBefore - (int)$item['quantity'];
+            $stockBefore = (float)$product['stock_quantity'];
+            $stockAfter = $stockBefore - $quantity;
+
+            if ($quantity <= 0 || $stockAfter < 0) {
+                throw new Exception("Insufficient stock for product ID {$item['product_id']}");
+            }
 
             $stmt = $pdo->prepare('INSERT INTO sale_items (sale_id, product_id, quantity, price_at_time) VALUES (?, ?, ?, ?)');
-            $stmt->execute([$saleId, $item['product_id'], $item['quantity'], $price_at_time]);
+            $stmt->execute([$saleId, $item['product_id'], $quantity, $price_at_time]);
 
-            $stmt = $pdo->prepare('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?');
-            $stmt->execute([$item['quantity'], $item['product_id']]);
+            $stmt = $pdo->prepare('UPDATE products SET stock_quantity = ? WHERE id = ?');
+            $stmt->execute([$stockAfter, $item['product_id']]);
 
             $stmt = $pdo->prepare("
                 INSERT INTO inventory_movements
@@ -200,7 +376,7 @@ if ($method === 'POST' && !$id) {
                 VALUES (?, 'sale', ?, ?, ?, ?, ?, 'Stock deducted by POS sale', ?)
             ");
             $stmt->execute([
-                $item['product_id'], -$item['quantity'], $stockBefore, $stockAfter, $price_at_time, "SALE-{$saleId}", $cashier_id
+                $item['product_id'], -$quantity, $stockBefore, $stockAfter, $price_at_time, "SALE-{$saleId}", $cashier_id
             ]);
         }
 
@@ -425,6 +601,202 @@ if ($id === 'cycles') {
         } catch (PDOException $e) {
             sendJson(["error" => "Internal server error"], 500);
         }
+    }
+}
+
+if ($method === 'GET' && $id === 'items') {
+    try {
+        ensureSalesColumns();
+
+        $date = isset($_GET['date']) && $_GET['date'] !== '' ? $_GET['date'] : date('Y-m-d');
+
+        $stmt = $pdo->prepare("
+            SELECT
+                si.product_id,
+                COALESCE(p.name, CONCAT('Product #', si.product_id)) AS product_name,
+                p.sku,
+                p.category,
+                p.unit,
+                p.product_type,
+                SUM(si.quantity) AS quantity,
+                SUM(si.quantity * si.price_at_time) AS total_amount,
+                COUNT(DISTINCT s.id) AS invoice_count
+            FROM sale_items si
+            JOIN sales s ON s.id = si.sale_id
+            LEFT JOIN products p ON p.id = si.product_id
+            WHERE COALESCE(s.business_date, DATE(s.created_at)) = ?
+              AND (s.status IS NULL OR s.status != 'refunded')
+            GROUP BY si.product_id, p.name, p.sku, p.category, p.unit, p.product_type
+            ORDER BY quantity DESC, total_amount DESC, product_name ASC
+        ");
+        $stmt->execute([$date]);
+        $items = $stmt->fetchAll();
+
+        $summary = [
+            "date" => $date,
+            "product_count" => count($items),
+            "quantity" => 0,
+            "total_amount" => 0,
+            "invoice_count" => 0
+        ];
+
+        foreach ($items as $item) {
+            $summary["quantity"] += (float)$item["quantity"];
+            $summary["total_amount"] += (float)$item["total_amount"];
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT COUNT(DISTINCT id) AS invoice_count
+            FROM sales
+            WHERE COALESCE(business_date, DATE(created_at)) = ?
+              AND (status IS NULL OR status != 'refunded')
+        ");
+        $stmt->execute([$date]);
+        $row = $stmt->fetch();
+        $summary["invoice_count"] = (int)($row["invoice_count"] ?? 0);
+
+        sendJson([
+            "summary" => $summary,
+            "items" => $items
+        ]);
+    } catch (PDOException $e) {
+        sendJson(["error" => "Internal server error"], 500);
+    }
+}
+
+if ($method === 'GET' && $id) {
+    try {
+        ensureSalesColumns();
+
+        $stmt = $pdo->prepare("
+            SELECT s.id, s.subtotal_amount, s.discount_rate, s.discount_amount,
+                   s.tax_rate, s.tax_amount, s.business_date, s.cash_received, s.cash_balance,
+                   s.sales_cycle_id, s.opening_cash_balance,
+                   s.total_amount, s.payment_method, s.status, s.created_at,
+                   u.username as cashier_name, c.name as customer_name
+            FROM sales s
+            LEFT JOIN users u ON s.cashier_id = u.id
+            LEFT JOIN customers c ON s.customer_id = c.id
+            WHERE s.id = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$id]);
+        $sale = $stmt->fetch();
+
+        if (!$sale) {
+            sendJson(["error" => "Sale not found"], 404);
+        }
+
+        sendJson([
+            "sale" => $sale,
+            "items" => saleItems($id)
+        ]);
+    } catch (PDOException $e) {
+        sendJson(["error" => "Internal server error"], 500);
+    }
+}
+
+if ($method === 'PATCH' && $id) {
+    try {
+        ensureSalesColumns();
+        ensureRevocationAuditTable();
+
+        $action = isset($inputData['action']) ? $inputData['action'] : null;
+        if (!in_array($action, ['refund', 'void'])) {
+            sendJson(["error" => "Unsupported sales action"], 400);
+        }
+        $reason = isset($inputData['reason']) ? trim($inputData['reason']) : '';
+        if ($reason === '') {
+            sendJson(["error" => "Reason is required"], 400);
+        }
+        $approver = supervisorApproval();
+
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare('SELECT * FROM sales WHERE id = ? FOR UPDATE');
+        $stmt->execute([$id]);
+        $sale = $stmt->fetch();
+
+        if (!$sale) {
+            $pdo->rollBack();
+            sendJson(["error" => "Sale not found"], 404);
+        }
+
+        if (in_array($sale['status'], ['refunded', 'voided', 'cancelled'])) {
+            $pdo->rollBack();
+            sendJson(["message" => "Invoice is already reversed"]);
+        }
+
+        $items = saleItems($id);
+        foreach ($items as $item) {
+            $stmt = $pdo->prepare('SELECT stock_quantity FROM products WHERE id = ? FOR UPDATE');
+            $stmt->execute([$item['product_id']]);
+            $product = $stmt->fetch();
+
+            if (!$product) {
+                throw new Exception("Product {$item['product_id']} not found");
+            }
+
+            $stockBefore = (float)$product['stock_quantity'];
+            $quantity = (float)$item['quantity'];
+            $stockAfter = $stockBefore + $quantity;
+
+            $stmt = $pdo->prepare('UPDATE products SET stock_quantity = ? WHERE id = ?');
+            $stmt->execute([$stockAfter, $item['product_id']]);
+
+            $stmt = $pdo->prepare("
+                INSERT INTO inventory_movements
+                (product_id, movement_type, quantity_change, stock_before, stock_after, unit_price, reference_no, notes, created_by)
+                VALUES (?, 'adjustment', ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([
+                $item['product_id'],
+                $quantity,
+                $stockBefore,
+                $stockAfter,
+                $item['price_at_time'],
+                strtoupper($action) . "-{$id}",
+                $action === 'refund' ? 'Refund returned stock' : 'Void returned stock',
+                $user['id']
+            ]);
+        }
+
+        if (!empty($sale['customer_id'])) {
+            $stmt = $pdo->prepare('UPDATE customers SET total_purchases = GREATEST(0, total_purchases - ?) WHERE id = ?');
+            $stmt->execute([(float)$sale['total_amount'], $sale['customer_id']]);
+        }
+
+        $nextStatus = $action === 'refund' ? 'refunded' : 'voided';
+        $stmt = $pdo->prepare("UPDATE sales SET status = ? WHERE id = ?");
+        $stmt->execute([$nextStatus, $id]);
+
+        recordRevocation(
+            $id,
+            $action === 'refund' ? 'completed_sale_refunded' : 'completed_sale_voided',
+            $user['id'],
+            $approver['id'],
+            $reason,
+            (float)$sale['total_amount'],
+            [
+                "previous_status" => $sale['status'],
+                "next_status" => $nextStatus,
+                "payment_method" => $sale['payment_method'],
+                "sales_cycle_id" => $sale['sales_cycle_id']
+            ]
+        );
+
+        $pdo->commit();
+        sendJson(["message" => $action === 'refund' ? "Invoice refunded and stock returned" : "Invoice voided and stock returned"]);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        sendJson(["error" => $e->getMessage()], 400);
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        sendJson(["error" => "Internal server error"], 500);
     }
 }
 

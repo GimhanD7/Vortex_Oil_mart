@@ -21,6 +21,36 @@ function ensureCustomersTable() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )
     ");
+
+    foreach ([
+        "ALTER TABLE customers ADD COLUMN email VARCHAR(150) NULL",
+        "ALTER TABLE customers ADD COLUMN address TEXT NULL",
+        "ALTER TABLE customers ADD COLUMN company_notes TEXT NULL",
+        "ALTER TABLE customers ADD COLUMN customer_type VARCHAR(60) NOT NULL DEFAULT 'Regular Customer'",
+        "ALTER TABLE customers ADD COLUMN status VARCHAR(30) NOT NULL DEFAULT 'Active'",
+        "ALTER TABLE customers ADD COLUMN credit_limit DECIMAL(10,2) NOT NULL DEFAULT 0",
+        "ALTER TABLE customers ADD COLUMN total_purchases DECIMAL(10,2) NOT NULL DEFAULT 0",
+        "ALTER TABLE customers ADD COLUMN outstanding_balance DECIMAL(10,2) NOT NULL DEFAULT 0",
+        "ALTER TABLE customers ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+    ] as $query) {
+        try {
+            $pdo->exec($query);
+        } catch (PDOException $e) {
+            // Column likely already exists
+        }
+    }
+
+    foreach ([
+        "ALTER TABLE customers MODIFY COLUMN credit_limit DECIMAL(10,2) NOT NULL DEFAULT 0",
+        "ALTER TABLE customers MODIFY COLUMN total_purchases DECIMAL(10,2) NOT NULL DEFAULT 0",
+        "ALTER TABLE customers MODIFY COLUMN outstanding_balance DECIMAL(10,2) NOT NULL DEFAULT 0",
+    ] as $query) {
+        try {
+            $pdo->exec($query);
+        } catch (PDOException $e) {
+            // Existing databases may already be compatible
+        }
+    }
 }
 
 if ($method === 'GET' && !$id) {
@@ -67,6 +97,7 @@ if ($method === 'POST' && !$id) {
 
 if ($method === 'PUT' && $id) {
     try {
+        ensureCustomersTable();
         $name = isset($inputData['name']) ? trim($inputData['name']) : '';
         $phone = isset($inputData['phone']) ? $inputData['phone'] : null;
         $email = isset($inputData['email']) ? $inputData['email'] : null;
@@ -101,6 +132,7 @@ if ($method === 'PUT' && $id) {
 
 if ($method === 'DELETE' && $id) {
     try {
+        ensureCustomersTable();
         $stmt = $pdo->prepare('DELETE FROM customers WHERE id = ?');
         $stmt->execute([$id]);
         

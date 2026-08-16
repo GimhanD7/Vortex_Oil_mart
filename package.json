@@ -7,10 +7,15 @@
     "dev:turbo": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:start": "node scripts/start_database.js",
+    "db:setup": "node scripts/setup_db.js",
+    "db:inventory": "node scripts/setup_inventory_db.js"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "lucide-react": "^1.31.0",
+    "mysql2": "^3.23.2",
     "next": "16.3.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"

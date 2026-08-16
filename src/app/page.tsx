@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { useToast } from "@/components/ToastProvider";
 
 function Icon({ name }: { name: "user" | "lock" | "eye" | "arrow" | "cart" | "box" | "chart" | "shield" }) {
   const paths = {
@@ -23,13 +24,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { showToast } = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
@@ -38,10 +38,16 @@ export default function LoginPage() {
         body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
-      if (res.ok) router.push(data.user.role === "admin" ? "/admin/dashboard" : "/dashboard");
-      else setError(data.error || "Failed to login");
+      if (res.ok) {
+        showToast({ type: "success", title: "Signed in", message: "Welcome back to Oil Mart POS." });
+        router.push(data.user.role === "admin" ? "/admin/dashboard" : "/dashboard");
+      } else {
+        const message = data.error || "Failed to login";
+        showToast({ type: "error", title: "Login failed", message });
+      }
     } catch {
-      setError("An unexpected error occurred");
+      const message = "An unexpected error occurred";
+      showToast({ type: "error", title: "Login failed", message });
     } finally {
       setLoading(false);
     }
@@ -75,7 +81,6 @@ export default function LoginPage() {
           <div><h2>Welcome Back</h2><p>Sign in to continue to Oil Mart POS</p></div>
         </div>
         <form onSubmit={handleLogin}>
-          {error && <div className="login-error" role="alert">{error}</div>}
           <label htmlFor="username">Username</label>
           <div className="login-input"><Icon name="user" /><input id="username" type="text" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter your username" required /></div>
           <label htmlFor="password">Password</label>

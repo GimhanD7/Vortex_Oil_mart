@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, Eye, PackagePlus, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { useToast } from "@/components/ToastProvider";
 
 type Product = {
   id: number;
   name: string;
   price: number;
   stock_quantity: number;
+  product_type?: "packaged" | "loose_oil" | string;
+  unit?: string;
+  barrel_capacity_liters?: number | string | null;
   sku?: string;
   supplier?: string;
 };
@@ -30,6 +34,11 @@ type PurchaseItem = {
   product_name: string;
   sku?: string;
   quantity: number;
+  purchase_unit?: string;
+  barrel_count?: number | string | null;
+  barrel_capacity_liters?: number | string | null;
+  product_type?: string;
+  unit?: string;
   unit_cost: string;
 };
 
@@ -37,21 +46,35 @@ type PurchaseLine = {
   product_id: number | "";
   quantity: number;
   unit_cost: number;
+  barrel_count: number;
+  barrel_capacity_liters: number;
 };
 
-const blankLine: PurchaseLine = { product_id: "", quantity: 1, unit_cost: 0 };
+const blankLine: PurchaseLine = { product_id: "", quantity: 1, unit_cost: 0, barrel_count: 1, barrel_capacity_liters: 200 };
 const paymentMethods = ["Cash", "Card", "UPI", "Bank Transfer", "Credit"];
 
 function money(value: string | number) {
   return `Rs. ${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 }
 
+function isLooseOil(product?: Pick<Product, "product_type" | "unit">) {
+  return product?.product_type === "loose_oil" || (product?.unit || "").toLowerCase() === "l";
+}
+
+function formatQty(value: string | number, unit = "Unit") {
+  const quantity = Number(value || 0);
+  const formatted = Number.isInteger(quantity)
+    ? quantity.toLocaleString("en-IN")
+    : quantity.toLocaleString("en-IN", { maximumFractionDigits: 3 });
+  return `${formatted} ${unit || "Unit"}`;
+}
+
 export default function PurchasesPage() {
+  const { showToast } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [supplier, setSupplier] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [notes, setNotes] = useState("");
@@ -60,12 +83,20 @@ export default function PurchasesPage() {
   const [selectedItems, setSelectedItems] = useState<PurchaseItem[]>([]);
   const [editing, setEditing] = useState<Purchase | null>(null);
 
-  const total = useMemo(() => lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unit_cost || 0), 0), [lines]);
+  const lineQuantity = useCallback((line: PurchaseLine) => {
+    const product = products.find((item) => item.id === Number(line.product_id));
+    if (isLooseOil(product)) {
+      return Number(line.barrel_count || 0) * Number(line.barrel_capacity_liters || product?.barrel_capacity_liters || 200);
+    }
+    return Number(line.quantity || 0);
+  }, [products]);
+
+  const total = useMemo(() => lines.reduce((sum, line) => sum + lineQuantity(line) * Number(line.unit_cost || 0), 0), [lineQuantity, lines]);
   const receivedThisMonth = purchases
     .filter((purchase) => purchase.status !== "cancelled")
     .reduce((sum, purchase) => sum + Number(purchase.total_amount), 0);
 
-  const load = () => {
+  const load = useCallback(() => {
     fetch("/api/products", { cache: "no-store" })
       .then((response) => response.json())
       .then((data) => Array.isArray(data) && setProducts(data))
@@ -74,12 +105,12 @@ export default function PurchasesPage() {
     fetch("/api/purchases", { cache: "no-store" })
       .then((response) => response.json())
       .then((data) => Array.isArray(data) && setPurchases(data))
-      .catch(() => setMessage("Unable to load purchases."));
-  };
+      .catch(() => showToast({ type: "error", title: "Purchases failed", message: "Unable to load purchases." }));
+  }, [showToast]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const updateLine = (index: number, patch: Partial<PurchaseLine>) => {
     setLines((current) => current.map((line, i) => {
@@ -88,6 +119,10 @@ export default function PurchasesPage() {
       if (patch.product_id) {
         const product = products.find((item) => item.id === Number(patch.product_id));
         if (product && !line.unit_cost) next.unit_cost = Number(product.price);
+        if (product && isLooseOil(product)) {
+          next.barrel_capacity_liters = Number(product.barrel_capacity_liters || 200);
+          next.quantity = Number(product.barrel_capacity_liters || 200);
+        }
       }
       return next;
     }));
@@ -96,7 +131,6 @@ export default function PurchasesPage() {
   const savePurchase = async (event: React.FormEvent) => {
     event.preventDefault();
     setSaving(true);
-    setMessage("");
     const response = await fetch("/api/purchases", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -106,14 +140,20 @@ export default function PurchasesPage() {
         notes,
         items: lines.filter((line) => line.product_id).map((line) => ({
           product_id: Number(line.product_id),
-          quantity: Number(line.quantity),
+          quantity: lineQuantity(line),
+          barrel_count: isLooseOil(products.find((product) => product.id === Number(line.product_id))) ? Number(line.barrel_count) : null,
+          barrel_capacity_liters: isLooseOil(products.find((product) => product.id === Number(line.product_id))) ? Number(line.barrel_capacity_liters) : null,
           unit_cost: Number(line.unit_cost),
         })),
       }),
     });
     const data = await response.json();
     setSaving(false);
-    setMessage(data.message || data.error || "Purchase saved.");
+    showToast({
+      type: response.ok ? "success" : "error",
+      title: response.ok ? "Purchase saved" : "Purchase failed",
+      message: data.message || data.error || "Purchase saved.",
+    });
     if (response.ok) {
       setSupplier("");
       setPaymentMethod("Cash");
@@ -155,7 +195,7 @@ export default function PurchasesPage() {
       setSelected(data.purchase || purchase);
       setSelectedItems(Array.isArray(data.items) ? data.items : []);
     } else {
-      setMessage(data.error || "Unable to load purchase details.");
+      showToast({ type: "error", title: "Purchase details failed", message: data.error || "Unable to load purchase details." });
     }
   };
 
@@ -177,7 +217,11 @@ export default function PurchasesPage() {
     });
     const data = await response.json();
     setSaving(false);
-    setMessage(data.message || data.error || "Purchase updated.");
+    showToast({
+      type: response.ok ? "success" : "error",
+      title: response.ok ? "Purchase updated" : "Update failed",
+      message: data.message || data.error || "Purchase updated.",
+    });
     if (response.ok) {
       setEditing(null);
       setSupplier("");
@@ -187,24 +231,52 @@ export default function PurchasesPage() {
     }
   };
 
-  const cancelPurchase = async (purchase: Purchase) => {
-    if (!confirm("Cancel this purchase and reverse received stock?")) return;
+  const executeCancelPurchase = async (purchase: Purchase) => {
     const response = await fetch(`/api/purchases/${purchase.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "cancelled" }),
     });
     const data = await response.json();
-    setMessage(data.message || data.error || "Purchase cancelled.");
+    showToast({
+      type: response.ok ? "success" : "error",
+      title: response.ok ? "Purchase cancelled" : "Cancel failed",
+      message: data.message || data.error || "Purchase cancelled.",
+    });
     if (response.ok) load();
   };
 
-  const deletePurchase = async (purchase: Purchase) => {
-    if (!confirm("Delete this purchase permanently? Received stock will be reversed if needed.")) return;
+  const cancelPurchase = (purchase: Purchase) => {
+    showToast({
+      type: "warning",
+      title: "Cancel purchase?",
+      message: "Received stock will be reversed if this purchase is cancelled.",
+      duration: 0,
+      actionLabel: "Cancel purchase",
+      onAction: () => void executeCancelPurchase(purchase),
+    });
+  };
+
+  const executeDeletePurchase = async (purchase: Purchase) => {
     const response = await fetch(`/api/purchases/${purchase.id}`, { method: "DELETE" });
     const data = await response.json();
-    setMessage(data.message || data.error || "Purchase deleted.");
+    showToast({
+      type: response.ok ? "success" : "error",
+      title: response.ok ? "Purchase deleted" : "Delete failed",
+      message: data.message || data.error || "Purchase deleted.",
+    });
     if (response.ok) load();
+  };
+
+  const deletePurchase = (purchase: Purchase) => {
+    showToast({
+      type: "warning",
+      title: "Delete purchase?",
+      message: "This permanently deletes the purchase and reverses received stock if needed.",
+      duration: 0,
+      actionLabel: "Delete",
+      onAction: () => void executeDeletePurchase(purchase),
+    });
   };
 
   return (
@@ -219,8 +291,6 @@ export default function PurchasesPage() {
           <button className="gold-btn" onClick={() => setShowForm(true)}><PackagePlus size={15} aria-hidden="true" /> New Purchase</button>
         </aside>
       </div>
-
-      {message && <div className="user-error">{message}<button onClick={() => setMessage("")}>x</button></div>}
 
       <section className="purchase-kpis">
         <article><small>Purchase Entries</small><b>{purchases.length}</b><em>All received orders</em></article>
@@ -271,7 +341,7 @@ export default function PurchasesPage() {
 
       {showForm && (
         <div className="management-modal">
-          <form onSubmit={savePurchase}>
+          <form className="purchase-modal-form" onSubmit={savePurchase}>
             <header>
               <h2>New Purchase</h2>
               <button type="button" onClick={() => setShowForm(false)}><X size={22} aria-label="Close" /></button>
@@ -293,14 +363,24 @@ export default function PurchasesPage() {
                 <button type="button" onClick={() => setLines((current) => [...current, { ...blankLine }])}><Plus size={14} aria-hidden="true" /> Add Line</button>
               </header>
               {lines.map((line, index) => (
-                <div key={index}>
+                <div key={index} className={isLooseOil(products.find((product) => product.id === Number(line.product_id))) ? "loose-purchase-line" : ""}>
                   <select required value={line.product_id} onChange={(event) => updateLine(index, { product_id: event.target.value ? Number(event.target.value) : "" })}>
                     <option value="">Select product</option>
-                    {products.map((product) => <option key={product.id} value={product.id}>{product.name} ({product.sku || `SKU-${product.id}`})</option>)}
+                    {products.map((product) => <option key={product.id} value={product.id}>{product.name} ({product.sku || `SKU-${product.id}`}){isLooseOil(product) ? " / Loose Oil" : ""}</option>)}
                   </select>
-                  <input type="number" min={1} required value={line.quantity} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} />
+                  {isLooseOil(products.find((product) => product.id === Number(line.product_id))) ? (
+                    <>
+                      <input type="number" min={0.001} step="0.001" required value={line.barrel_count} onChange={(event) => updateLine(index, { barrel_count: Number(event.target.value) })} title="Barrel count" placeholder="Barrels" />
+                      <input type="number" min={0.001} step="0.001" required value={line.barrel_capacity_liters} onChange={(event) => updateLine(index, { barrel_capacity_liters: Number(event.target.value) })} title="Liters per barrel" placeholder="L / Barrel" />
+                    </>
+                  ) : (
+                    <input type="number" min={1} step={1} required value={line.quantity} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} />
+                  )}
                   <input type="number" min={0} step="0.01" required value={line.unit_cost} onChange={(event) => updateLine(index, { unit_cost: Number(event.target.value) })} />
-                  <strong>{money(Number(line.quantity || 0) * Number(line.unit_cost || 0))}</strong>
+                  <strong>
+                    {money(lineQuantity(line) * Number(line.unit_cost || 0))}
+                    <small>{formatQty(lineQuantity(line), isLooseOil(products.find((product) => product.id === Number(line.product_id))) ? "L" : "Unit")} received</small>
+                  </strong>
                   <button type="button" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((_, i) => i !== index))}><Trash2 size={15} aria-hidden="true" /></button>
                 </div>
               ))}
@@ -317,7 +397,7 @@ export default function PurchasesPage() {
 
       {editing && (
         <div className="management-modal">
-          <form onSubmit={updatePurchase}>
+          <form className="purchase-modal-form compact" onSubmit={updatePurchase}>
             <header>
               <h2>Edit Purchase</h2>
               <button type="button" onClick={() => setEditing(null)}><X size={22} aria-label="Close" /></button>
@@ -342,7 +422,7 @@ export default function PurchasesPage() {
 
       {selected && (
         <div className="management-modal">
-          <form>
+          <form className="purchase-modal-form purchase-view-form">
             <header>
               <h2>PUR-{String(selected.id).padStart(6, "0")}</h2>
               <button type="button" onClick={() => setSelected(null)}><X size={22} aria-label="Close" /></button>
@@ -355,13 +435,14 @@ export default function PurchasesPage() {
             </section>
             <div className="table-scroll">
               <table>
-                <thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit Cost</th><th>Total</th></tr></thead>
+                <thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Received From</th><th>Unit Cost</th><th>Total</th></tr></thead>
                 <tbody>
                   {selectedItems.map((item) => (
                     <tr key={item.id}>
                       <td>{item.product_name}</td>
                       <td>{item.sku || `SKU-${item.product_id}`}</td>
-                      <td>{item.quantity}</td>
+                      <td>{formatQty(item.quantity, item.purchase_unit || item.unit || "Unit")}</td>
+                      <td>{item.barrel_count && item.barrel_capacity_liters ? `${item.barrel_count} barrel x ${item.barrel_capacity_liters}L` : "-"}</td>
                       <td>{money(item.unit_cost)}</td>
                       <td>{money(Number(item.unit_cost) * Number(item.quantity))}</td>
                     </tr>

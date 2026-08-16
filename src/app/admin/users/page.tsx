@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useToast } from "@/components/ToastProvider";
 
 type User = {
   id: number;
@@ -8,6 +9,10 @@ type User = {
   role: "admin" | "cashier";
   permissions: string[];
   created_at: string;
+};
+
+type ApiUser = Omit<User, "permissions"> & {
+  permissions?: string[] | string | null;
 };
 
 type FormState = {
@@ -35,10 +40,11 @@ const AVAILABLE_PERMISSIONS = [
 ];
 
 export default function UsersPage() {
+  const { showToast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [, setError] = useState("");
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
@@ -53,21 +59,24 @@ export default function UsersPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Unable to load users");
       
-      const normalizedUsers = data.map((u: any) => {
+      const rows = Array.isArray(data) ? data as ApiUser[] : [];
+      const normalizedUsers = rows.map((u) => {
         let perms = u.permissions;
         if (typeof perms === 'string') {
-          try { perms = JSON.parse(perms); } catch (e) { perms = []; }
+          try { perms = JSON.parse(perms); } catch { perms = []; }
         }
         return { ...u, permissions: Array.isArray(perms) ? perms : [] };
       });
       
       setUsers(normalizedUsers);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to load users");
+      const message = e instanceof Error ? e.message : "Unable to load users";
+      setError(message);
+      showToast({ type: "error", title: "Users failed", message });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     void loadUsers();
@@ -108,7 +117,7 @@ export default function UsersPage() {
     setSaving(true);
     setError("");
     try {
-      const url = modal === "edit" ? "/api/users/${editingId}" : "/api/users";
+      const url = modal === "edit" ? `/api/users/${editingId}` : "/api/users";
       const res = await fetch(url, {
         method: modal === "edit" ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -120,23 +129,39 @@ export default function UsersPage() {
       setModal(null);
       setForm(emptyForm);
       await loadUsers();
+      showToast({ type: "success", title: modal === "edit" ? "User updated" : "User created", message: data.message || "User saved successfully." });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save user");
+      const message = e instanceof Error ? e.message : "Could not save user";
+      setError(message);
+      showToast({ type: "error", title: "User failed", message });
     } finally {
       setSaving(false);
     }
   };
 
-  const remove = async (u: User) => {
-    if (!confirm(`Delete user “${u.username}”?`)) return;
+  const deleteUser = async (u: User) => {
     setError("");
     const res = await fetch(`/api/users/${u.id}`, { method: "DELETE" });
     const data = await res.json();
     if (!res.ok) {
-      setError(data.error || "Could not delete user");
+      const message = data.error || "Could not delete user";
+      setError(message);
+      showToast({ type: "error", title: "Delete failed", message });
       return;
     }
     setUsers((current) => current.filter((x) => x.id !== u.id));
+    showToast({ type: "success", title: "User deleted", message: "User removed successfully." });
+  };
+
+  const remove = (u: User) => {
+    showToast({
+      type: "warning",
+      title: "Delete user?",
+      message: `${u.username} will be removed if they are not linked to sales records.`,
+      duration: 0,
+      actionLabel: "Delete",
+      onAction: () => void deleteUser(u),
+    });
   };
 
   return (
@@ -153,14 +178,6 @@ export default function UsersPage() {
           </button>
         </aside>
       </div>
-
-      {error && (
-        <div className="user-error" role="alert">
-          {error}
-          <button onClick={() => setError("")}>×</button>
-        </div>
-      )}
-
       <section className="user-kpis">
         <article>
           <span>♙</span>
@@ -306,8 +323,6 @@ export default function UsersPage() {
                 ×
               </button>
             </header>
-
-            {error && <div className="user-error">{error}</div>}
 
             <label>
               Username

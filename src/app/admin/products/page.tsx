@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cachedFetch } from "@/lib/api-client";
+import { useToast } from "@/components/ToastProvider";
 import {
   Armchair,
   BatteryCharging,
@@ -37,6 +38,10 @@ type Product = {
   description: string;
   price: number;
   stock_quantity: number;
+  product_type?: "packaged" | "loose_oil" | string;
+  unit?: string;
+  barrel_capacity_liters?: number | string | null;
+  reorder_level?: number | string;
   sku?: string;
   category?: string;
   sub_category?: string;
@@ -64,13 +69,43 @@ function CategoryIcon({ category, className = "" }: { category: string; classNam
   return <Box {...props} color="#94a3b8" />;
 }
 
-function stockBadge(stockQuantity: number) {
-  if (stockQuantity === 0) return { className: "out", label: "Out of Stock" };
-  if (stockQuantity < 10) return { className: "low", label: "Low Stock" };
+function stockBadge(stockQuantity: number | string, reorderLevel: number | string = 10) {
+  const stock = Number(stockQuantity || 0);
+  const reorder = Number(reorderLevel || 10);
+  if (stock <= 0) return { className: "out", label: "Out of Stock" };
+  if (stock <= reorder) return { className: "low", label: "Low Stock" };
   return { className: "", label: "In Stock" };
 }
 
+function isLooseOil(product: Pick<Product, "product_type" | "unit">) {
+  return product.product_type === "loose_oil" || (product.unit || "").toLowerCase() === "l";
+}
+
+function formatQty(value: string | number, unit = "Unit") {
+  const quantity = Number(value || 0);
+  const formatted = Number.isInteger(quantity)
+    ? quantity.toLocaleString("en-IN")
+    : quantity.toLocaleString("en-IN", { maximumFractionDigits: 3 });
+  return `${formatted} ${unit || "Unit"}`;
+}
+
+const blankProductForm = {
+  name: "",
+  description: "",
+  price: "",
+  stock_quantity: "",
+  sku: "",
+  category: "Engine Oils",
+  brand: "Generic",
+  sub_category: "General",
+  product_type: "packaged",
+  unit: "Unit",
+  barrel_capacity_liters: "",
+  reorder_level: "10",
+};
+
 export default function ProductsPage() {
+  const { showToast } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [dbCategories, setDbCategories] = useState<{id: number, name: string}[]>([]);
   const [dbSubCategories, setDbSubCategories] = useState<{id: number, category_name: string, name: string}[]>([]);
@@ -90,16 +125,7 @@ export default function ProductsPage() {
   const [isNewCat, setIsNewCat] = useState(false);
   const [isNewSubCat, setIsNewSubCat] = useState(false);
   const [isNewBrand, setIsNewBrand] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    description: "",
-    price: "",
-    stock_quantity: "",
-    sku: "",
-    category: "Engine Oils",
-    sub_category: "General",
-    brand: "Generic",
-  });
+  const [form, setForm] = useState(blankProductForm);
 
   const [showIcons, setShowIcons] = useState(true);
 
@@ -152,6 +178,10 @@ export default function ProductsPage() {
               category: p.category || "General",
               sub_category: p.sub_category || "General",
               brand: p.brand || "Generic",
+              product_type: p.product_type || "packaged",
+              unit: p.unit || "Unit",
+              stock_quantity: Number(p.stock_quantity || 0),
+              reorder_level: Number(p.reorder_level || 10),
             }))
           );
         }
@@ -177,11 +207,11 @@ export default function ProductsPage() {
     );
 
     if (statusFilter === "In Stock") {
-      result = result.filter(p => p.stock_quantity >= 10);
+      result = result.filter(p => Number(p.stock_quantity || 0) > Number(p.reorder_level || 10));
     } else if (statusFilter === "Low Stock") {
-      result = result.filter(p => p.stock_quantity > 0 && p.stock_quantity < 10);
+      result = result.filter(p => Number(p.stock_quantity || 0) > 0 && Number(p.stock_quantity || 0) <= Number(p.reorder_level || 10));
     } else if (statusFilter === "Out of Stock") {
-      result = result.filter(p => p.stock_quantity === 0);
+      result = result.filter(p => Number(p.stock_quantity || 0) <= 0);
     }
 
     return result;
@@ -205,32 +235,41 @@ export default function ProductsPage() {
     const method = editId ? "PUT" : "POST";
     const url = editId ? `/api/products/${editId}` : "/api/products";
 
-    await fetch(url, {
+    const response = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...form,
+        unit: form.product_type === "loose_oil" ? "L" : form.unit || "Unit",
         price: Number(form.price),
         stock_quantity: Number(form.stock_quantity),
+        barrel_capacity_liters: form.product_type === "loose_oil" && form.barrel_capacity_liters ? Number(form.barrel_capacity_liters) : null,
+        reorder_level: Number(form.reorder_level || (form.product_type === "loose_oil" ? 20 : 10)),
       }),
     });
+    const data = await response.json();
     setSaving(false);
+    if (!response.ok) {
+      showToast({ type: "error", title: "Product failed", message: data.error || "Could not save product." });
+      return;
+    }
     setShow(false);
     setEditId(null);
     setIsNewCat(false);
     setIsNewSubCat(false);
     setIsNewBrand(false);
-    setForm({ name: "", description: "", price: "", stock_quantity: "", sku: "", category: "Engine Oils", sub_category: "General", brand: "Generic" });
+    setForm(blankProductForm);
     load();
+    showToast({ type: "success", title: editId ? "Product updated" : "Product created", message: data.message || "Product saved successfully." });
   };
 
   const importFileRef = useRef<HTMLInputElement>(null);
 
   const exportProducts = () => {
-    let csv = "Name,SKU,Category,Brand,Description,Price,Stock Quantity\n";
+    let csv = "Name,SKU,Category,Brand,Description,Product Type,Unit,Barrel Capacity Liters,Price,Stock Quantity,Reorder Level\n";
     products.forEach((p) => {
       const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
-      csv += `${escape(p.name)},${escape(p.sku || "")},${escape(p.category || "")},${escape(p.brand || "")},${escape(p.description || "")},${p.price},${p.stock_quantity}\n`;
+      csv += `${escape(p.name)},${escape(p.sku || "")},${escape(p.category || "")},${escape(p.brand || "")},${escape(p.description || "")},${escape(p.product_type || "packaged")},${escape(p.unit || "Unit")},${p.barrel_capacity_liters || ""},${p.price},${p.stock_quantity},${p.reorder_level || 10}\n`;
     });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -252,7 +291,7 @@ export default function ProductsPage() {
     const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
 
     if (!headers.includes("name") || !headers.includes("price") || !headers.includes("stock quantity")) {
-      alert("Invalid CSV format. Missing required columns (Name, Price, Stock Quantity).");
+      showToast({ type: "error", title: "Import failed", message: "Invalid CSV format. Missing required columns: Name, Price, Stock Quantity." });
       setSaving(false);
       if (importFileRef.current) importFileRef.current.value = "";
       return;
@@ -283,6 +322,10 @@ export default function ProductsPage() {
         description: getCol("description"),
         price: isNaN(price) ? 0 : price,
         stock_quantity: isNaN(stock) ? 0 : stock,
+        product_type: getCol("product type") === "loose_oil" ? "loose_oil" : "packaged",
+        unit: getCol("unit") || (getCol("product type") === "loose_oil" ? "L" : "Unit"),
+        barrel_capacity_liters: getCol("barrel capacity liters") ? Number(getCol("barrel capacity liters")) : null,
+        reorder_level: getCol("reorder level") ? Number(getCol("reorder level")) : (getCol("product type") === "loose_oil" ? 20 : 10),
       };
 
       if (existingProduct) {
@@ -301,7 +344,7 @@ export default function ProductsPage() {
       importedCount++;
     }
 
-    alert(`Successfully imported ${importedCount} products.`);
+    showToast({ type: "success", title: "Import completed", message: `Successfully imported ${importedCount} products.` });
     if (importFileRef.current) importFileRef.current.value = "";
     load();
     setSaving(false);
@@ -316,16 +359,36 @@ export default function ProductsPage() {
       sku: p.sku || "",
       category: p.category || "General",
       sub_category: p.sub_category || "General",
-      brand: p.brand || "Generic"
+      brand: p.brand || "Generic",
+      product_type: p.product_type || "packaged",
+      unit: p.unit || "Unit",
+      barrel_capacity_liters: p.barrel_capacity_liters ? String(p.barrel_capacity_liters) : "",
+      reorder_level: String(p.reorder_level || (isLooseOil(p) ? 20 : 10)),
     });
     setEditId(p.id);
     setShow(true);
   };
 
-  const del = async (id: number) => {
-    if (!confirm("Delete this product?")) return;
+  const deleteProduct = async (id: number) => {
     const r = await fetch(`/api/products/${id}`, { method: "DELETE" });
-    if (r.ok) setProducts((p) => p.filter((x) => x.id !== id));
+    const data = await r.json();
+    if (r.ok) {
+      setProducts((p) => p.filter((x) => x.id !== id));
+      showToast({ type: "success", title: "Product deleted", message: data.message || "Product removed successfully." });
+    } else {
+      showToast({ type: "error", title: "Delete failed", message: data.error || "Could not delete product." });
+    }
+  };
+
+  const del = (id: number) => {
+    showToast({
+      type: "warning",
+      title: "Delete product?",
+      message: "This product will be removed if it is not linked to sales.",
+      duration: 0,
+      actionLabel: "Delete",
+      onAction: () => void deleteProduct(id),
+    });
   };
 
   return (
@@ -349,7 +412,7 @@ export default function ProductsPage() {
           <button onClick={exportProducts}>
             <Download size={15} aria-hidden="true" /> Export
           </button>
-          <button className="gold-btn" onClick={() => { setEditId(null); setForm({ name: "", description: "", price: "", stock_quantity: "", sku: "", category: "Engine Oils", sub_category: "General", brand: "Generic" }); setShow(true); }}>
+          <button className="gold-btn" onClick={() => { setEditId(null); setForm(blankProductForm); setShow(true); }}>
             <Plus size={15} aria-hidden="true" /> Add Product
           </button>
         </aside>
@@ -454,7 +517,7 @@ export default function ProductsPage() {
       )}
         <div>
           {shown.slice(0, 7).map((p) => {
-            const status = stockBadge(p.stock_quantity);
+            const status = stockBadge(p.stock_quantity, Number(p.reorder_level || 10));
             return (
               <article key={p.id}>
                 {showIcons && <CategoryIcon category={p.category || "General"} className="product-card-icon" />}
@@ -556,15 +619,17 @@ export default function ProductsPage() {
                     </td>
                   )}
                   {cols.brand && <td>{p.brand}</td>}
-                  {cols.pack && <td>1 Unit</td>}
+                  {cols.pack && <td>{isLooseOil(p) ? `Loose Oil / ${p.unit || "L"}` : "1 Unit"}</td>}
                   {cols.price && (
                     <td>
                       Rs. {Number(p.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      {isLooseOil(p) ? " / L" : ""}
                     </td>
                   )}
                   {cols.status && (
                     <td>
-                      <em className={stockBadge(p.stock_quantity).className}>{stockBadge(p.stock_quantity).label}</em>
+                      <em className={stockBadge(p.stock_quantity, Number(p.reorder_level || 10)).className}>{stockBadge(p.stock_quantity, Number(p.reorder_level || 10)).label}</em>
+                      <small>{formatQty(p.stock_quantity, p.unit)}</small>
                     </td>
                   )}
                   {cols.actions && (
@@ -586,7 +651,7 @@ export default function ProductsPage() {
 
       {show && (
         <div className="management-modal">
-          <form onSubmit={add}>
+          <form className="product-modal-form" onSubmit={add}>
             <header>
               <h2>
                 <CategoryIcon category={form.category || "General"} className="modal-title-icon" />
@@ -597,7 +662,7 @@ export default function ProductsPage() {
               </button>
             </header>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1rem' }}>
+            <div className="product-form-grid product-form-grid-primary">
               <label>
                 Product Name
                 <input
@@ -618,7 +683,7 @@ export default function ProductsPage() {
               </label>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+            <div className="product-form-grid product-form-grid-two">
               <label>
                 Category
                 {!isNewCat ? (
@@ -722,6 +787,51 @@ export default function ProductsPage() {
               </label>
             </div>
 
+            <div className="product-form-grid product-form-grid-three">
+              <label>
+                Product Type
+                <select
+                  value={form.product_type}
+                  onChange={(e) => {
+                    const nextType = e.target.value;
+                    setForm({
+                      ...form,
+                      product_type: nextType,
+                      unit: nextType === "loose_oil" ? "L" : "Unit",
+                      reorder_level: nextType === "loose_oil" && form.reorder_level === "10" ? "20" : form.reorder_level,
+                      barrel_capacity_liters: nextType === "loose_oil" ? (form.barrel_capacity_liters || "200") : "",
+                    });
+                  }}
+                  style={{ border: '1px solid #dfe2e5', borderRadius: '7px', padding: '11px', font: 'inherit', width: '100%', outline: 'none' }}
+                >
+                  <option value="packaged">Packaged Item</option>
+                  <option value="loose_oil">Loose Oil</option>
+                </select>
+              </label>
+              <label>
+                Unit
+                <input
+                  required
+                  value={form.unit}
+                  onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                  readOnly={form.product_type === "loose_oil"}
+                  placeholder="Unit"
+                />
+              </label>
+              <label>
+                Barrel Capacity (L)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  value={form.barrel_capacity_liters}
+                  onChange={(e) => setForm({ ...form, barrel_capacity_liters: e.target.value })}
+                  disabled={form.product_type !== "loose_oil"}
+                  placeholder="200"
+                />
+              </label>
+            </div>
+
             <label>
               Description
               <textarea
@@ -731,9 +841,9 @@ export default function ProductsPage() {
               />
             </label>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="product-form-grid product-form-grid-three">
               <label>
-                Price (Rs.)
+                {form.product_type === "loose_oil" ? "Selling Price / L (Rs.)" : "Price (Rs.)"}
                 <input
                   required
                   type="number"
@@ -744,13 +854,25 @@ export default function ProductsPage() {
                 />
               </label>
               <label>
-                Initial Stock Status (Quantity)
+                Initial Stock {form.product_type === "loose_oil" ? "(Liters)" : "(Quantity)"}
                 <input
                   required
                   type="number"
                   min="0"
+                  step={form.product_type === "loose_oil" ? "0.001" : "1"}
                   value={form.stock_quantity}
                   onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })}
+                />
+              </label>
+              <label>
+                Reorder Level {form.product_type === "loose_oil" ? "(L)" : ""}
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  step={form.product_type === "loose_oil" ? "0.001" : "1"}
+                  value={form.reorder_level}
+                  onChange={(e) => setForm({ ...form, reorder_level: e.target.value })}
                 />
               </label>
             </div>
