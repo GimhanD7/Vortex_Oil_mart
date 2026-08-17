@@ -2,20 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { cachedFetch } from "@/lib/api-client";
+import { ProductCategoryIcon } from "@/components/ProductCategoryIcon";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
-  Armchair,
-  BatteryCharging,
-  Box,
-  CircleStop,
-  CloudRain,
-  Cog,
   Columns3,
-  Filter,
   IndianRupee,
-  Lightbulb,
-  Link,
   MapPinHouse,
   MoreVertical,
   Package,
@@ -23,10 +15,7 @@ import {
   Pencil,
   Plus,
   SlidersHorizontal,
-  Sparkles,
-  Wrench,
   X,
-  Zap,
 } from "lucide-react";
 
 type Product = {
@@ -71,25 +60,6 @@ type InventoryMovement = {
   reference_no: string | null;
   created_at: string;
 };
-
-function CategoryIcon({ category, className = "" }: { category: string; className?: string }) {
-  const props = { className: className || "table-product-icon", "aria-hidden": true, size: 22, strokeWidth: 1.9 };
-  const c = category.toLowerCase();
-  if (c.includes("engine") || c.includes("oil")) return <Package {...props} />;
-  if (c.includes("gear") || c.includes("lubricant") || c.includes("grease")) return <Cog {...props} />;
-  if (c.includes("filter")) return <Filter {...props} />;
-  if (c.includes("brake") || c.includes("pad") || c.includes("shoe")) return <CircleStop {...props} />;
-  if (c.includes("batter")) return <BatteryCharging {...props} />;
-  if (c.includes("spark") || c.includes("ignition") || c.includes("plug")) return <Zap {...props} />;
-  if (c.includes("coolant") || c.includes("radiator") || c.includes("wiper") || c.includes("wash")) return <CloudRain {...props} />;
-  if (c.includes("bulb") || c.includes("light") || c.includes("lamp")) return <Lightbulb {...props} />;
-  if (c.includes("tire") || c.includes("tyre") || c.includes("wheel")) return <CircleStop {...props} />;
-  if (c.includes("belt") || c.includes("chain")) return <Link {...props} />;
-  if (c.includes("suspension") || c.includes("shock") || c.includes("spring") || c.includes("tool") || c.includes("equipment")) return <Wrench {...props} />;
-  if (c.includes("polish") || c.includes("wax") || c.includes("cleaner") || c.includes("shampoo")) return <Sparkles {...props} />;
-  if (c.includes("accessory") || c.includes("mat") || c.includes("cover")) return <Armchair {...props} />;
-  return <Box {...props} />;
-}
 
 function formatQty(value: string | number, unit = "Unit") {
   const quantity = Number(value || 0);
@@ -460,7 +430,7 @@ export default function InventoryPage() {
                   )}
                   {cols.prod && (
                     <td>
-                      <CategoryIcon category={p.category || "General"} />
+                      <ProductCategoryIcon category={p.category} productName={p.name} className="table-product-icon" />
                       <b>{p.name}</b>
                       <small>{p.brand}</small>
                     </td>
@@ -626,7 +596,7 @@ export default function InventoryPage() {
             .slice(0, 4)
             .map((p) => (
               <div key={p.id}>
-                <CategoryIcon category={p.category || "General"} />
+                <ProductCategoryIcon category={p.category} productName={p.name} className="table-product-icon" />
                 <p>
                   <b>{p.name}</b>
                   <small>

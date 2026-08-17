@@ -2,28 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ProductCategoryIcon } from "@/components/ProductCategoryIcon";
 import {
-  BatteryCharging,
   CalendarDays,
   CalendarRange,
   ClipboardList,
   CreditCard,
   FileBarChart,
-  Filter,
   Gauge,
   PackagePlus,
   Receipt,
   RotateCcw,
   ShoppingCart,
   SlidersHorizontal,
-  Sparkles,
   TrendingUp,
   Truck,
   UserCheck,
   UserPlus,
   Users,
-  Wrench,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -95,15 +91,6 @@ const metricDefs: Array<{ key: MetricKey; label: string; color: string }> = [
   { key: "profit", label: "Gross Profit", color: "green" },
   { key: "customers", label: "Total Customers", color: "purple" },
 ];
-
-const productIcons: Record<string, LucideIcon> = {
-  oil: PackagePlus,
-  filter: Filter,
-  battery: BatteryCharging,
-  spark: Zap,
-  air: SlidersHorizontal,
-  brake: Wrench,
-};
 
 const quickIcons: Record<string, LucideIcon> = {
   "Add Product": PackagePlus,
@@ -198,22 +185,6 @@ function readableDate(value: string) {
 
 function readableMonth(value: string) {
   return value ? new Date(`${value}-01T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : "";
-}
-
-function categoryKey(category?: string | null) {
-  const text = (category || "").toLowerCase();
-  if (text.includes("filter")) return "filter";
-  if (text.includes("batter")) return "battery";
-  if (text.includes("spark")) return "spark";
-  if (text.includes("brake")) return "brake";
-  if (text.includes("air")) return "air";
-  if (text.includes("oil")) return "oil";
-  return "item";
-}
-
-function ProductMark({ category }: { category?: string | null }) {
-  const Icon = productIcons[categoryKey(category)] || Sparkles;
-  return <Icon className="product-mark" aria-hidden="true" strokeWidth={1.9} />;
 }
 
 function percent(value: number, total: number) {
@@ -512,7 +483,7 @@ export default function AdminDashboard() {
         <div className="stock-list">
           {data.low_stock.map((item) => (
             <div key={item.id}>
-              <ProductMark category={item.category} />
+              <ProductCategoryIcon category={item.category} productName={item.name} className="product-mark" />
               <p><b>{item.name}</b><small>SKU: {item.sku || `SKU-${item.id}`}</small></p>
               <em>Stock: {item.stock_quantity}</em>
             </div>
@@ -593,7 +564,7 @@ export default function AdminDashboard() {
           {data.top_products.map((item, index) => (
             <div key={`${item.name}-${index}`}>
               <i>{index + 1}</i>
-              <ProductMark category={item.category} />
+              <ProductCategoryIcon category={item.category} productName={item.name} className="product-mark" />
               <b>{item.name}</b>
               <em>{qty(item.quantity)}</em>
               <strong>{money(item.total)}</strong>

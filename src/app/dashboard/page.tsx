@@ -4,9 +4,9 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import { useRouter } from "next/navigation";
 import { HelpSupportButton } from "@/components/HelpSupport";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import { ProductCategoryIcon } from "@/components/ProductCategoryIcon";
 import { useToast } from "@/components/ToastProvider";
 import {
-  BatteryCharging,
   BadgePercent,
   Banknote,
   BarChart3,
@@ -16,7 +16,6 @@ import {
   CircleHelp,
   CircleDot,
   CreditCard,
-  Filter,
   Gauge,
   LayoutDashboard,
   LogOut,
@@ -40,8 +39,6 @@ import {
   UserCog,
   Users,
   Wallet,
-  Wrench,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -280,21 +277,6 @@ const revokeReasons = {
   return: ["Wrong return item selected", "Incorrect refund quantity or amount", "Customer decides not to return the product", "Other correction"],
   held: ["Customer does not return", "Duplicate held order exists", "Order is no longer required", "Other correction"],
 };
-
-function ProductIcon({ product, className = "" }: { product: Product; className?: string }) {
-  const label = `${product.category || ""} ${product.name}`.toLowerCase();
-  const Icon = label.includes("batter")
-    ? BatteryCharging
-    : label.includes("filter")
-      ? Filter
-      : label.includes("spark") || label.includes("plug")
-        ? Zap
-        : label.includes("brake")
-          ? Wrench
-          : Package;
-
-  return <Icon className={`pos-product-icon ${className}`} aria-hidden="true" strokeWidth={1.8} />;
-}
 
 export default function PosBilling() {
   const { showToast } = useToast();
@@ -1004,7 +986,7 @@ export default function PosBilling() {
               {shown.map((product) => (
                 <article key={product.id} onClick={() => add(product)} style={{ opacity: product.stock_quantity <= 0 ? 0.5 : 1 }}>
                   <button className="favorite" aria-label={`Favorite ${product.name}`}><Star size={18} aria-hidden="true" /></button>
-                  <div className="product-visual"><ProductIcon product={product} className="large" /></div>
+                  <div className="product-visual"><ProductCategoryIcon category={product.category} productName={product.name} className="pos-product-icon large" /></div>
                   <h3>{product.name}</h3>
                   <small>Stock: {formatQty(product.stock_quantity, product.unit)}</small>
                   <p>SKU: {product.sku}</p>
@@ -1077,7 +1059,7 @@ export default function PosBilling() {
             <div className="cart-items">
               {cart.map((item) => (
                 <article key={item.id}>
-                  <div className="cart-thumb"><ProductIcon product={item} /></div>
+                  <div className="cart-thumb"><ProductCategoryIcon category={item.category} productName={item.name} className="pos-product-icon" /></div>
                   <p>
                     <b>{item.name}</b>
                     <small>SKU: {item.sku}{isLooseOil(item) ? " / Loose oil" : ""}</small>
