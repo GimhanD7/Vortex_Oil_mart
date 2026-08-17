@@ -1134,6 +1134,12 @@ export default function PosBilling() {
             <p>{isCashier ? "Cashier workspace" : "Admin billing workspace"} / Welcome back, {user.username}</p>
           </div>
           <div className="pos-top-actions">
+            {isCashier && cashCycle && (
+              <div className="pos-status-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '6px 12px', borderRadius: '8px', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                <Banknote size={16} aria-hidden="true" style={{ color: '#16a34a' }} />
+                <span>O/C: <b style={{ fontWeight: 700 }}>{money(cashCycle.openingBalance || 0)}</b></span>
+              </div>
+            )}
             <button className="pos-status-pill">
               <ShoppingCart size={16} aria-hidden="true" />
               <span>{shiftLabel}</span>
@@ -1310,10 +1316,8 @@ export default function PosBilling() {
                   </select>
                 </p>
               </div>
-              {isAdmin ? (
+              {isAdmin && (
                 <button onClick={() => router.push("/admin/customers")}><Plus size={16} aria-hidden="true" /> Manage Customers</button>
-              ) : (
-                <span className="cashier-shift-chip"><Banknote size={15} aria-hidden="true" /> Opening Cash {money(cashCycle?.openingBalance || 0)}</span>
               )}
             </div>
 
@@ -1334,6 +1338,10 @@ export default function PosBilling() {
                     <h2><BarChart3 size={18} aria-hidden="true" /> Sales Summary</h2>
                     <p>{activeSummaryRange.label} / {cashCycle?.id}</p>
                   </div>
+                  <div style={{ marginLeft: 'auto', marginRight: '10px', display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '6px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}>
+                    <Banknote size={16} aria-hidden="true" style={{ color: '#16a34a' }} />
+                    <span>Opening Cash: <b style={{ fontWeight: 700 }}>{money(cashCycle?.openingBalance || 0)}</b></span>
+                  </div>
                   <button type="button" onClick={() => setShowCycleInvoices(true)}><Receipt size={15} aria-hidden="true" /> Cycle Invoices</button>
                 </header>
                 <div className="summary-metrics">
@@ -1350,12 +1358,6 @@ export default function PosBilling() {
                   <p><small>Discount</small><b>{money(summaryTotals.discount)}</b></p>
                   <p><small>Expected Cash</small><b>{money(expectedClosingCash)}</b></p>
                 </div>
-                <footer>
-                  <span>Opening Cash: <b>{money(cashCycle?.openingBalance || 0)}</b></span>
-                  <button onClick={() => void openCloseCycle()}>
-                    <X size={16} aria-hidden="true" /> Close Sales Cycle
-                  </button>
-                </footer>
               </section>
             )}
           </section>
