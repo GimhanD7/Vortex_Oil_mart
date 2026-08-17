@@ -284,6 +284,40 @@ if ($method === 'GET' && $id === 'returns') {
     sendJson($stmt->fetchAll());
 }
 
+if ($method === 'GET' && is_numeric($id)) {
+    try {
+        ensureSalesColumns();
+        ensureSaleReturnTables();
+
+        $stmt = $pdo->prepare("
+            SELECT s.id, s.subtotal_amount, s.discount_rate, s.discount_amount,
+                   s.tax_rate, s.tax_amount, s.business_date, s.cash_received, s.cash_balance,
+                   s.sales_cycle_id, s.opening_cash_balance, s.total_amount, s.payment_method,
+                   s.status, s.created_at,
+                   u.username as cashier_name, c.name as customer_name
+            FROM sales s
+            LEFT JOIN users u ON s.cashier_id = u.id
+            LEFT JOIN customers c ON s.customer_id = c.id
+            WHERE s.id = ?
+        ");
+        $stmt->execute([(int)$id]);
+        $sale = $stmt->fetch();
+
+        if (!$sale) {
+            sendJson(["error" => "Sale not found"], 404);
+        }
+
+        $items = detailedSaleItems((int)$id);
+
+        sendJson([
+            "sale" => $sale,
+            "items" => $items
+        ]);
+    } catch (PDOException $e) {
+        sendJson(["error" => "Internal server error"], 500);
+    }
+}
+
 if ($method === 'POST' && is_numeric($id) && $action === 'returns') {
     try {
         ensureSalesColumns();
@@ -387,6 +421,11 @@ if ($method === 'GET' && !$id) {
         $paymentMethod = isset($_GET['payment_method']) ? $_GET['payment_method'] : null;
         $status = isset($_GET['status']) ? $_GET['status'] : null;
         $cycleId = isset($_GET['cycle_id']) ? $_GET['cycle_id'] : null;
+        
+        $invoiceId = isset($_GET['invoice_id']) ? $_GET['invoice_id'] : null;
+        $customerName = isset($_GET['customer_name']) ? $_GET['customer_name'] : null;
+        $customerPhone = isset($_GET['customer_phone']) ? $_GET['customer_phone'] : null;
+        $searchQuery = isset($_GET['search']) ? $_GET['search'] : null;
 
         $where = [];
         $values = [];
@@ -414,6 +453,27 @@ if ($method === 'GET' && !$id) {
         if ($cycleId) {
             $where[] = 's.sales_cycle_id = ?';
             $values[] = $cycleId;
+        }
+        if ($invoiceId) {
+            $where[] = 's.id = ?';
+            $values[] = (int)str_replace('INV-', '', $invoiceId);
+        }
+        if ($customerName) {
+            $where[] = 'c.name LIKE ?';
+            $values[] = '%' . $customerName . '%';
+        }
+        if ($customerPhone) {
+            $where[] = 'c.phone LIKE ?';
+            $values[] = '%' . $customerPhone . '%';
+        }
+        if ($searchQuery) {
+            $where[] = '(s.id = ? OR c.name LIKE ? OR c.phone LIKE ? OR si.product_id IN (SELECT id FROM products WHERE name LIKE ? OR sku LIKE ?))';
+            $searchTerm = '%' . $searchQuery . '%';
+            $values[] = (int)str_replace('INV-', '', $searchQuery);
+            $values[] = $searchTerm;
+            $values[] = $searchTerm;
+            $values[] = $searchTerm;
+            $values[] = $searchTerm;
         }
 
         $whereClause = count($where) > 0 ? 'WHERE ' . implode(' AND ', $where) : '';

@@ -1074,6 +1074,10 @@ export default function PosBilling() {
               <span>{displayDate} / {displayTime}</span>
               <em><CircleDot size={12} aria-hidden="true" /> Online</em>
             </button>
+            <button className="pos-status-pill" onClick={() => router.push("/dashboard/returns-exchanges")} style={{ cursor: 'pointer', transition: 'background 0.2s', backgroundColor: '#f8fafc' }} onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')} onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}>
+              <RotateCcw size={16} aria-hidden="true" style={{ color: '#475569' }} />
+              <span style={{ color: '#334155', fontWeight: 500 }}>Returns & Exchanges</span>
+            </button>
             <NotificationCenter variant="pos" />
             <div className="pos-topbar-popover pos-profile-control">
               <button
@@ -1439,30 +1443,93 @@ export default function PosBilling() {
           </aside>
           {showCycleInvoices && (
             <div className="cash-modal-backdrop">
-              <section className="cash-modal cycle-invoices-modal">
+              <section className="cash-modal cycle-invoices-modal" style={{ width: 'min(820px, calc(100vw - 30px))', maxWidth: '820px' }}>
                 <h2>Current Cycle Invoices</h2>
                 <p>{cashCycle?.id} · invoices remain listed after cancellation or return.</p>
                 <div className="cycle-invoice-list">
-                  {summaryRows.filter((sale) => !cashCycle || sale.sales_cycle_id === cashCycle.id).map((sale) => (
-                    <article key={sale.id}>
-                      <div><b>{settings.invoice_prefix}-{String(sale.id).padStart(6, "0")}</b><small>{new Date(sale.created_at).toLocaleString()} · {sale.customer_name || "Walk-in Customer"}</small></div>
-                      <span>{money(Number(sale.total_amount))}<small>{sale.status || "completed"}</small></span>
-                      <aside>
-                        <button type="button" onClick={() => void loadInvoiceDetail(sale.id)}>View</button>
-                        {!['cancelled', 'returned'].includes(sale.status) && <button type="button" onClick={() => void openReturn(sale.id)}>Return / Exchange</button>}
-                        {sale.status === 'completed' && <button type="button" className="danger" onClick={() => cancelCompletedSale(sale)}>Cancel Bill</button>}
-                      </aside>
-                    </article>
-                  ))}
+                  {(() => {
+                    const cycleSales = summaryRows.filter((sale) => !cashCycle || sale.sales_cycle_id === cashCycle.id);
+                    const latestSaleId = cycleSales.length > 0 ? Math.max(...cycleSales.map(s => s.id)) : -1;
+                    return cycleSales.map((sale) => (
+                      <article key={sale.id}>
+                        <div><b>{settings.invoice_prefix}-{String(sale.id).padStart(6, "0")}</b><small>{new Date(sale.created_at).toLocaleString()} · {sale.customer_name || "Walk-in Customer"}</small></div>
+                        <span>{money(Number(sale.total_amount))}<small>{sale.status || "completed"}</small></span>
+                        <aside>
+                          <button type="button" onClick={() => void loadInvoiceDetail(sale.id)}>View</button>
+                          {!['cancelled', 'returned'].includes(sale.status) && <button type="button" onClick={() => void openReturn(sale.id)}>Return / Exchange</button>}
+                          {sale.status === 'completed' && sale.id === latestSaleId && <button type="button" className="danger" onClick={() => cancelCompletedSale(sale)}>Cancel Bill</button>}
+                        </aside>
+                      </article>
+                    ));
+                  })()}
                   {!summaryRows.filter((sale) => !cashCycle || sale.sales_cycle_id === cashCycle.id).length && <p>No invoices in this cycle.</p>}
                 </div>
-                {invoiceDetail && (
-                  <div className="cycle-invoice-detail">
-                    <b>{settings.invoice_prefix}-{String(invoiceDetail.sale.id).padStart(6, "0")} · {invoiceDetail.sale.status}</b>
-                    {invoiceDetail.items.map((item) => <p key={item.sale_item_id}><span>{item.product_name} × {formatQty(item.quantity, item.unit)}</span><b>{money(Number(item.price_at_time) * Number(item.quantity))}</b></p>)}
-                  </div>
-                )}
                 <footer><button type="button" onClick={() => { setShowCycleInvoices(false); setInvoiceDetail(null); }}>Close</button></footer>
+              </section>
+            </div>
+          )}
+          {invoiceDetail && (
+            <div className="cash-modal-backdrop" style={{ zIndex: 1100 }}>
+              <section className="cash-modal invoice-detail-modal" style={{ width: 'min(700px, calc(100vw - 30px))', maxWidth: '700px', maxHeight: '85vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>
+                      Invoice Details: {settings.invoice_prefix}-{String(invoiceDetail.sale.id).padStart(6, "0")}
+                    </h2>
+                    <small style={{ color: '#64748b' }}>{new Date(invoiceDetail.sale.created_at).toLocaleString()}</small>
+                  </div>
+                  <span style={{ textTransform: 'uppercase', background: invoiceDetail.sale.status === 'cancelled' ? '#fee2e2' : '#dcfce7', color: invoiceDetail.sale.status === 'cancelled' ? '#dc2626' : '#166534', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' }}>
+                    {invoiceDetail.sale.status}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: '#f8fafc', padding: '14px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
+                  <p style={{ margin: 0 }}><small style={{ display: 'block', color: '#64748b' }}>Customer</small> <b>{invoiceDetail.sale.customer_name || "Walk-in Customer"}</b></p>
+                  <p style={{ margin: 0 }}><small style={{ display: 'block', color: '#64748b' }}>Payment Method</small> <b>{invoiceDetail.sale.payment_method}</b></p>
+                  <p style={{ margin: 0 }}><small style={{ display: 'block', color: '#64748b' }}>Cashier</small> <b>{invoiceDetail.sale.cashier_name || user?.username || "Cashier"}</b></p>
+                  {invoiceDetail.sale.cash_received !== null && invoiceDetail.sale.cash_received !== undefined && (
+                    <p style={{ margin: 0 }}><small style={{ display: 'block', color: '#64748b' }}>Cash Received / Balance</small> <b>{money(Number(invoiceDetail.sale.cash_received))} / {money(Number(invoiceDetail.sale.cash_balance || 0))}</b></p>
+                  )}
+                </div>
+
+                <h3 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>Purchased Items</h3>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16px', fontSize: '13px' }}>
+                  <thead style={{ borderBottom: '2px solid #e2e8f0', textAlign: 'left', color: '#64748b' }}>
+                    <tr>
+                      <th style={{ padding: '8px 0' }}>Item Description</th>
+                      <th style={{ padding: '8px 0', textAlign: 'center' }}>Qty</th>
+                      <th style={{ padding: '8px 0', textAlign: 'right' }}>Unit Price</th>
+                      <th style={{ padding: '8px 0', textAlign: 'right' }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoiceDetail.items.map((item) => (
+                      <tr key={item.sale_item_id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '10px 0' }}>
+                          <b>{item.product_name}</b>
+                          {Number(item.returned_quantity || 0) > 0 && <small style={{ display: 'block', color: '#ef4444' }}>Returned: {formatQty(item.returned_quantity, item.unit)}</small>}
+                        </td>
+                        <td style={{ padding: '10px 0', textAlign: 'center' }}>{formatQty(item.quantity, item.unit)}</td>
+                        <td style={{ padding: '10px 0', textAlign: 'right' }}>{money(Number(item.price_at_time))}</td>
+                        <td style={{ padding: '10px 0', textAlign: 'right' }}><b>{money(Number(item.price_at_time) * Number(item.quantity))}</b></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div style={{ textAlign: 'right', borderTop: '2px solid #e2e8f0', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '14px' }}>
+                  <p style={{ margin: 0, color: '#64748b' }}>Subtotal: <b>{money(Number(invoiceDetail.sale.total_amount) + Number(invoiceDetail.sale.discount_amount || 0))}</b></p>
+                  {Number(invoiceDetail.sale.discount_amount || 0) > 0 && (
+                    <p style={{ margin: 0, color: '#ef4444' }}>Discount ({invoiceDetail.sale.discount_rate}%): <b>-{money(Number(invoiceDetail.sale.discount_amount))}</b></p>
+                  )}
+                  <p style={{ margin: '6px 0 0 0', fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>Total Amount Paid: {money(Number(invoiceDetail.sale.total_amount))}</p>
+                </div>
+
+                <footer style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="button" onClick={() => setInvoiceDetail(null)} style={{ padding: '8px 20px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+                    Close Invoice View
+                  </button>
+                </footer>
               </section>
             </div>
           )}
@@ -1470,11 +1537,19 @@ export default function PosBilling() {
             <div className="cash-modal-backdrop">
               <form className="cash-modal return-sale-modal" onSubmit={submitReturn}>
                 <h2>Return / Exchange</h2>
-                <p>Original invoice: {settings.invoice_prefix}-{String(returnInvoice.sale.id).padStart(6, "0")}. A new return document will be created.</p>
+                <p style={{ marginBottom: '15px', color: '#64748b' }}>Original invoice: <b>{settings.invoice_prefix}-{String(returnInvoice.sale.id).padStart(6, "0")}</b>. A new return document will be created.</p>
+                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontSize: '13px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <p style={{ margin: 0 }}><small style={{ color: '#64748b', display: 'block' }}>Date</small> <b>{new Date(returnInvoice.sale.created_at).toLocaleString()}</b></p>
+                    <p style={{ margin: 0 }}><small style={{ color: '#64748b', display: 'block' }}>Customer</small> <b>{returnInvoice.sale.customer_name || "Walk-in"}</b></p>
+                    <p style={{ margin: 0 }}><small style={{ color: '#64748b', display: 'block' }}>Total Paid</small> <b>{money(Number(returnInvoice.sale.total_amount))}</b></p>
+                    <p style={{ margin: 0 }}><small style={{ color: '#64748b', display: 'block' }}>Payment Method</small> <b>{returnInvoice.sale.payment_method}</b></p>
+                  </div>
+                </div>
                 <div className="return-item-list">
                   {returnInvoice.items.map((item) => {
                     const available = Math.max(0, Number(item.quantity) - Number(item.returned_quantity || 0));
-                    return <label key={item.sale_item_id}><span><b>{item.product_name}</b><small>Available to return: {formatQty(available, item.unit)}</small></span><input type="number" min="0" max={available} step={item.unit?.toLowerCase() === 'l' ? '0.25' : '1'} value={returnQuantities[item.sale_item_id] || ''} onChange={(event) => setReturnQuantities((current) => ({ ...current, [item.sale_item_id]: event.target.value }))} placeholder="Qty" /></label>;
+                    return <label key={item.sale_item_id}><span><b>{item.product_name}</b><small>Available to return: {formatQty(available, item.unit)}</small><small style={{display: 'block', color: '#334155'}}>{money(Number(item.price_at_time))} each</small></span><input type="number" min="0" max={available} step={item.unit?.toLowerCase() === 'l' ? '0.25' : '1'} value={returnQuantities[item.sale_item_id] || ''} onChange={(event) => setReturnQuantities((current) => ({ ...current, [item.sale_item_id]: event.target.value }))} placeholder="Qty" /></label>;
                   })}
                 </div>
                 <label>Resolution<select value={returnResolution} onChange={(event) => setReturnResolution(event.target.value)}><option>Cash</option><option>Card</option><option>Bank Transfer</option><option>Credit Adjustment</option><option>Exchange</option></select></label>
