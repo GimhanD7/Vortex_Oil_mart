@@ -1149,6 +1149,9 @@ body {
 .discount-row em{height:38px;border:1px solid #dfe4ea;border-left:0;border-radius:0 7px 7px 0;display:grid;place-items:center;font-style:normal;color:#667085;background:#f8fafc}
 .revoke-inline{height:34px;border:1px solid #fecaca;border-radius:8px;background:#fff1f1;color:#dc2626;padding:0 12px;font-family:inherit;font-size:13px;font-weight:700;line-height:1;letter-spacing:0;display:inline-flex;align-items:center;justify-content:center;gap:7px;margin:-2px 0 12px;cursor:pointer}
 .customer-bar aside .clear{border-color:#fecaca;background:#fff1f1;color:#dc2626;font-family:inherit;font-size:13px;font-weight:700;line-height:1;letter-spacing:0;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.customer-bar{grid-template-columns:1fr auto}
+.cart-title button{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;color:#dc2626;border-color:#fecaca;background:#fff7f7}
+.cart-title button:disabled{color:#9ca3af;border-color:#e5e7eb;background:#f9fafb;cursor:not-allowed}
 .cash-modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:120;display:grid;place-items:center;padding:20px}
 .cash-modal{width:min(410px,100%);background:#fff;border-radius:12px;border:1px solid #dfe4ea;box-shadow:0 24px 60px rgba(15,23,42,.24);padding:22px;display:grid;gap:14px}
 .cash-modal-total,.cash-return{border:1px solid #e5e7eb;border-radius:9px;padding:13px;display:flex;align-items:center;justify-content:space-between}

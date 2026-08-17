@@ -573,7 +573,7 @@ export default function PosBilling() {
     setCart((current) => current.filter((cartItem) => cartItem.id !== item.id));
   };
 
-  const voidCurrentSale = () => {
+  const clearCurrentCart = () => {
     if (!cart.length) return;
     setCart([]);
     setDiscountRate("0");
@@ -1139,9 +1139,6 @@ export default function PosBilling() {
               ) : (
                 <span className="cashier-shift-chip"><Banknote size={15} aria-hidden="true" /> Opening Cash {money(cashCycle?.openingBalance || 0)}</span>
               )}
-              <aside>
-                <button className="clear" onClick={voidCurrentSale}><Trash2 size={16} aria-hidden="true" /> Void Sale</button>
-              </aside>
             </div>
 
             {selectedCustomer && (
@@ -1189,6 +1186,9 @@ export default function PosBilling() {
           <aside className="cart-pane">
             <div className="cart-title">
               <h2>Current Cart <small>({cart.length} Items)</small></h2>
+              <button type="button" onClick={clearCurrentCart} disabled={!cart.length}>
+                <Trash2 size={14} aria-hidden="true" /> Clear
+              </button>
             </div>
 
             <div className="cart-items">
