@@ -13,6 +13,8 @@ type BreakdownRow = { brand?: string | null; category?: string | null; payment_m
 type PurchaseRow = { date: string; supplier: string; payment_method: string; purchases: string | number; total: string | number };
 type MovementRow = { movement_type: string; transactions: string | number; quantity: string | number; value: string | number };
 type RevocationRow = { created_at: string; sale_id: number | null; action_type: string; reason: string; affected_amount: string | number; cashier: string; approver: string };
+type CreditCollectionRow = { payment_method: string; payments: string | number; total: string | number };
+type ReceivableRow = { customer_id: number; customer: string; credit_limit: string | number; outstanding_balance: string | number; available_credit: string | number; account_status: string };
 
 type SelectedReport = {
   period: "daily" | "monthly" | "yearly";
@@ -29,6 +31,8 @@ type SelectedReport = {
   categories: BreakdownRow[];
   staff: BreakdownRow[];
   payment_methods: BreakdownRow[];
+  credit_collections: CreditCollectionRow[];
+  receivables: ReceivableRow[];
   purchases: PurchaseRow[];
   inventory_movements: MovementRow[];
   revocations: RevocationRow[];
@@ -57,6 +61,8 @@ const fallbackSelected: SelectedReport = {
   categories: [],
   staff: [],
   payment_methods: [],
+  credit_collections: [],
+  receivables: [],
   purchases: [],
   inventory_movements: [],
   revocations: [],
@@ -540,6 +546,18 @@ export default function ReportsPage() {
           </section>
 
           <section className="report-breakdown-grid">
+            <TablePanel title="Credit Collections">
+              <table><thead><tr><th>Method</th><th>Payments</th><th>Collected</th></tr></thead><tbody>
+                {selected.credit_collections.map((row) => <tr key={row.payment_method}><td>{row.payment_method}</td><td>{row.payments}</td><td>{money(row.total)}</td></tr>)}
+                {!selected.credit_collections.length && <tr><td colSpan={3}>No credit collections for this period.</td></tr>}
+              </tbody></table>
+            </TablePanel>
+            <TablePanel title="Customer Receivables">
+              <table><thead><tr><th>Customer</th><th>Limit</th><th>Outstanding</th><th>Available</th><th>Status</th></tr></thead><tbody>
+                {selected.receivables.map((row) => <tr key={row.customer_id}><td>{row.customer}</td><td>{money(row.credit_limit)}</td><td>{money(row.outstanding_balance)}</td><td>{money(row.available_credit)}</td><td>{row.account_status}</td></tr>)}
+                {!selected.receivables.length && <tr><td colSpan={5}>No customer credit accounts.</td></tr>}
+              </tbody></table>
+            </TablePanel>
             <TablePanel title="Payment Methods">
               <table><thead><tr><th>Method</th><th>Orders</th><th>Total</th></tr></thead><tbody>
                 {selected.payment_methods.map((row) => <tr key={row.payment_method}><td>{row.payment_method}</td><td>{row.orders}</td><td>{money(row.total)}</td></tr>)}

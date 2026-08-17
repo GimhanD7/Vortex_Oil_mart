@@ -1,6 +1,7 @@
 <?php
 global $pdo, $inputData, $id, $method;
 $user = requireAuth(); // Require auth for sales
+require_once __DIR__ . '/../credit.php';
 
 $salesColumns = [
     'payment_method', 'status', 'customer_id', 'subtotal_amount', 'discount_rate',
@@ -99,7 +100,6 @@ function supervisorApproval() {
 
 function recordRevocation($saleId, $actionType, $cashierId, $approverId, $reason, $affectedAmount, $metadata = []) {
     global $pdo;
-    ensureRevocationAuditTable();
 
     $stmt = $pdo->prepare("
         INSERT INTO transaction_revocations
@@ -143,6 +143,7 @@ if ($method === 'POST' && $id === 'revocations') {
     try {
         ensureSalesColumns();
         ensureRevocationAuditTable();
+        ensureCreditAccountTables();
 
         $actionType = isset($inputData['action_type']) ? trim($inputData['action_type']) : '';
         $reason = isset($inputData['reason']) ? trim($inputData['reason']) : '';
@@ -281,6 +282,7 @@ if ($method === 'GET' && !$id) {
 if ($method === 'POST' && !$id) {
     try {
         ensureSalesColumns();
+        ensureCreditAccountTables();
         
         $cashier_id = isset($inputData['cashier_id']) ? (int)$inputData['cashier_id'] : 0;
         $customer_id = !empty($inputData['customer_id']) ? (int)$inputData['customer_id'] : null;
@@ -331,6 +333,40 @@ if ($method === 'POST' && !$id) {
         $taxAmount = 0;
         $totalAmount = max(0, $subtotalAmount - $discountAmount);
 
+        $customerCredit = null;
+        if ($payment_method === 'Credit') {
+            if (!$customer_id) {
+                throw new Exception('Select a customer before using Credit payment');
+            }
+
+            $stmt = $pdo->prepare('
+                SELECT id, name, status, credit_limit, outstanding_balance
+                FROM customers
+                WHERE id = ?
+                FOR UPDATE
+            ');
+            $stmt->execute([$customer_id]);
+            $customerCredit = $stmt->fetch();
+
+            if (!$customerCredit) {
+                throw new Exception('Selected customer was not found');
+            }
+            if (strtolower((string)$customerCredit['status']) !== 'active') {
+                throw new Exception('Credit is available only for active customers');
+            }
+
+            $creditLimit = (float)$customerCredit['credit_limit'];
+            $outstandingBalance = (float)$customerCredit['outstanding_balance'];
+            $availableCredit = max(0, $creditLimit - $outstandingBalance);
+
+            if ($creditLimit <= 0) {
+                throw new Exception('This customer does not have an approved credit limit');
+            }
+            if ($totalAmount > $availableCredit + 0.001) {
+                throw new Exception('Insufficient customer credit. Available credit is Rs. ' . number_format($availableCredit, 2));
+            }
+        }
+
         $stmt = $pdo->prepare("
             INSERT INTO sales
             (cashier_id, customer_id, subtotal_amount, discount_rate, discount_amount,
@@ -346,8 +382,31 @@ if ($method === 'POST' && !$id) {
         $saleId = $pdo->lastInsertId();
 
         if ($customer_id) {
-            $stmt = $pdo->prepare('UPDATE customers SET total_purchases = total_purchases + ? WHERE id = ?');
-            $stmt->execute([$totalAmount, $customer_id]);
+            if ($payment_method === 'Credit') {
+                $stmt = $pdo->prepare('
+                    UPDATE customers
+                    SET total_purchases = total_purchases + ?,
+                        outstanding_balance = outstanding_balance + ?
+                    WHERE id = ?
+                ');
+                $stmt->execute([$totalAmount, $totalAmount, $customer_id]);
+                $newOutstandingBalance = (float)$customerCredit['outstanding_balance'] + $totalAmount;
+                addCreditLedgerEntry(
+                    $customer_id,
+                    'credit_sale',
+                    $totalAmount,
+                    0,
+                    $newOutstandingBalance,
+                    $saleId,
+                    null,
+                    "INV-{$saleId}",
+                    'Credit sale posted to customer account',
+                    $cashier_id
+                );
+            } else {
+                $stmt = $pdo->prepare('UPDATE customers SET total_purchases = total_purchases + ? WHERE id = ?');
+                $stmt->execute([$totalAmount, $customer_id]);
+            }
         }
 
         foreach ($items as $item) {
@@ -390,7 +449,13 @@ if ($method === 'POST' && !$id) {
             "tax_amount" => $taxAmount,
             "total_amount" => $totalAmount,
             "payment_method" => $payment_method,
-            "status" => "completed"
+            "status" => "completed",
+            "customer_credit" => $payment_method === 'Credit' ? [
+                "customer_id" => $customer_id,
+                "credit_limit" => (float)$customerCredit['credit_limit'],
+                "outstanding_balance" => (float)$customerCredit['outstanding_balance'] + $totalAmount,
+                "available_credit" => max(0, (float)$customerCredit['credit_limit'] - (float)$customerCredit['outstanding_balance'] - $totalAmount)
+            ] : null
         ], 201);
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
@@ -700,6 +765,7 @@ if ($method === 'PATCH' && $id) {
     try {
         ensureSalesColumns();
         ensureRevocationAuditTable();
+        ensureCreditAccountTables();
 
         $action = isset($inputData['action']) ? $inputData['action'] : null;
         if (!in_array($action, ['refund', 'void'])) {
@@ -762,8 +828,38 @@ if ($method === 'PATCH' && $id) {
         }
 
         if (!empty($sale['customer_id'])) {
-            $stmt = $pdo->prepare('UPDATE customers SET total_purchases = GREATEST(0, total_purchases - ?) WHERE id = ?');
-            $stmt->execute([(float)$sale['total_amount'], $sale['customer_id']]);
+            if ($sale['payment_method'] === 'Credit') {
+                $allocatedAmount = activeCreditAllocationsForSale($id);
+                if ($allocatedAmount > 0.001) {
+                    throw new Exception('Reverse the customer payment allocation before refunding or voiding this credit invoice');
+                }
+                $customerStmt = $pdo->prepare('SELECT outstanding_balance FROM customers WHERE id = ? FOR UPDATE');
+                $customerStmt->execute([$sale['customer_id']]);
+                $customerBalance = (float)$customerStmt->fetchColumn();
+                $nextCustomerBalance = max(0, $customerBalance - (float)$sale['total_amount']);
+                $stmt = $pdo->prepare('
+                    UPDATE customers
+                    SET total_purchases = GREATEST(0, total_purchases - ?),
+                        outstanding_balance = GREATEST(0, outstanding_balance - ?)
+                    WHERE id = ?
+                ');
+                $stmt->execute([(float)$sale['total_amount'], (float)$sale['total_amount'], $sale['customer_id']]);
+                addCreditLedgerEntry(
+                    $sale['customer_id'],
+                    $action === 'refund' ? 'credit_sale_refund' : 'credit_sale_void',
+                    0,
+                    (float)$sale['total_amount'],
+                    $nextCustomerBalance,
+                    $id,
+                    null,
+                    strtoupper($action) . "-{$id}",
+                    $action === 'refund' ? 'Credit invoice refunded' : 'Credit invoice voided',
+                    $user['id']
+                );
+            } else {
+                $stmt = $pdo->prepare('UPDATE customers SET total_purchases = GREATEST(0, total_purchases - ?) WHERE id = ?');
+                $stmt->execute([(float)$sale['total_amount'], $sale['customer_id']]);
+            }
         }
 
         $nextStatus = $action === 'refund' ? 'refunded' : 'voided';

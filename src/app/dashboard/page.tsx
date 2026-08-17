@@ -72,6 +72,10 @@ type Customer = {
   name: string;
   phone: string | null;
   customer_type: string;
+  status?: string;
+  credit_limit?: string | number;
+  outstanding_balance?: string | number;
+  total_purchases?: string | number;
 };
 
 type CartItem = Product & { cartQuantity: number };
@@ -125,7 +129,7 @@ const defaultPosSettings: PosSettings = {
   invoice_footer: "Thank you for your visit. Drive safe. Stay protected.",
   invoice_logo_text: "OM",
   invoice_print_style: "Dot Matrix",
-  payment_methods: ["Cash", "Card", "Bank Transfer"],
+  payment_methods: ["Cash", "Card", "Bank Transfer", "Credit"],
 };
 
 type CashCycle = {
@@ -149,6 +153,8 @@ type LastInvoice = {
   cashReceived?: number;
   cashBalance?: number;
   cycleId?: string;
+  creditOutstanding?: number;
+  creditAvailable?: number;
 };
 
 type RevocationApproval = {
@@ -186,8 +192,15 @@ type SummaryTotals = {
   cashSales: number;
   cardSales: number;
   bankSales: number;
+  creditSales: number;
   discount: number;
   tax: number;
+};
+
+type CreditCollectionTotals = {
+  Cash: number;
+  Card: number;
+  "Bank Transfer": number;
 };
 
 function money(value: number) {
@@ -258,9 +271,10 @@ function calculateSummary(rows: SaleSummaryRow[], cashCycle: CashCycle | null): 
       if (row.payment_method === "Cash") totals.cashSales += totalAmount;
       if (row.payment_method === "Card") totals.cardSales += totalAmount;
       if (row.payment_method === "Bank Transfer") totals.bankSales += totalAmount;
+      if (row.payment_method === "Credit") totals.creditSales += totalAmount;
       return totals;
     },
-    { invoiceCount: 0, itemCount: 0, totalSales: 0, cashSales: 0, cardSales: 0, bankSales: 0, discount: 0, tax: 0 }
+    { invoiceCount: 0, itemCount: 0, totalSales: 0, cashSales: 0, cardSales: 0, bankSales: 0, creditSales: 0, discount: 0, tax: 0 }
   );
 }
 
@@ -315,6 +329,13 @@ export default function PosBilling() {
   const [approverUsername, setApproverUsername] = useState("");
   const [approverPin, setApproverPin] = useState("");
   const [revocationSaving, setRevocationSaving] = useState(false);
+  const [creditCollectionTotals, setCreditCollectionTotals] = useState<CreditCollectionTotals>({ Cash: 0, Card: 0, "Bank Transfer": 0 });
+  const [showCreditPaymentModal, setShowCreditPaymentModal] = useState(false);
+  const [creditPaymentAmount, setCreditPaymentAmount] = useState("");
+  const [creditPaymentMethod, setCreditPaymentMethod] = useState("Cash");
+  const [creditPaymentReference, setCreditPaymentReference] = useState("");
+  const [creditPaymentNotes, setCreditPaymentNotes] = useState("");
+  const [creditPaymentSaving, setCreditPaymentSaving] = useState(false);
 
   const fetchProducts = async () => {
     const response = await fetch("/api/products", { cache: "no-store" });
@@ -345,8 +366,23 @@ export default function PosBilling() {
     const data = await response.json();
     const rows = Array.isArray(data) ? data as SaleSummaryRow[] : [];
     setSummaryRows(rows);
+    const collectionParams = new URLSearchParams({ date: currentBusinessDate });
+    if (cashCycle?.id) collectionParams.set("sales_cycle_id", cashCycle.id);
+    try {
+      const collectionResponse = await fetch(`/api/customers/credit-collections?${collectionParams.toString()}`, { cache: "no-store" });
+      const collectionData = await collectionResponse.json();
+      if (collectionResponse.ok && collectionData.totals) {
+        setCreditCollectionTotals({
+          Cash: Number(collectionData.totals.Cash || 0),
+          Card: Number(collectionData.totals.Card || 0),
+          "Bank Transfer": Number(collectionData.totals["Bank Transfer"] || 0),
+        });
+      }
+    } catch {
+      setCreditCollectionTotals({ Cash: 0, Card: 0, "Bank Transfer": 0 });
+    }
     return rows;
-  }, [currentBusinessDate, user]);
+  }, [cashCycle, currentBusinessDate, user]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(new Date()), 1000);
@@ -442,6 +478,10 @@ export default function PosBilling() {
   const normalizedDiscountRate = Math.min(100, Math.max(0, Number(discountRate || 0)));
   const discount = subtotal * (Number.isFinite(normalizedDiscountRate) ? normalizedDiscountRate / 100 : 0);
   const total = Math.max(0, subtotal - discount);
+  const selectedCustomer = customers.find((customer) => customer.id === customerId);
+  const customerCreditLimit = Number(selectedCustomer?.credit_limit || 0);
+  const customerOutstanding = Number(selectedCustomer?.outstanding_balance || 0);
+  const customerAvailableCredit = Math.max(0, customerCreditLimit - customerOutstanding);
   const summaryTotals = useMemo(() => {
     return calculateSummary(summaryRows, cashCycle);
   }, [cashCycle, summaryRows]);
@@ -693,9 +733,81 @@ export default function PosBilling() {
     }
   };
 
+  const openCreditPayment = () => {
+    if (!selectedCustomer || customerOutstanding <= 0) return;
+    setCreditPaymentAmount(customerOutstanding.toFixed(2));
+    setCreditPaymentMethod("Cash");
+    setCreditPaymentReference("");
+    setCreditPaymentNotes("");
+    setShowCreditPaymentModal(true);
+  };
+
+  const receiveCreditPayment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedCustomer) return;
+    const amount = Number(creditPaymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > customerOutstanding) {
+      showToast({ type: "warning", title: "Invalid payment", message: `Enter an amount up to ${money(customerOutstanding)}.` });
+      return;
+    }
+    setCreditPaymentSaving(true);
+    try {
+      const response = await fetch(`/api/customers/${selectedCustomer.id}/payments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount,
+          payment_method: creditPaymentMethod,
+          reference_number: creditPaymentReference,
+          notes: creditPaymentNotes,
+          sales_cycle_id: cashCycle?.id || null,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to receive credit payment");
+
+      const customerResponse = await fetch("/api/customers", { cache: "no-store" });
+      const customerData = await customerResponse.json();
+      if (Array.isArray(customerData)) setCustomers(customerData);
+      setShowCreditPaymentModal(false);
+      await loadCashierSummary();
+      showToast({
+        type: "success",
+        title: "Credit payment received",
+        message: `${money(amount)} received by ${creditPaymentMethod}. Receipt PAY-${data.payment_id}.`,
+      });
+    } catch (error) {
+      showToast({ type: "error", title: "Payment failed", message: error instanceof Error ? error.message : "Unable to receive credit payment." });
+    } finally {
+      setCreditPaymentSaving(false);
+    }
+  };
+
   const completeSale = () => {
     if (!cart.length) return;
     setNotice("");
+    if (payment === "Credit") {
+      if (!selectedCustomer) {
+        const message = "Select a customer before using Credit payment.";
+        showToast({ type: "warning", title: "Customer required", message });
+        return;
+      }
+      if ((selectedCustomer.status || "Active").toLowerCase() !== "active") {
+        const message = "Credit is available only for active customers.";
+        showToast({ type: "warning", title: "Credit unavailable", message });
+        return;
+      }
+      if (customerCreditLimit <= 0) {
+        const message = "This customer does not have an approved credit limit.";
+        showToast({ type: "warning", title: "Credit unavailable", message });
+        return;
+      }
+      if (total > customerAvailableCredit) {
+        const message = `Available customer credit is ${money(customerAvailableCredit)}.`;
+        showToast({ type: "warning", title: "Insufficient credit", message });
+        return;
+      }
+    }
     if (payment === "Cash") {
       setCashReceived(total ? total.toFixed(2) : "");
       setShowCashModal(true);
@@ -738,7 +850,7 @@ export default function PosBilling() {
       const data = await response.json();
 
       if (response.ok) {
-        const selectedCustomer = customers.find((customer) => customer.id === customerId);
+        const invoiceCustomer = customers.find((customer) => customer.id === customerId);
         setLastInvoice({
           id: data.saleId,
           date: new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
@@ -748,17 +860,26 @@ export default function PosBilling() {
           discountRate: normalizedDiscountRate,
           tax: 0,
           total,
-          customerName: selectedCustomer ? selectedCustomer.name : "Walk-in Customer",
+          customerName: invoiceCustomer ? invoiceCustomer.name : "Walk-in Customer",
           paymentMethod: payment,
           cashReceived: payment === "Cash" ? cashAmount : undefined,
           cashBalance: payment === "Cash" && cashAmount !== undefined ? cashAmount - total : undefined,
           cycleId: cashCycle?.id,
+          creditOutstanding: data.customer_credit?.outstanding_balance,
+          creditAvailable: data.customer_credit?.available_credit,
         });
         setNotice("Sale completed successfully.");
         showToast({ type: "success", title: "Sale completed", message: "Sale completed successfully." });
         setCart([]);
         setShowCashModal(false);
         setCashReceived("");
+        if (data.customer_credit) {
+          setCustomers((current) => current.map((customer) => customer.id === data.customer_credit.customer_id ? {
+            ...customer,
+            outstanding_balance: data.customer_credit.outstanding_balance,
+            total_purchases: Number(customer.total_purchases || 0) + total,
+          } : customer));
+        }
         setProducts(await fetchProducts());
         await loadCashierSummary();
         setSummaryRefresh((current) => current + 1);
@@ -794,7 +915,7 @@ export default function PosBilling() {
   const hasValidCashReceived = Number.isFinite(cashReceivedAmount);
   const cashReturn = hasValidCashReceived ? cashReceivedAmount - total : -total;
   const activeSummaryRange = summaryRange(new Date(`${currentBusinessDate}T00:00:00`));
-  const expectedClosingCash = (cashCycle?.openingBalance || 0) + summaryTotals.cashSales;
+  const expectedClosingCash = (cashCycle?.openingBalance || 0) + summaryTotals.cashSales + creditCollectionTotals.Cash;
   const closingBalanceAmount = Number(closingBalance);
   const hasValidClosingBalance = Number.isFinite(closingBalanceAmount);
   const closingDifference = hasValidClosingBalance ? closingBalanceAmount - expectedClosingCash : 0;
@@ -1023,6 +1144,16 @@ export default function PosBilling() {
               </aside>
             </div>
 
+            {selectedCustomer && (
+              <div className={`customer-credit-strip${payment === "Credit" ? " active" : ""}`}>
+                <span><CreditCard size={16} aria-hidden="true" /> {selectedCustomer.name}</span>
+                <small>Credit limit <b>{money(customerCreditLimit)}</b></small>
+                <small>Outstanding <b>{money(customerOutstanding)}</b></small>
+                <small>Available <b>{money(customerAvailableCredit)}</b></small>
+                <button type="button" onClick={openCreditPayment} disabled={customerOutstanding <= 0}><Banknote size={14} aria-hidden="true" /> Receive Payment</button>
+              </div>
+            )}
+
             {isCashier && (
               <section className="cashier-summary-card">
                 <header>
@@ -1038,6 +1169,10 @@ export default function PosBilling() {
                   <p><small>Cash Sales</small><b>{money(summaryTotals.cashSales)}</b></p>
                   <p><small>Card</small><b>{money(summaryTotals.cardSales)}</b></p>
                   <p><small>Bank Transfer</small><b>{money(summaryTotals.bankSales)}</b></p>
+                  <p><small>Credit Sales</small><b>{money(summaryTotals.creditSales)}</b></p>
+                  <p><small>Credit Cash Collected</small><b>{money(creditCollectionTotals.Cash)}</b></p>
+                  <p><small>Credit Card Collected</small><b>{money(creditCollectionTotals.Card)}</b></p>
+                  <p><small>Credit Bank Collected</small><b>{money(creditCollectionTotals["Bank Transfer"])}</b></p>
                   <p><small>Discount</small><b>{money(summaryTotals.discount)}</b></p>
                   <p><small>Expected Cash</small><b>{money(expectedClosingCash)}</b></p>
                 </div>
@@ -1123,6 +1258,13 @@ export default function PosBilling() {
                   );
                 })}
               </div>
+              {payment === "Credit" && (
+                <p className={`credit-payment-note${selectedCustomer && total <= customerAvailableCredit && customerCreditLimit > 0 ? " valid" : ""}`}>
+                  {selectedCustomer
+                    ? `Available credit: ${money(customerAvailableCredit)} · After sale: ${money(Math.max(0, customerAvailableCredit - total))}`
+                    : "Select an approved customer to complete a credit sale."}
+                </p>
+              )}
               <button className="complete-sale" onClick={completeSale} disabled={!cart.length || checking}>
                 <Receipt size={17} aria-hidden="true" /> {checking ? "Processing Sale..." : "Complete Sale"}
               </button>
@@ -1182,6 +1324,12 @@ export default function PosBilling() {
                       <p>Balance Returned <b>{money(lastInvoice.cashBalance || 0)}</b></p>
                     </>
                   )}
+                  {lastInvoice.paymentMethod === "Credit" && (
+                    <>
+                      <p>Outstanding Balance <b>{money(lastInvoice.creditOutstanding || 0)}</b></p>
+                      <p>Available Credit <b>{money(lastInvoice.creditAvailable || 0)}</b></p>
+                    </>
+                  )}
                   <h3>Total <b>{money(lastInvoice.total)}</b></h3>
                 </div>
                 <small className="thanks">
@@ -1204,6 +1352,25 @@ export default function PosBilling() {
               </div>
             )}
           </aside>
+          {showCreditPaymentModal && selectedCustomer && (
+            <div className="cash-modal-backdrop">
+              <form className="cash-modal credit-collection-modal" onSubmit={receiveCreditPayment}>
+                <div className="cash-modal-icon"><CreditCard size={24} aria-hidden="true" /></div>
+                <h2>Receive Credit Payment</h2>
+                <p>Record a full or partial settlement for {selectedCustomer.name}.</p>
+                <div className="cash-modal-total"><span>Outstanding Balance</span><b>{money(customerOutstanding)}</b></div>
+                <label>Payment Amount<input type="number" min="0.01" max={customerOutstanding} step="0.01" value={creditPaymentAmount} onChange={(event) => setCreditPaymentAmount(event.target.value)} autoFocus /></label>
+                <label>Payment Method<select value={creditPaymentMethod} onChange={(event) => setCreditPaymentMethod(event.target.value)}><option>Cash</option><option>Card</option><option>Bank Transfer</option></select></label>
+                <label>Reference Number<input value={creditPaymentReference} onChange={(event) => setCreditPaymentReference(event.target.value)} placeholder="Receipt, card, or bank reference" /></label>
+                <label>Notes<input value={creditPaymentNotes} onChange={(event) => setCreditPaymentNotes(event.target.value)} placeholder="Optional notes" /></label>
+                <div className="cash-return"><span>Balance After Payment</span><b>{money(Math.max(0, customerOutstanding - Number(creditPaymentAmount || 0)))}</b></div>
+                <footer>
+                  <button type="button" onClick={() => setShowCreditPaymentModal(false)}>Cancel</button>
+                  <button type="submit" disabled={creditPaymentSaving || Number(creditPaymentAmount) <= 0 || Number(creditPaymentAmount) > customerOutstanding}><Receipt size={16} aria-hidden="true" /> {creditPaymentSaving ? "Recording..." : "Receive & Issue Receipt"}</button>
+                </footer>
+              </form>
+            </div>
+          )}
           {showCashModal && (
             <div className="cash-modal-backdrop">
               <form

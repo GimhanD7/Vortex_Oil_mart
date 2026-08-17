@@ -655,6 +655,35 @@ body {
 .cart-items article p b,.product-grid h3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .payments>div{grid-template-columns:repeat(3,minmax(0,1fr))}
 .payments>div button span{display:grid;place-items:center;font-size:0}
+.customer-credit-strip{margin-top:8px;padding:9px 12px;border:1px solid #dbe3ec;border-radius:8px;background:#fff;display:flex;align-items:center;gap:18px;color:#52606f;font-size:12px}
+.customer-credit-strip.active{border-color:#e8ad00;background:#fffaf0}
+.customer-credit-strip>span{display:flex;align-items:center;gap:7px;color:#172033;font-weight:700;margin-right:auto}
+.customer-credit-strip small{white-space:nowrap}
+.customer-credit-strip b{color:#172033;margin-left:3px}
+.customer-credit-strip>button{height:30px;border:1px solid #e5a900;border-radius:6px;background:#fffbeb;color:#805b00;padding:0 10px;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;white-space:nowrap}
+.customer-credit-strip>button:disabled{opacity:.45;cursor:not-allowed}
+.credit-payment-note{grid-column:1/-1;margin-top:9px;padding:9px 11px;border-radius:7px;background:#fff1f2;color:#b42318;font-size:12px;line-height:1.4}
+.credit-payment-note.valid{background:#ecfdf3;color:#067647}
+.credit-collection-modal select{width:100%;height:42px;border:1px solid #dfe2e5;border-radius:7px;padding:0 11px;background:#fff;font:inherit}
+.crm-layout{grid-template-columns:minmax(650px,1fr) 430px}
+.customer-actions{grid-template-columns:repeat(5,1fr)}
+.customer-actions button:disabled{opacity:.45;cursor:not-allowed}
+.customer-credit-account>header{display:flex;align-items:center;margin-bottom:10px}
+.customer-credit-account>header h3{display:flex;align-items:center;gap:7px;margin:0}
+.customer-credit-account>header button{margin-left:auto;border:1px solid #dfe4ea;background:#fff;border-radius:6px;padding:5px 8px;display:flex;align-items:center;gap:5px;font-size:10px}
+.credit-account-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:13px}
+.credit-account-totals p{display:grid!important;gap:5px;padding:8px;border-radius:6px;background:#f8fafc;margin:0!important}
+.credit-account-totals p b{margin:0!important;font-size:11px}
+.customer-credit-account h4{font-size:11px;margin:12px 0 7px}
+.credit-account-table{overflow:auto;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:10px}
+.credit-account-table table{width:100%;min-width:390px;border-collapse:collapse;font-size:9px}
+.credit-account-table th,.credit-account-table td{padding:6px;border-bottom:1px solid #edf0f2;text-align:left;white-space:nowrap}
+.credit-account-table td button{border:0;background:#fff;color:#dc2626;display:grid;place-items:center}
+.credit-payment-form select{height:42px;border:1px solid #dfe2e5;border-radius:7px;padding:0 11px;background:#fff;font:inherit}
+.credit-payment-summary{display:grid!important;grid-template-columns:1fr!important;gap:5px!important;padding:12px;border-radius:8px;background:#fff8e5}
+.credit-payment-summary span{font-weight:800}
+.credit-payment-summary p{display:flex;justify-content:space-between;font-size:12px}
+@media(max-width:1300px){.crm-layout{grid-template-columns:minmax(600px,1fr) 350px}.customer-actions{grid-template-columns:repeat(3,1fr)}}
 .complete-sale{justify-content:center}
 
 .purchase-actions{display:flex;align-items:center;gap:6px}

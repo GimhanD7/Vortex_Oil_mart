@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { cachedFetch } from "@/lib/api-client";
 import { useToast } from "@/components/ToastProvider";
-import { Edit3, Phone, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { Banknote, CreditCard, Edit3, Phone, RefreshCw, RotateCcw, Search, Trash2, X } from "lucide-react";
 
 type Customer = {
   id: number;
@@ -30,6 +30,13 @@ type FormState = {
   credit_limit: string;
   outstanding_balance: string;
   total_purchases: string;
+};
+
+type CreditAccount = {
+  customer: Customer & { available_credit: string | number };
+  payments: Array<{ id: number; amount: string | number; payment_method: string; payment_date: string; reference_number?: string | null; status: string; received_by_name?: string | null }>;
+  ledger: Array<{ id: number; transaction_type: string; debit_amount: string | number; credit_amount: string | number; balance_after: string | number; reference_number?: string | null; created_at: string }>;
+  invoices: Array<{ id: number; created_at: string; total_amount: string | number; paid_amount: string | number; due_amount: string | number; status: string }>;
 };
 
 const emptyForm: FormState = {
@@ -81,6 +88,31 @@ export default function CustomersPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [, setError] = useState("");
+  const [creditAccount, setCreditAccount] = useState<CreditAccount | null>(null);
+  const [creditLoading, setCreditLoading] = useState(false);
+  const [paymentModal, setPaymentModal] = useState(false);
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({ amount: "", payment_method: "Cash", reference_number: "", notes: "" });
+
+  const loadCreditAccount = useCallback(async (customerId: number) => {
+    setCreditLoading(true);
+    try {
+      const response = await fetch(`/api/customers/${customerId}/credit`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load credit account");
+      setCreditAccount(data);
+    } catch (error) {
+      setCreditAccount(null);
+      showToast({ type: "error", title: "Credit account failed", message: error instanceof Error ? error.message : "Unable to load credit account." });
+    } finally {
+      setCreditLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (selected) void loadCreditAccount(selected.id);
+    else setCreditAccount(null);
+  }, [loadCreditAccount, selected]);
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
@@ -206,6 +238,61 @@ export default function CustomersPage() {
     });
   };
 
+  const openPayment = () => {
+    if (!selected) return;
+    setPaymentForm({ amount: numericText(selected.outstanding_balance), payment_method: "Cash", reference_number: "", notes: "" });
+    setPaymentModal(true);
+  };
+
+  const receivePayment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selected) return;
+    setPaymentSaving(true);
+    try {
+      const response = await fetch(`/api/customers/${selected.id}/payments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...paymentForm, amount: Number(paymentForm.amount) }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to record payment");
+      setPaymentModal(false);
+      await loadCustomers();
+      await loadCreditAccount(selected.id);
+      showToast({ type: "success", title: "Payment received", message: `${money(paymentForm.amount)} received successfully.` });
+    } catch (error) {
+      showToast({ type: "error", title: "Payment failed", message: error instanceof Error ? error.message : "Unable to record payment." });
+    } finally {
+      setPaymentSaving(false);
+    }
+  };
+
+  const reversePayment = (paymentId: number) => {
+    if (!selected) return;
+    showToast({
+      type: "warning",
+      title: "Reverse this payment?",
+      message: "The amount will be added back to the customer outstanding balance.",
+      duration: 0,
+      actionLabel: "Reverse",
+      onAction: async () => {
+        const response = await fetch(`/api/customers/${selected.id}/payment-reversal`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ payment_id: paymentId, reason: "Payment entry reversed by administrator" }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          showToast({ type: "error", title: "Reversal failed", message: data.error || "Unable to reverse payment." });
+          return;
+        }
+        await loadCustomers();
+        await loadCreditAccount(selected.id);
+        showToast({ type: "success", title: "Payment reversed", message: "Customer balance and invoice allocations were restored." });
+      },
+    });
+  };
+
   // KPIs
   const totalReceivables = customers.reduce((sum, c) => sum + numberValue(c.outstanding_balance), 0);
   const thisMonthSales = customers.reduce((sum, c) => sum + numberValue(c.total_purchases), 0); // Simplified for KPI
@@ -270,13 +357,14 @@ export default function CustomersPage() {
                   <th>Company / Notes</th>
                   <th>Total Purchases</th>
                   <th>Outstanding</th>
+                  <th>Available Credit</th>
                   <th>Status</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {loading && <tr><td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>Loading...</td></tr>}
-                {!loading && rows.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: '20px' }}>No customers found.</td></tr>}
+                {loading && <tr><td colSpan={8} style={{ textAlign: 'center', padding: '20px' }}>Loading...</td></tr>}
+                {!loading && rows.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', padding: '20px' }}>No customers found.</td></tr>}
                 {rows.map((c) => (
                   <tr key={c.id} className={selected?.id === c.id ? "selected" : ""} onClick={() => setSelected(c)} style={{ cursor: 'pointer' }}>
                     <td>
@@ -295,6 +383,7 @@ export default function CustomersPage() {
                     <td className={numberValue(c.outstanding_balance) > 0 ? "danger" : ""}>
                       {money(c.outstanding_balance)}
                     </td>
+                    <td>{money(Math.max(0, numberValue(c.credit_limit) - numberValue(c.outstanding_balance)))}</td>
                     <td>
                       <em className={c.status === "Inactive" ? "inactive" : ""}>{c.status}</em>
                     </td>
@@ -328,6 +417,7 @@ export default function CustomersPage() {
             </div>
             <div className="customer-actions">
               <button onClick={() => openEdit(selected)}><Edit3 size={17} aria-hidden="true" /><small>Edit</small></button>
+              <button onClick={openPayment} disabled={numberValue(selected.outstanding_balance) <= 0}><Banknote size={17} aria-hidden="true" /><small>Receive Payment</small></button>
               <button onClick={() => window.open(`tel:${selected.phone}`, '_self')}><Phone size={17} aria-hidden="true" /><small>Call</small></button>
               <button onClick={() => window.open(`https://wa.me/${selected.phone?.replace(/[^0-9]/g, '')}`, '_blank')}><WhatsAppIcon /><small>WhatsApp</small></button>
               <button className="danger-action" onClick={() => removeCustomer(selected)}><Trash2 size={17} aria-hidden="true" /><small>Delete</small></button>
@@ -344,10 +434,47 @@ export default function CustomersPage() {
               <div><dt>Customer Type</dt><dd>{selected.customer_type}</dd></div>
               <div><dt>Credit Limit</dt><dd>{money(selected.credit_limit)}</dd></div>
               <div><dt>Current Balance</dt><dd className={numberValue(selected.outstanding_balance) > 0 ? 'danger' : ''}>{money(selected.outstanding_balance)}</dd></div>
+              <div><dt>Available Credit</dt><dd>{money(Math.max(0, numberValue(selected.credit_limit) - numberValue(selected.outstanding_balance)))}</dd></div>
             </dl>
             <section>
               <h3>Purchase Summary</h3>
               <p>Total Purchases <b>{money(selected.total_purchases)}</b></p>
+            </section>
+            <section className="customer-credit-account">
+              <header>
+                <h3><CreditCard size={16} aria-hidden="true" /> Credit Account</h3>
+                <button onClick={() => void loadCreditAccount(selected.id)} disabled={creditLoading}><RefreshCw size={14} aria-hidden="true" /> Refresh</button>
+              </header>
+              {creditLoading && <p>Loading customer statement...</p>}
+              {!creditLoading && creditAccount && (
+                <>
+                  <div className="credit-account-totals">
+                    <p><small>Limit</small><b>{money(creditAccount.customer.credit_limit)}</b></p>
+                    <p><small>Outstanding</small><b>{money(creditAccount.customer.outstanding_balance)}</b></p>
+                    <p><small>Available</small><b>{money(creditAccount.customer.available_credit)}</b></p>
+                  </div>
+                  <h4>Credit Invoices</h4>
+                  <div className="credit-account-table">
+                    <table>
+                      <thead><tr><th>Invoice</th><th>Date</th><th>Total</th><th>Paid</th><th>Due</th></tr></thead>
+                      <tbody>
+                        {creditAccount.invoices.map((invoice) => <tr key={invoice.id}><td>INV-{String(invoice.id).padStart(6, "0")}</td><td>{new Date(invoice.created_at).toLocaleDateString()}</td><td>{money(invoice.total_amount)}</td><td>{money(invoice.paid_amount)}</td><td>{money(invoice.due_amount)}</td></tr>)}
+                        {!creditAccount.invoices.length && <tr><td colSpan={5}>No credit invoices.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                  <h4>Payment History</h4>
+                  <div className="credit-account-table">
+                    <table>
+                      <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Amount</th><th>Status</th><th /></tr></thead>
+                      <tbody>
+                        {creditAccount.payments.map((payment) => <tr key={payment.id}><td>{new Date(payment.payment_date).toLocaleDateString()}</td><td>{payment.payment_method}</td><td>{payment.reference_number || "-"}</td><td>{money(payment.amount)}</td><td>{payment.status}</td><td>{payment.status === "completed" && <button onClick={() => reversePayment(payment.id)} title="Reverse payment"><RotateCcw size={13} aria-hidden="true" /></button>}</td></tr>)}
+                        {!creditAccount.payments.length && <tr><td colSpan={6}>No payments recorded.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </section>
           </aside>
         )}
@@ -407,11 +534,11 @@ export default function CustomersPage() {
                 <>
                   <label>
                     Outstanding Balance (Rs.)
-                    <input type="number" step="0.01" value={form.outstanding_balance} onChange={e => setForm({ ...form, outstanding_balance: e.target.value })} />
+                    <input type="number" value={form.outstanding_balance} readOnly title="Managed by credit sales and payments" />
                   </label>
                   <label>
                     Total Purchases (Rs.)
-                    <input type="number" step="0.01" value={form.total_purchases} onChange={e => setForm({ ...form, total_purchases: e.target.value })} />
+                    <input type="number" value={form.total_purchases} readOnly title="Managed by completed sales" />
                   </label>
                 </>
               )}
@@ -423,6 +550,26 @@ export default function CustomersPage() {
                 {saving ? 'Saving...' : modal === 'add' ? 'Save Customer' : 'Update Customer'}
               </button>
             </footer>
+          </form>
+        </div>
+      )}
+
+      {paymentModal && selected && (
+        <div className="management-modal">
+          <form onSubmit={receivePayment} className="credit-payment-form">
+            <header>
+              <h2>Receive Credit Payment</h2>
+              <button type="button" onClick={() => setPaymentModal(false)} aria-label="Close payment form"><X size={18} aria-hidden="true" /></button>
+            </header>
+            <div className="credit-payment-summary">
+              <span>{selected.name}</span>
+              <p>Outstanding balance <b>{money(selected.outstanding_balance)}</b></p>
+            </div>
+            <label>Payment Amount (Rs.)<input type="number" min="0.01" max={numberValue(selected.outstanding_balance)} step="0.01" required value={paymentForm.amount} onChange={(event) => setPaymentForm({ ...paymentForm, amount: event.target.value })} /></label>
+            <label>Payment Method<select value={paymentForm.payment_method} onChange={(event) => setPaymentForm({ ...paymentForm, payment_method: event.target.value })}><option>Cash</option><option>Card</option><option>Bank Transfer</option></select></label>
+            <label>Reference Number<input value={paymentForm.reference_number} onChange={(event) => setPaymentForm({ ...paymentForm, reference_number: event.target.value })} placeholder="Receipt, card, or bank reference" /></label>
+            <label>Notes<textarea value={paymentForm.notes} onChange={(event) => setPaymentForm({ ...paymentForm, notes: event.target.value })} placeholder="Optional payment notes" /></label>
+            <footer><button type="button" onClick={() => setPaymentModal(false)}>Cancel</button><button className="gold-btn" disabled={paymentSaving}>{paymentSaving ? "Recording..." : "Receive Payment"}</button></footer>
           </form>
         </div>
       )}
