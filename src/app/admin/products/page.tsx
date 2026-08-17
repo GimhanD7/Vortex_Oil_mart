@@ -13,13 +13,14 @@ import {
   CloudRain,
   Cog,
   Columns3,
+  Disc3,
   Download,
   Eye,
   EyeOff,
+  Fan,
   Filter,
   Lightbulb,
   Link,
-  Package,
   PackageSearch,
   Pencil,
   Plus,
@@ -49,23 +50,47 @@ type Product = {
   visual?: string;
 };
 
-function CategoryIcon({ category, className = "" }: { category: string; className?: string }) {
+function OilBarrelIcon({ className = "", size = 22, color = "#f59e0b" }: { className?: string; size?: number; color?: string }) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <ellipse cx="12" cy="4.5" rx="7" ry="2.5" />
+      <path d="M5 4.5v15c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-15" />
+      <path d="M5 9h14M5 17h14" />
+    </svg>
+  );
+}
+
+function CategoryIcon({ category, productName = "", className = "" }: { category: string; productName?: string; className?: string }) {
   const props = { className: className || "catalog-icon", "aria-hidden": true, size: 22, strokeWidth: 1.9 };
   if (category === "All") return <PackageSearch {...props} color="#3b82f6" />;
-  const c = category.toLowerCase();
-  if (c.includes("engine") || c.includes("oil")) return <Package {...props} color="#f59e0b" />;
+  const c = `${productName} ${category}`.toLowerCase();
+  if (c.includes("barrel") || c.includes("drum")) return <OilBarrelIcon className={props.className} size={props.size} color="#d97706" />;
+  if (c.includes("coolant") || c.includes("coolent") || c.includes("cooler") || c.includes("coolor") || c.includes("radiator")) return <Fan {...props} color="#0ea5e9" />;
+  if (c.includes("engine") || c.includes("motor oil") || c.includes("oil")) return <OilBarrelIcon className={props.className} size={props.size} color="#f59e0b" />;
   if (c.includes("gear") || c.includes("lubricant") || c.includes("grease")) return <Cog {...props} color="#64748b" />;
   if (c.includes("filter")) return <Filter {...props} color="#10b981" />;
-  if (c.includes("brake") || c.includes("pad") || c.includes("shoe")) return <CircleStop {...props} color="#ef4444" />;
+  if (c.includes("brake") || c.includes("pad") || c.includes("shoe") || c.includes("disc")) return <Disc3 {...props} color="#ef4444" />;
   if (c.includes("batter")) return <BatteryCharging {...props} color="#eab308" />;
   if (c.includes("spark") || c.includes("ignition") || c.includes("plug")) return <Zap {...props} color="#8b5cf6" />;
-  if (c.includes("coolant") || c.includes("radiator") || c.includes("wiper") || c.includes("wash")) return <CloudRain {...props} color="#0ea5e9" />;
+  if (c.includes("wiper") || c.includes("wash")) return <CloudRain {...props} color="#0ea5e9" />;
   if (c.includes("bulb") || c.includes("light") || c.includes("lamp")) return <Lightbulb {...props} color="#fcd34d" />;
   if (c.includes("tire") || c.includes("tyre") || c.includes("wheel")) return <CircleStop {...props} color="#334155" />;
   if (c.includes("belt") || c.includes("chain")) return <Link {...props} color="#d97706" />;
   if (c.includes("suspension") || c.includes("shock") || c.includes("spring") || c.includes("tool") || c.includes("equipment")) return <Wrench {...props} color="#6366f1" />;
   if (c.includes("polish") || c.includes("wax") || c.includes("cleaner") || c.includes("shampoo")) return <Sparkles {...props} color="#ec4899" />;
   if (c.includes("accessory") || c.includes("mat") || c.includes("cover")) return <Armchair {...props} color="#14b8a6" />;
+  if (c.includes("spare") || c.includes("part") || c.includes("general")) return <Wrench {...props} color="#64748b" />;
   return <Box {...props} color="#94a3b8" />;
 }
 
@@ -520,7 +545,7 @@ export default function ProductsPage() {
             const status = stockBadge(p.stock_quantity, Number(p.reorder_level || 10));
             return (
               <article key={p.id}>
-                {showIcons && <CategoryIcon category={p.category || "General"} className="product-card-icon" />}
+                {showIcons && <CategoryIcon category={p.category || "General"} productName={p.name} className="product-card-icon" />}
                 <b>{p.name}</b>
                 <small>SKU: {p.sku}</small>
                 {/* <small style={{ color: '#64748b', fontSize: '0.8em', marginTop: '-4px', marginBottom: '4px' }}>
@@ -607,7 +632,7 @@ export default function ProductsPage() {
                 <tr key={p.id}>
                   {cols.prod && (
                     <td>
-                      <CategoryIcon category={p.category || "General"} className="table-product-icon" />
+                      <CategoryIcon category={p.category || "General"} productName={p.name} className="table-product-icon" />
                       <b>{p.name}</b>
                     </td>
                   )}

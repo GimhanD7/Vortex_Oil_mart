@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useToast } from "@/components/ToastProvider";
 
-function Icon({ name }: { name: "user" | "lock" | "eye" | "arrow" | "cart" | "box" | "chart" | "shield" }) {
+function Icon({ name }: { name: "user" | "lock" | "eye" | "cart" | "box" | "chart" | "shield" }) {
   const paths = {
     user: <><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></>,
     lock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></>,
     eye: <><path d="M3 3l18 18"/><path d="M10.6 10.7a2 2 0 0 0 2.7 2.7M9.9 4.2A10.7 10.7 0 0 1 12 4c5.5 0 9 5.5 9 5.5a16 16 0 0 1-2.1 2.7M6.6 6.6C4.4 8.1 3 10.5 3 10.5S6.5 16 12 16c1 0 1.9-.2 2.7-.4"/></>,
-    arrow: <><path d="M5 12h13M14 7l5 5-5 5"/><path d="M19 5v14"/></>,
     cart: <><path d="M3 4h2l2.3 10.5h9.8l2-7H6"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></>,
     box: <><path d="M4 7l8-4 8 4v10l-8 4-8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/></>,
     chart: <><path d="M4 20V10h4v10M10 20V4h4v16M16 20v-7h4v7"/></>,
@@ -84,7 +83,7 @@ export default function LoginPage() {
           <div className="login-input"><Icon name="user" /><input id="username" type="text" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter your username" required /></div>
           <label htmlFor="password">Password</label>
           <div className="login-input"><Icon name="lock" /><input id="password" type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" required /><button type="button" className="show-password" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}><Icon name="eye" /></button></div>
-          <button className="login-submit" type="submit" disabled={loading}><Icon name="arrow" />{loading ? "Signing in..." : "Sign In"}</button>
+          <button className="login-submit" type="submit" disabled={loading}>{loading ? "Signing in..." : "Sign In"}</button>
         </form>
         <div className="secure-note"><Icon name="shield" /> Secure access to your business</div>
       </section>
