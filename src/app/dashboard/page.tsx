@@ -449,18 +449,87 @@ export default function PosBilling() {
       .catch(() => setSettings(defaultPosSettings));
   }, [router]);
 
+  const autoCloseExpiredCycle = useCallback(async (cycle: CashCycle) => {
+    if (!user) return;
+    try {
+      const endOfDayTimestamp = `${cycle.openedDate} 23:59:59`;
+      const params = new URLSearchParams({
+        cashier: user.username,
+        date_from: cycle.openedDate,
+        date_to: cycle.openedDate,
+      });
+      const response = await fetch(`/api/sales?${params.toString()}`, { cache: "no-store" });
+      const rows = await response.json();
+      const cycleRows = Array.isArray(rows) ? rows.filter((r: any) => r.sales_cycle_id === cycle.id) : [];
+      const totals = calculateSummary(cycleRows, cycle);
+      const expectedClosingCash = (cycle.openingBalance || 0) + totals.cashSales;
+
+      await fetch("/api/sales/cycles", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cycle_id: cycle.id,
+          cashier_id: user.id,
+          opened_at: localDateTimeValue(new Date(cycle.openedAt)),
+          opened_date: cycle.openedDate,
+          opening_balance: cycle.openingBalance,
+          closing_balance: expectedClosingCash,
+          closed_at: endOfDayTimestamp,
+        }),
+      });
+
+      const prefix = `oil-mart-cash-cycle-${user.id}-`;
+      for (let i = window.localStorage.length - 1; i >= 0; i--) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          window.localStorage.removeItem(key);
+        }
+      }
+      setCashCycle(null);
+      setCart([]);
+      setLastInvoice(null);
+      showToast({
+        type: "info",
+        title: "Shift Auto-Closed at 11:59 PM",
+        message: `Shift ${cycle.id} from ${cycle.openedDate} was automatically closed at 11:59:59 PM (End of Day).`,
+      });
+    } catch (err) {
+      console.error("Auto close failed", err);
+    }
+  }, [user, showToast]);
+
   useEffect(() => {
     if (!user || user.role === "admin") return;
-    const saved = window.localStorage.getItem(cashierCycleKey(user.id));
-    if (saved) {
-      try {
-        const restoredCycle = JSON.parse(saved) as CashCycle;
-        window.setTimeout(() => setCashCycle(restoredCycle), 0);
-      } catch {
-        window.localStorage.removeItem(cashierCycleKey(user.id));
+    const prefix = `oil-mart-cash-cycle-${user.id}-`;
+    let foundCycle: CashCycle | null = null;
+
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith(prefix)) {
+        try {
+          const item = JSON.parse(window.localStorage.getItem(key) || "");
+          if (item && item.openedDate) {
+            foundCycle = item;
+            break;
+          }
+        } catch {}
       }
     }
-  }, [user]);
+
+    if (foundCycle) {
+      if (foundCycle.openedDate !== currentBusinessDate) {
+        void autoCloseExpiredCycle(foundCycle);
+      } else {
+        setCashCycle(foundCycle);
+      }
+    }
+  }, [user, currentBusinessDate, autoCloseExpiredCycle]);
+
+  useEffect(() => {
+    if (cashCycle && cashCycle.openedDate !== currentBusinessDate) {
+      void autoCloseExpiredCycle(cashCycle);
+    }
+  }, [cashCycle, currentBusinessDate, autoCloseExpiredCycle]);
 
   useEffect(() => {
     if (!user || user.role === "admin" || !cashCycle) return;
@@ -1078,6 +1147,31 @@ export default function PosBilling() {
               <RotateCcw size={16} aria-hidden="true" style={{ color: '#475569' }} />
               <span style={{ color: '#334155', fontWeight: 500 }}>Returns & Exchanges</span>
             </button>
+            {isCashier && cashCycle && (
+              <button 
+                type="button"
+                onClick={() => void openCloseCycle()}
+                style={{ 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  gap: '6px', 
+                  backgroundColor: '#991b1b', 
+                  color: '#ffffff', 
+                  padding: '7px 14px', 
+                  borderRadius: '8px', 
+                  fontWeight: 600, 
+                  fontSize: '13px', 
+                  border: 'none', 
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#7f1d1d')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#991b1b')}
+              >
+                <span>Close Sale Cycle</span>
+              </button>
+            )}
             <NotificationCenter variant="pos" />
             <div className="pos-topbar-popover pos-profile-control">
               <button
