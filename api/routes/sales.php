@@ -1,12 +1,12 @@
 <?php
-global $pdo, $inputData, $id, $method;
+global $pdo, $inputData, $id, $method, $action;
 $user = requireAuth(); // Require auth for sales
 require_once __DIR__ . '/../credit.php';
 
 $salesColumns = [
     'payment_method', 'status', 'customer_id', 'subtotal_amount', 'discount_rate',
     'discount_amount', 'tax_rate', 'tax_amount', 'business_date', 'cash_received',
-    'cash_balance', 'sales_cycle_id', 'opening_cash_balance'
+    'cash_balance', 'sales_cycle_id', 'opening_cash_balance', 'original_sale_id', 'transaction_type'
 ];
 
 function ensureSalesColumns() {
@@ -51,6 +51,8 @@ function ensureSalesColumns() {
     if (!in_array('cash_balance', $existingColumns)) $alterQueries[] = 'ADD COLUMN cash_balance DECIMAL(10,2) NULL';
     if (!in_array('sales_cycle_id', $existingColumns)) $alterQueries[] = 'ADD COLUMN sales_cycle_id VARCHAR(60) NULL';
     if (!in_array('opening_cash_balance', $existingColumns)) $alterQueries[] = 'ADD COLUMN opening_cash_balance DECIMAL(10,2) NULL';
+    if (!in_array('original_sale_id', $existingColumns)) $alterQueries[] = 'ADD COLUMN original_sale_id INT NULL';
+    if (!in_array('transaction_type', $existingColumns)) $alterQueries[] = "ADD COLUMN transaction_type VARCHAR(20) NOT NULL DEFAULT 'sale'";
     
     if (count($alterQueries) > 0) {
         $pdo->exec('ALTER TABLE sales ' . implode(', ', $alterQueries));
@@ -139,6 +141,62 @@ function saleItems($saleId) {
     return $stmt->fetchAll();
 }
 
+function ensureSaleReturnTables() {
+    global $pdo;
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS sale_returns (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            original_sale_id INT NOT NULL,
+            return_number VARCHAR(40) NULL,
+            transaction_type VARCHAR(20) NOT NULL DEFAULT 'return',
+            resolution VARCHAR(30) NOT NULL DEFAULT 'Cash',
+            refund_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            reason VARCHAR(255) NOT NULL,
+            notes TEXT NULL,
+            replacement_sale_id INT NULL,
+            cashier_id INT NOT NULL,
+            sales_cycle_id VARCHAR(60) NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'completed',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_sale_returns_original (original_sale_id),
+            INDEX idx_sale_returns_replacement (replacement_sale_id),
+            INDEX idx_sale_returns_cycle (sales_cycle_id),
+            INDEX idx_sale_returns_created (created_at)
+        )
+    ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS sale_return_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            return_id INT NOT NULL,
+            sale_item_id INT NOT NULL,
+            product_id INT NOT NULL,
+            quantity DECIMAL(12,3) NOT NULL,
+            unit_price DECIMAL(10,2) NOT NULL,
+            line_refund DECIMAL(10,2) NOT NULL,
+            disposition VARCHAR(30) NOT NULL DEFAULT 'resellable',
+            INDEX idx_return_items_return (return_id),
+            INDEX idx_return_items_sale_item (sale_item_id)
+        )
+    ");
+}
+
+function detailedSaleItems($saleId) {
+    global $pdo;
+    $stmt = $pdo->prepare("
+        SELECT si.id AS sale_item_id, si.product_id, si.quantity, si.price_at_time,
+               COALESCE(p.name, CONCAT('Product #', si.product_id)) AS product_name,
+               p.sku, p.unit, p.product_type,
+               COALESCE((SELECT SUM(sri.quantity) FROM sale_return_items sri
+                         JOIN sale_returns sr ON sr.id = sri.return_id
+                         WHERE sri.sale_item_id = si.id AND sr.status = 'completed'), 0) AS returned_quantity
+        FROM sale_items si
+        LEFT JOIN products p ON p.id = si.product_id
+        WHERE si.sale_id = ? ORDER BY si.id
+    ");
+    $stmt->execute([$saleId]);
+    return $stmt->fetchAll();
+}
+
 if ($method === 'POST' && $id === 'revocations') {
     try {
         ensureSalesColumns();
@@ -209,9 +267,119 @@ if ($method === 'GET' && $id === 'revocations') {
     }
 }
 
+if ($method === 'GET' && $id === 'returns') {
+    ensureSaleReturnTables();
+    $stmt = $pdo->query("
+        SELECT sr.*, s.payment_method AS original_payment_method, s.total_amount AS original_total,
+               s.status AS original_status, c.name AS customer_name, u.username AS cashier_name,
+               COUNT(sri.id) AS line_count, COALESCE(SUM(sri.quantity), 0) AS item_quantity
+        FROM sale_returns sr
+        JOIN sales s ON s.id = sr.original_sale_id
+        LEFT JOIN customers c ON c.id = s.customer_id
+        LEFT JOIN users u ON u.id = sr.cashier_id
+        LEFT JOIN sale_return_items sri ON sri.return_id = sr.id
+        GROUP BY sr.id, s.payment_method, s.total_amount, s.status, c.name, u.username
+        ORDER BY sr.id DESC LIMIT 500
+    ");
+    sendJson($stmt->fetchAll());
+}
+
+if ($method === 'POST' && is_numeric($id) && $action === 'returns') {
+    try {
+        ensureSalesColumns();
+        ensureRevocationAuditTable();
+        ensureCreditAccountTables();
+        ensureSaleReturnTables();
+        $reason = trim((string)($inputData['reason'] ?? ''));
+        $notes = trim((string)($inputData['notes'] ?? ''));
+        $resolution = trim((string)($inputData['resolution'] ?? 'Cash'));
+        $transactionType = $resolution === 'Exchange' ? 'exchange' : 'return';
+        $requestedItems = is_array($inputData['items'] ?? null) ? $inputData['items'] : [];
+        $allowedResolutions = ['Cash', 'Card', 'Bank Transfer', 'Credit Adjustment', 'Exchange'];
+        if ($reason === '' || !$requestedItems || !in_array($resolution, $allowedResolutions, true)) {
+            sendJson(['error' => 'Return items, resolution and reason are required'], 400);
+        }
+
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare('SELECT * FROM sales WHERE id = ? FOR UPDATE');
+        $stmt->execute([(int)$id]);
+        $sale = $stmt->fetch();
+        if (!$sale || in_array($sale['status'], ['cancelled', 'voided'], true)) {
+            throw new Exception('Only an active completed invoice can be returned');
+        }
+        $availableItems = [];
+        foreach (detailedSaleItems((int)$id) as $row) $availableItems[(int)$row['sale_item_id']] = $row;
+        $discountFactor = max(0, 1 - ((float)$sale['discount_rate'] / 100));
+        $prepared = [];
+        $refundAmount = 0;
+        foreach ($requestedItems as $requested) {
+            $saleItemId = (int)($requested['sale_item_id'] ?? 0);
+            $quantity = (float)($requested['quantity'] ?? 0);
+            $disposition = ($requested['disposition'] ?? 'resellable') === 'damaged' ? 'damaged' : 'resellable';
+            if (!isset($availableItems[$saleItemId]) || $quantity <= 0) throw new Exception('Invalid return item or quantity');
+            $source = $availableItems[$saleItemId];
+            $remaining = (float)$source['quantity'] - (float)$source['returned_quantity'];
+            if ($quantity > $remaining + 0.0001) throw new Exception('Return quantity exceeds the quantity available on the original invoice');
+            $lineRefund = round($quantity * (float)$source['price_at_time'] * $discountFactor, 2);
+            $refundAmount += $lineRefund;
+            $prepared[] = [$source, $quantity, $disposition, $lineRefund];
+        }
+
+        $stmt = $pdo->prepare("INSERT INTO sale_returns
+            (original_sale_id, transaction_type, resolution, refund_amount, reason, notes, cashier_id, sales_cycle_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([(int)$id, $transactionType, $resolution, $refundAmount, $reason, $notes ?: null, $user['id'], $inputData['sales_cycle_id'] ?? $sale['sales_cycle_id']]);
+        $returnId = (int)$pdo->lastInsertId();
+        $returnNumber = 'RTN-' . str_pad((string)$returnId, 6, '0', STR_PAD_LEFT);
+        $pdo->prepare('UPDATE sale_returns SET return_number = ? WHERE id = ?')->execute([$returnNumber, $returnId]);
+
+        foreach ($prepared as [$source, $quantity, $disposition, $lineRefund]) {
+            $pdo->prepare("INSERT INTO sale_return_items
+                (return_id, sale_item_id, product_id, quantity, unit_price, line_refund, disposition)
+                VALUES (?, ?, ?, ?, ?, ?, ?)")->execute([$returnId, $source['sale_item_id'], $source['product_id'], $quantity, $source['price_at_time'], $lineRefund, $disposition]);
+            if ($disposition === 'resellable') {
+                $stockStmt = $pdo->prepare('SELECT stock_quantity FROM products WHERE id = ? FOR UPDATE');
+                $stockStmt->execute([$source['product_id']]);
+                $before = (float)$stockStmt->fetchColumn();
+                $after = $before + $quantity;
+                $pdo->prepare('UPDATE products SET stock_quantity = ? WHERE id = ?')->execute([$after, $source['product_id']]);
+                $pdo->prepare("INSERT INTO inventory_movements
+                    (product_id, movement_type, quantity_change, stock_before, stock_after, unit_price, reference_no, notes, created_by)
+                    VALUES (?, 'return', ?, ?, ?, ?, ?, 'Customer return - resellable stock', ?)")
+                    ->execute([$source['product_id'], $quantity, $before, $after, $source['price_at_time'], $returnNumber, $user['id']]);
+            }
+        }
+
+        if (!empty($sale['customer_id'])) {
+            $pdo->prepare('UPDATE customers SET total_purchases = GREATEST(0, total_purchases - ?) WHERE id = ?')->execute([$refundAmount, $sale['customer_id']]);
+            if ($sale['payment_method'] === 'Credit' || $resolution === 'Credit Adjustment') {
+                $customerStmt = $pdo->prepare('SELECT outstanding_balance FROM customers WHERE id = ? FOR UPDATE');
+                $customerStmt->execute([$sale['customer_id']]);
+                $balance = (float)$customerStmt->fetchColumn();
+                $applied = min($balance, $refundAmount);
+                $next = max(0, $balance - $applied);
+                $pdo->prepare('UPDATE customers SET outstanding_balance = ? WHERE id = ?')->execute([$next, $sale['customer_id']]);
+                if ($applied > 0) addCreditLedgerEntry($sale['customer_id'], 'sale_return', 0, $applied, $next, (int)$id, null, $returnNumber, 'Return credited to customer account', $user['id']);
+            }
+        }
+
+        $remainingCountStmt = $pdo->prepare("SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = ? AND si.quantity > COALESCE((SELECT SUM(sri.quantity) FROM sale_return_items sri JOIN sale_returns sr ON sr.id=sri.return_id WHERE sri.sale_item_id=si.id AND sr.status='completed'),0)");
+        $remainingCountStmt->execute([(int)$id]);
+        $nextStatus = (int)$remainingCountStmt->fetchColumn() === 0 ? 'returned' : 'partially_returned';
+        $pdo->prepare('UPDATE sales SET status = ? WHERE id = ?')->execute([$nextStatus, (int)$id]);
+        recordRevocation((int)$id, $transactionType === 'exchange' ? 'sale_exchange' : 'sale_return', $user['id'], null, $reason, $refundAmount, ['return_id' => $returnId, 'return_number' => $returnNumber, 'resolution' => $resolution]);
+        $pdo->commit();
+        sendJson(['message' => 'Return recorded', 'return_id' => $returnId, 'return_number' => $returnNumber, 'refund_amount' => $refundAmount, 'status' => $nextStatus], 201);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        sendJson(['error' => $e->getMessage()], 400);
+    }
+}
+
 if ($method === 'GET' && !$id) {
     try {
         ensureSalesColumns();
+        ensureSaleReturnTables();
         
         $dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : null;
         $dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : null;
@@ -256,6 +424,7 @@ if ($method === 'GET' && !$id) {
                    s.sales_cycle_id, s.opening_cash_balance,
                    s.total_amount, s.payment_method, s.status, s.created_at,
                    u.username as cashier_name, c.name as customer_name,
+                   COALESCE((SELECT SUM(sr.refund_amount) FROM sale_returns sr WHERE sr.original_sale_id = s.id AND sr.status = 'completed'), 0) AS returned_amount,
                    COALESCE(SUM(si.quantity), 0) as item_count
             FROM sales s
             LEFT JOIN users u ON s.cashier_id = u.id
@@ -283,6 +452,7 @@ if ($method === 'POST' && !$id) {
     try {
         ensureSalesColumns();
         ensureCreditAccountTables();
+        ensureSaleReturnTables();
         
         $cashier_id = isset($inputData['cashier_id']) ? (int)$inputData['cashier_id'] : 0;
         $customer_id = !empty($inputData['customer_id']) ? (int)$inputData['customer_id'] : null;
@@ -294,6 +464,8 @@ if ($method === 'POST' && !$id) {
         $cash_balance = isset($inputData['cash_balance']) && $inputData['cash_balance'] !== null ? (float)$inputData['cash_balance'] : null;
         $sales_cycle_id = !empty($inputData['sales_cycle_id']) ? $inputData['sales_cycle_id'] : null;
         $opening_cash_balance = isset($inputData['opening_cash_balance']) && $inputData['opening_cash_balance'] !== null ? (float)$inputData['opening_cash_balance'] : null;
+        $original_sale_id = !empty($inputData['original_sale_id']) ? (int)$inputData['original_sale_id'] : null;
+        $transaction_type = $original_sale_id ? 'exchange' : 'sale';
 
         $validPaymentMethods = ['Cash', 'Card', 'Wallet', 'Bank Transfer', 'Credit'];
         if (!in_array($payment_method, $validPaymentMethods)) {
@@ -371,15 +543,20 @@ if ($method === 'POST' && !$id) {
             INSERT INTO sales
             (cashier_id, customer_id, subtotal_amount, discount_rate, discount_amount,
              tax_rate, tax_amount, business_date, total_amount, payment_method, status,
-             cash_received, cash_balance, sales_cycle_id, opening_cash_balance)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             cash_received, cash_balance, sales_cycle_id, opening_cash_balance, original_sale_id, transaction_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $cashier_id, $customer_id, $subtotalAmount, $normalizedDiscountRate, $discountAmount,
             $normalizedTaxRate, $taxAmount, $business_date, $totalAmount, $payment_method, 'completed',
-            $cash_received, $cash_balance, $sales_cycle_id, $opening_cash_balance
+            $cash_received, $cash_balance, $sales_cycle_id, $opening_cash_balance, $original_sale_id, $transaction_type
         ]);
         $saleId = $pdo->lastInsertId();
+
+        if ($original_sale_id) {
+            $stmt = $pdo->prepare("UPDATE sale_returns SET replacement_sale_id = ? WHERE original_sale_id = ? AND transaction_type = 'exchange' AND replacement_sale_id IS NULL ORDER BY id DESC LIMIT 1");
+            $stmt->execute([$saleId, $original_sale_id]);
+        }
 
         if ($customer_id) {
             if ($payment_method === 'Credit') {
@@ -732,6 +909,7 @@ if ($method === 'GET' && $id === 'items') {
 if ($method === 'GET' && $id) {
     try {
         ensureSalesColumns();
+        ensureSaleReturnTables();
 
         $stmt = $pdo->prepare("
             SELECT s.id, s.subtotal_amount, s.discount_rate, s.discount_amount,
@@ -754,7 +932,7 @@ if ($method === 'GET' && $id) {
 
         sendJson([
             "sale" => $sale,
-            "items" => saleItems($id)
+            "items" => detailedSaleItems($id)
         ]);
     } catch (PDOException $e) {
         sendJson(["error" => "Internal server error"], 500);
@@ -768,14 +946,14 @@ if ($method === 'PATCH' && $id) {
         ensureCreditAccountTables();
 
         $action = isset($inputData['action']) ? $inputData['action'] : null;
-        if (!in_array($action, ['refund', 'void'])) {
+        if ($action !== 'cancel') {
             sendJson(["error" => "Unsupported sales action"], 400);
         }
         $reason = isset($inputData['reason']) ? trim($inputData['reason']) : '';
         if ($reason === '') {
             sendJson(["error" => "Reason is required"], 400);
         }
-        $approver = supervisorApproval();
+        $approver = null;
 
         $pdo->beginTransaction();
 
@@ -786,6 +964,11 @@ if ($method === 'PATCH' && $id) {
         if (!$sale) {
             $pdo->rollBack();
             sendJson(["error" => "Sale not found"], 404);
+        }
+
+        if ($user['role'] !== 'admin') {
+            if ((int)$sale['cashier_id'] !== (int)$user['id']) throw new Exception('Cashiers can cancel only their own invoices');
+            if (empty($sale['sales_cycle_id']) || $sale['sales_cycle_id'] !== ($inputData['sales_cycle_id'] ?? '')) throw new Exception('Cashiers can cancel only invoices from their active sales cycle');
         }
 
         if (in_array($sale['status'], ['refunded', 'voided', 'cancelled'])) {
@@ -821,8 +1004,8 @@ if ($method === 'PATCH' && $id) {
                 $stockBefore,
                 $stockAfter,
                 $item['price_at_time'],
-                strtoupper($action) . "-{$id}",
-                $action === 'refund' ? 'Refund returned stock' : 'Void returned stock',
+                "CANCEL-{$id}",
+                'Cancelled bill stock restoration',
                 $user['id']
             ]);
         }
@@ -831,7 +1014,7 @@ if ($method === 'PATCH' && $id) {
             if ($sale['payment_method'] === 'Credit') {
                 $allocatedAmount = activeCreditAllocationsForSale($id);
                 if ($allocatedAmount > 0.001) {
-                    throw new Exception('Reverse the customer payment allocation before refunding or voiding this credit invoice');
+                    throw new Exception('Reverse the customer payment allocation before cancelling this credit invoice');
                 }
                 $customerStmt = $pdo->prepare('SELECT outstanding_balance FROM customers WHERE id = ? FOR UPDATE');
                 $customerStmt->execute([$sale['customer_id']]);
@@ -846,14 +1029,14 @@ if ($method === 'PATCH' && $id) {
                 $stmt->execute([(float)$sale['total_amount'], (float)$sale['total_amount'], $sale['customer_id']]);
                 addCreditLedgerEntry(
                     $sale['customer_id'],
-                    $action === 'refund' ? 'credit_sale_refund' : 'credit_sale_void',
+                    'credit_sale_cancel',
                     0,
                     (float)$sale['total_amount'],
                     $nextCustomerBalance,
                     $id,
                     null,
-                    strtoupper($action) . "-{$id}",
-                    $action === 'refund' ? 'Credit invoice refunded' : 'Credit invoice voided',
+                    "CANCEL-{$id}",
+                    'Credit invoice cancelled',
                     $user['id']
                 );
             } else {
@@ -862,15 +1045,15 @@ if ($method === 'PATCH' && $id) {
             }
         }
 
-        $nextStatus = $action === 'refund' ? 'refunded' : 'voided';
+        $nextStatus = 'cancelled';
         $stmt = $pdo->prepare("UPDATE sales SET status = ? WHERE id = ?");
         $stmt->execute([$nextStatus, $id]);
 
         recordRevocation(
             $id,
-            $action === 'refund' ? 'completed_sale_refunded' : 'completed_sale_voided',
+            'completed_sale_cancelled',
             $user['id'],
-            $approver['id'],
+            null,
             $reason,
             (float)$sale['total_amount'],
             [
@@ -882,7 +1065,7 @@ if ($method === 'PATCH' && $id) {
         );
 
         $pdo->commit();
-        sendJson(["message" => $action === 'refund' ? "Invoice refunded and stock returned" : "Invoice voided and stock returned"]);
+        sendJson(["message" => "Invoice cancelled; stock and balances were restored"]);
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();

@@ -380,7 +380,7 @@ export default function AdminDashboard() {
             <RotateCcw aria-hidden="true" size={24} strokeWidth={1.9} />
           </span>
           <div>
-            <small>Void / Refund Watch</small>
+            <small>Cancelled / Returned Bills</small>
             <strong>{data.metrics.voided_count + data.metrics.refund_count}</strong>
             <em>{money(data.metrics.voided_amount + data.metrics.refund_amount)} affected</em>
           </div>
@@ -541,7 +541,7 @@ export default function AdminDashboard() {
           <div><span><Truck size={19} aria-hidden="true" /></span><small>Purchases</small><b>{data.purchases.purchase_count}</b><em>{money(data.purchases.purchase_value)}</em></div>
           <div><span><ShoppingCart size={19} aria-hidden="true" /></span><small>Today Stock In</small><b>{money(data.purchases.today_purchase_value)}</b><em>purchase value</em></div>
           <div><span><UserCheck size={19} aria-hidden="true" /></span><small>Active Customers</small><b>{data.customers.active_customers}</b><em>{money(data.customers.credit_limit)} credit limit</em></div>
-          <div><span><RotateCcw size={19} aria-hidden="true" /></span><small>Audit Records</small><b>{data.metrics.revocation_records}</b><em>{money(data.metrics.revocation_amount)}</em></div>
+          <div><span><RotateCcw size={19} aria-hidden="true" /></span><small>Cancellation &amp; Return Audit</small><b>{data.metrics.revocation_records}</b><em>{money(data.metrics.revocation_amount)}</em></div>
         </div>
       </Panel>
 

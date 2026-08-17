@@ -183,7 +183,22 @@ type SaleSummaryRow = {
   created_at: string;
   item_count: string | number;
   sales_cycle_id?: string | null;
+  customer_name?: string | null;
+  cashier_name?: string | null;
+  returned_amount?: string | number;
 };
+
+type ReturnableItem = {
+  sale_item_id: number;
+  product_id: number;
+  product_name: string;
+  quantity: string | number;
+  returned_quantity: string | number;
+  price_at_time: string | number;
+  unit?: string;
+};
+
+type InvoiceDetail = { sale: SaleSummaryRow; items: ReturnableItem[] };
 
 type SummaryTotals = {
   invoiceCount: number;
@@ -262,7 +277,8 @@ function calculateSummary(rows: SaleSummaryRow[], cashCycle: CashCycle | null): 
   const sourceRows = currentCycleRows.length ? currentCycleRows : rows;
   return sourceRows.reduce(
     (totals, row) => {
-      const totalAmount = Number(row.total_amount || 0);
+      if (row.status === "cancelled" || row.status === "voided") return totals;
+      const totalAmount = Math.max(0, Number(row.total_amount || 0) - Number(row.returned_amount || 0));
       totals.invoiceCount += 1;
       totals.itemCount += Number(row.item_count || 0);
       totals.totalSales += totalAmount;
@@ -336,6 +352,16 @@ export default function PosBilling() {
   const [creditPaymentReference, setCreditPaymentReference] = useState("");
   const [creditPaymentNotes, setCreditPaymentNotes] = useState("");
   const [creditPaymentSaving, setCreditPaymentSaving] = useState(false);
+  const [showCycleInvoices, setShowCycleInvoices] = useState(false);
+  const [invoiceDetail, setInvoiceDetail] = useState<InvoiceDetail | null>(null);
+  const [returnInvoice, setReturnInvoice] = useState<InvoiceDetail | null>(null);
+  const [returnQuantities, setReturnQuantities] = useState<Record<number, string>>({});
+  const [returnResolution, setReturnResolution] = useState("Cash");
+  const [returnDisposition, setReturnDisposition] = useState("resellable");
+  const [returnReason, setReturnReason] = useState("");
+  const [returnNotes, setReturnNotes] = useState("");
+  const [returnSaving, setReturnSaving] = useState(false);
+  const [exchangeOriginalId, setExchangeOriginalId] = useState<number | null>(null);
 
   const fetchProducts = async () => {
     const response = await fetch("/api/products", { cache: "no-store" });
@@ -597,30 +623,80 @@ export default function PosBilling() {
     setShowCashModal(false);
   };
 
-  const revokeCompletedSale = () => {
-    if (!lastInvoice) return;
+  const loadInvoiceDetail = async (saleId: number) => {
+    const response = await fetch(`/api/sales/${saleId}`, { cache: "no-store" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to load invoice");
+    const detail = data as InvoiceDetail;
+    setInvoiceDetail(detail);
+    return detail;
+  };
+
+  const cancelCompletedSale = (sale: Pick<SaleSummaryRow, "id" | "total_amount" | "payment_method">) => {
     openRevocation({
-      kind: "completed_sale_voided",
-      title: "Revoke completed sale",
-      message: `Invoice #${settings.invoice_prefix}-${String(lastInvoice.id).padStart(6, "0")} will be voided and stock will be returned.`,
-      affectedAmount: lastInvoice.total,
+      kind: "completed_sale_cancelled",
+      title: "Cancel Bill",
+      message: `${settings.invoice_prefix}-${String(sale.id).padStart(6, "0")} will remain in history as cancelled. Its stock and financial values will be reversed.`,
+      affectedAmount: Number(sale.total_amount),
       reasons: revokeReasons.sale,
-      requiresApproval: true,
-      metadata: { sale_id: lastInvoice.id, payment_method: lastInvoice.paymentMethod },
-      onConfirm: async (reason, approval) => {
-        const response = await fetch(`/api/sales/${lastInvoice.id}`, {
+      metadata: { sale_id: sale.id, payment_method: sale.payment_method },
+      onConfirm: async (reason) => {
+        const response = await fetch(`/api/sales/${sale.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "void", reason, ...approval }),
+          body: JSON.stringify({ action: "cancel", reason, sales_cycle_id: cashCycle?.id }),
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Unable to revoke completed sale.");
-        setLastInvoice(null);
+        if (!response.ok) throw new Error(data.error || "Unable to cancel bill.");
+        if (lastInvoice?.id === sale.id) setLastInvoice(null);
+        setInvoiceDetail(null);
         setProducts(await fetchProducts());
         await loadCashierSummary();
         setSummaryRefresh((current) => current + 1);
       },
     });
+  };
+
+  const openReturn = async (saleId: number) => {
+    try {
+      const detail = await loadInvoiceDetail(saleId);
+      setReturnInvoice(detail);
+      setReturnQuantities({});
+      setReturnResolution(detail.sale.payment_method === "Credit" ? "Credit Adjustment" : detail.sale.payment_method || "Cash");
+      setReturnDisposition("resellable");
+      setReturnReason("");
+      setReturnNotes("");
+    } catch (error) {
+      showToast({ type: "error", title: "Invoice unavailable", message: error instanceof Error ? error.message : "Unable to load invoice." });
+    }
+  };
+
+  const submitReturn = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!returnInvoice || !returnReason.trim()) return;
+    const items = returnInvoice.items.map((item) => ({ sale_item_id: item.sale_item_id, quantity: Number(returnQuantities[item.sale_item_id] || 0), disposition: returnDisposition })).filter((item) => item.quantity > 0);
+    if (!items.length) {
+      showToast({ type: "warning", title: "Select returned items", message: "Enter a return quantity for at least one item." });
+      return;
+    }
+    setReturnSaving(true);
+    try {
+      const response = await fetch(`/api/sales/${returnInvoice.sale.id}/returns`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items, resolution: returnResolution, reason: returnReason, notes: returnNotes, sales_cycle_id: cashCycle?.id }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to record return");
+      if (returnResolution === "Exchange") {
+        setExchangeOriginalId(returnInvoice.sale.id);
+        showToast({ type: "success", title: `${data.return_number} recorded`, message: `Add replacement items to the cart. The next invoice will reference ${settings.invoice_prefix}-${String(returnInvoice.sale.id).padStart(6, "0")}.` });
+      } else {
+        showToast({ type: "success", title: `${data.return_number} recorded`, message: `${money(Number(data.refund_amount))} recorded by ${returnResolution}.` });
+      }
+      setReturnInvoice(null);
+      setInvoiceDetail(null);
+      setProducts(await fetchProducts());
+      await loadCashierSummary();
+    } catch (error) {
+      showToast({ type: "error", title: "Return failed", message: error instanceof Error ? error.message : "Unable to record return." });
+    } finally { setReturnSaving(false); }
   };
 
   const startCashCycle = async (event: FormEvent) => {
@@ -844,6 +920,7 @@ export default function PosBilling() {
           cash_balance: payment === "Cash" && cashAmount !== undefined ? cashAmount - total : null,
           sales_cycle_id: cashCycle?.id || null,
           opening_cash_balance: cashCycle?.openingBalance || null,
+          original_sale_id: exchangeOriginalId,
           items: cart.map((item) => ({ product_id: item.id, quantity: item.cartQuantity })),
         }),
       });
@@ -871,6 +948,7 @@ export default function PosBilling() {
         setNotice("Sale completed successfully.");
         showToast({ type: "success", title: "Sale completed", message: "Sale completed successfully." });
         setCart([]);
+        setExchangeOriginalId(null);
         setShowCashModal(false);
         setCashReceived("");
         if (data.customer_credit) {
@@ -1158,6 +1236,7 @@ export default function PosBilling() {
                     <h2><BarChart3 size={18} aria-hidden="true" /> Sales Summary</h2>
                     <p>{activeSummaryRange.label} / {cashCycle?.id}</p>
                   </div>
+                  <button type="button" onClick={() => setShowCycleInvoices(true)}><Receipt size={15} aria-hidden="true" /> Cycle Invoices</button>
                 </header>
                 <div className="summary-metrics">
                   <p><small>Invoices</small><b>{summaryTotals.invoiceCount}</b></p>
@@ -1190,6 +1269,7 @@ export default function PosBilling() {
                 <Trash2 size={14} aria-hidden="true" /> Clear
               </button>
             </div>
+            {exchangeOriginalId && <div className="exchange-reference">Exchange for {settings.invoice_prefix}-{String(exchangeOriginalId).padStart(6, "0")}<button type="button" onClick={() => setExchangeOriginalId(null)}>Cancel Exchange</button></div>}
 
             <div className="cart-items">
               {cart.map((item) => (
@@ -1271,7 +1351,8 @@ export default function PosBilling() {
             </div>
 
             {lastInvoice && (
-              <div className={`invoice printable-invoice ${settings.invoice_print_style === "Dot Matrix" ? "dot-matrix-invoice" : "standard-print-invoice"}`}>
+              <>
+                <div className={`invoice printable-invoice ${settings.invoice_print_style === "Dot Matrix" ? "dot-matrix-invoice" : "standard-print-invoice"}`}>
                 <header>
                   <div className="invoice-store-head">
                     <span className="invoice-logo-mark">{settings.invoice_logo_text || "OM"}</span>
@@ -1335,6 +1416,7 @@ export default function PosBilling() {
                 <small className="thanks">
                   {settings.invoice_footer}
                 </small>
+                </div>
                 <div className="no-print invoice-print-actions">
                   <button onClick={() => {
                     const message = "Print command sent successfully.";
@@ -1345,13 +1427,64 @@ export default function PosBilling() {
                   }}>
                     <Printer size={15} aria-hidden="true" /> Print Invoice
                   </button>
-                  <button className="danger" onClick={revokeCompletedSale}>
-                    <ShieldCheck size={15} aria-hidden="true" /> Revoke Sale
+                  <button onClick={() => void openReturn(lastInvoice.id)}>
+                    <RotateCcw size={15} aria-hidden="true" /> Return / Exchange
+                  </button>
+                  <button className="danger" onClick={() => cancelCompletedSale({ id: lastInvoice.id, total_amount: lastInvoice.total, payment_method: lastInvoice.paymentMethod })}>
+                    <X size={15} aria-hidden="true" /> Cancel Bill
                   </button>
                 </div>
-              </div>
+              </>
             )}
           </aside>
+          {showCycleInvoices && (
+            <div className="cash-modal-backdrop">
+              <section className="cash-modal cycle-invoices-modal">
+                <h2>Current Cycle Invoices</h2>
+                <p>{cashCycle?.id} · invoices remain listed after cancellation or return.</p>
+                <div className="cycle-invoice-list">
+                  {summaryRows.filter((sale) => !cashCycle || sale.sales_cycle_id === cashCycle.id).map((sale) => (
+                    <article key={sale.id}>
+                      <div><b>{settings.invoice_prefix}-{String(sale.id).padStart(6, "0")}</b><small>{new Date(sale.created_at).toLocaleString()} · {sale.customer_name || "Walk-in Customer"}</small></div>
+                      <span>{money(Number(sale.total_amount))}<small>{sale.status || "completed"}</small></span>
+                      <aside>
+                        <button type="button" onClick={() => void loadInvoiceDetail(sale.id)}>View</button>
+                        {!['cancelled', 'returned'].includes(sale.status) && <button type="button" onClick={() => void openReturn(sale.id)}>Return / Exchange</button>}
+                        {sale.status === 'completed' && <button type="button" className="danger" onClick={() => cancelCompletedSale(sale)}>Cancel Bill</button>}
+                      </aside>
+                    </article>
+                  ))}
+                  {!summaryRows.filter((sale) => !cashCycle || sale.sales_cycle_id === cashCycle.id).length && <p>No invoices in this cycle.</p>}
+                </div>
+                {invoiceDetail && (
+                  <div className="cycle-invoice-detail">
+                    <b>{settings.invoice_prefix}-{String(invoiceDetail.sale.id).padStart(6, "0")} · {invoiceDetail.sale.status}</b>
+                    {invoiceDetail.items.map((item) => <p key={item.sale_item_id}><span>{item.product_name} × {formatQty(item.quantity, item.unit)}</span><b>{money(Number(item.price_at_time) * Number(item.quantity))}</b></p>)}
+                  </div>
+                )}
+                <footer><button type="button" onClick={() => { setShowCycleInvoices(false); setInvoiceDetail(null); }}>Close</button></footer>
+              </section>
+            </div>
+          )}
+          {returnInvoice && (
+            <div className="cash-modal-backdrop">
+              <form className="cash-modal return-sale-modal" onSubmit={submitReturn}>
+                <h2>Return / Exchange</h2>
+                <p>Original invoice: {settings.invoice_prefix}-{String(returnInvoice.sale.id).padStart(6, "0")}. A new return document will be created.</p>
+                <div className="return-item-list">
+                  {returnInvoice.items.map((item) => {
+                    const available = Math.max(0, Number(item.quantity) - Number(item.returned_quantity || 0));
+                    return <label key={item.sale_item_id}><span><b>{item.product_name}</b><small>Available to return: {formatQty(available, item.unit)}</small></span><input type="number" min="0" max={available} step={item.unit?.toLowerCase() === 'l' ? '0.25' : '1'} value={returnQuantities[item.sale_item_id] || ''} onChange={(event) => setReturnQuantities((current) => ({ ...current, [item.sale_item_id]: event.target.value }))} placeholder="Qty" /></label>;
+                  })}
+                </div>
+                <label>Resolution<select value={returnResolution} onChange={(event) => setReturnResolution(event.target.value)}><option>Cash</option><option>Card</option><option>Bank Transfer</option><option>Credit Adjustment</option><option>Exchange</option></select></label>
+                <label>Stock condition<select value={returnDisposition} onChange={(event) => setReturnDisposition(event.target.value)}><option value="resellable">Resellable — restore stock</option><option value="damaged">Damaged / opened — do not restore stock</option></select></label>
+                <label>Reason<input value={returnReason} onChange={(event) => setReturnReason(event.target.value)} required placeholder="Why is the item being returned?" /></label>
+                <label>Notes<textarea value={returnNotes} onChange={(event) => setReturnNotes(event.target.value)} placeholder="Replacement details or refund reference" /></label>
+                <footer><button type="button" onClick={() => setReturnInvoice(null)}>Close</button><button type="submit" disabled={returnSaving}>{returnSaving ? "Recording..." : returnResolution === 'Exchange' ? "Create Return & Start Exchange" : "Create Return Document"}</button></footer>
+              </form>
+            </div>
+          )}
           {showCreditPaymentModal && selectedCustomer && (
             <div className="cash-modal-backdrop">
               <form className="cash-modal credit-collection-modal" onSubmit={receiveCreditPayment}>
@@ -1486,7 +1619,7 @@ export default function PosBilling() {
                 <footer>
                   <button type="button" onClick={closeRevocation} disabled={revocationSaving}>Cancel</button>
                   <button type="submit" disabled={revocationSaving}>
-                    <ShieldCheck size={16} aria-hidden="true" /> {revocationSaving ? "Recording..." : "Record Revoke"}
+                    <ShieldCheck size={16} aria-hidden="true" /> {revocationSaving ? "Recording..." : "Confirm Action"}
                   </button>
                 </footer>
               </form>

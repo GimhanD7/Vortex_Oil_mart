@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Columns3, Download, Eye, Printer, RotateCcw, X } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 
@@ -96,7 +97,7 @@ const defaultInvoiceSettings: InvoiceSettings = {
 };
 
 const paymentMethods = ["All Payment Methods", "Cash", "Card", "Wallet", "Bank Transfer", "Credit"];
-const statuses = ["All Status", "Completed", "Refunded", "Voided", "Cancelled"];
+const statuses = ["All Status", "Completed", "Partially Returned", "Returned", "Cancelled"];
 const refundReasons = [
   "Sale was completed accidentally",
   "Duplicate transaction was created",
@@ -276,6 +277,7 @@ function buildReceiptHtml(sale: Sale, items: SaleItem[], settings: InvoiceSettin
 }
 
 export default function SalesPage() {
+  const router = useRouter();
   const [sales, setSales] = useState<Sale[]>([]);
   const [selected, setSelected] = useState<Sale | null>(null);
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
@@ -483,15 +485,6 @@ export default function SalesPage() {
       loadSales();
       void loadTransactionLogs();
     }
-  };
-
-  const refundInvoice = () => {
-    if (!selected || selected.status === "refunded") return;
-    setRefundReason(refundReasons[0]);
-    setRefundNotes("");
-    setApproverUsername("");
-    setApproverPin("");
-    setRefundApprovalOpen(true);
   };
 
   const confirmRefundInvoice = async (event: React.FormEvent) => {
@@ -739,7 +732,7 @@ export default function SalesPage() {
               </div>
               {selectedLogs.length > 0 && (
                 <section className="invoice-audit-note">
-                  <h3>Revocation Log</h3>
+                  <h3>Cancellation / Return Audit</h3>
                   {selectedLogs.map((log) => (
                     <article key={log.id}>
                       <b>{actionLabel(log.action_type)}</b>
@@ -757,7 +750,7 @@ export default function SalesPage() {
             <footer>
               <button onClick={() => void printReceipt()}><Printer size={15} aria-hidden="true" /> Print</button>
               <button onClick={() => void downloadReceipt()}><Download size={15} aria-hidden="true" /> Download Receipt</button>
-              <button className="danger" onClick={refundInvoice} disabled={selected.status === "refunded" || selected.status === "voided" || selected.status === "cancelled"}><RotateCcw size={15} aria-hidden="true" /> Refund</button>
+              <button onClick={() => router.push("/dashboard")} disabled={selected.status === "cancelled" || selected.status === "returned"}><RotateCcw size={15} aria-hidden="true" /> Process Return in POS</button>
             </footer>
           </aside>
         )}
@@ -767,7 +760,7 @@ export default function SalesPage() {
           <header>
             <div>
               <h2>Transaction Logs</h2>
-              <p>Void, refund, payment, discount, and cart correction audit records</p>
+              <p>Cancelled bills, returns, exchanges, payments, discounts, and cart correction records</p>
             </div>
             <button onClick={() => void loadTransactionLogs()} disabled={logsLoading}>
               {logsLoading ? "Loading..." : "Refresh Logs"}
