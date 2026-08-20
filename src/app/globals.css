@@ -1218,7 +1218,7 @@ body {
 
 /* Compact responsive footer and navigation polish */
 .admin-sidebar{display:flex!important;flex-direction:column!important;overflow:hidden!important}
-.admin-sidebar .admin-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:2px 2px 8px 0;scrollbar-width:thin}
+.admin-sidebar .admin-nav{flex:0 0 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:2px 2px 8px 0;scrollbar-width:thin}
 .admin-logo{padding:0 8px 14px}
 .admin-logo b{font-size:18px;line-height:1}
 .admin-logo small{font-size:11px;line-height:1.25}

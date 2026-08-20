@@ -33,8 +33,8 @@ if ($method === 'POST' && $id === 'login') {
         }
     } else {
         $permissions = $user['role'] === 'admin' 
-            ? ['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing']
-            : ['pos_billing'];
+            ? ['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing', 'view_inventory']
+            : ['pos_billing', 'view_inventory'];
     }
 
     $payload = [
@@ -92,8 +92,8 @@ if ($method === 'GET' && $id === 'me') {
         }
     } else {
         $permissions = $dbUser['role'] === 'admin' 
-            ? ['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing']
-            : ['pos_billing'];
+            ? ['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing', 'view_inventory']
+            : ['pos_billing', 'view_inventory'];
     }
 
     sendJson([

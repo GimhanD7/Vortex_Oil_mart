@@ -45,12 +45,13 @@ import {
 const PERMISSION_MAP: Record<string, string> = {
   "/admin/sales": "view_sales",
   "/admin/products": "manage_products",
-  "/admin/inventory": "manage_inventory",
+  "/admin/inventory": "view_inventory",
   "/admin/customers": "manage_customers",
   "/admin/reports": "view_reports",
   "/admin/dashboard": "view_reports",
   "/admin/users": "manage_users",
   "/admin/purchases": "manage_inventory",
+  "/admin/settings": "manage_settings",
   "/dashboard": "pos_billing",
 };
 
@@ -1075,7 +1076,11 @@ export default function PosBilling() {
   const filteredNav = navItems.filter((item) => {
     if (isAdmin) return true;
     const req = PERMISSION_MAP[item.href];
-    return !req || user.permissions.includes(req);
+    if (!req) return false;
+    if (req === "view_inventory") {
+      return user.permissions.includes("view_inventory") || user.permissions.includes("manage_inventory") || user.permissions.includes("pos_billing");
+    }
+    return user.permissions.includes(req);
   });
 
   return (

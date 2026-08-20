@@ -16,6 +16,7 @@ import {
   Package,
   PackageCheck,
   Settings,
+  ShoppingCart,
   TrendingUp,
   UserCog,
   Users,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 
 const allNav = [
+  ["pos", "POS Billing", "/dashboard"],
   ["dashboard", "Dashboard", "/admin/dashboard"],
   ["sales", "Sales", "/admin/sales"],
   ["cycles", "Sales Cycles", "/admin/sales-cycles"],
@@ -39,18 +41,21 @@ const PERMISSION_MAP: Record<string, string> = {
   "/admin/sales": "view_sales",
   "/admin/sales-cycles": "view_sales",
   "/admin/products": "manage_products",
-  "/admin/inventory": "manage_inventory",
+  "/admin/inventory": "view_inventory",
+  "/cashier/inventory": "view_inventory",
   "/admin/customers": "manage_customers",
   "/admin/reports": "view_reports",
   "/admin/dashboard": "view_reports",
   "/admin/users": "manage_users",
   "/admin/purchases": "manage_inventory",
+  "/admin/settings": "manage_settings",
   "/dashboard": "pos_billing",
 };
 
 type NavIcon = (typeof allNav)[number][0];
 
 const navIcons: Record<NavIcon, LucideIcon> = {
+  pos: ShoppingCart,
   dashboard: LayoutDashboard,
   sales: TrendingUp,
   cycles: ClipboardList,
@@ -62,6 +67,14 @@ const navIcons: Record<NavIcon, LucideIcon> = {
   purchases: PackageCheck,
   settings: Settings,
 };
+
+function hasAccess(user: { permissions: string[] }, required?: string) {
+  if (!required) return false;
+  if (required === "view_inventory") {
+    return user.permissions.includes("view_inventory") || user.permissions.includes("manage_inventory") || user.permissions.includes("pos_billing");
+  }
+  return user.permissions.includes(required);
+}
 
 function AdminNavIcon({ name }: { name: NavIcon }) {
   const Icon = navIcons[name];
@@ -97,12 +110,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (loading || !user || user.role === "admin") return;
 
     const requiredPermission = PERMISSION_MAP[pathname];
-    if (requiredPermission && !user.permissions.includes(requiredPermission)) {
+    if (requiredPermission && !hasAccess(user, requiredPermission)) {
       const available = allNav.find((item) => {
         const req = PERMISSION_MAP[item[2]];
-        return !req || user.permissions.includes(req);
+        return req && hasAccess(user, req);
       });
-      router.push(available ? available[2] : "/");
+      router.push(available ? available[2] : "/dashboard");
     }
   }, [loading, pathname, router, user]);
 
@@ -117,7 +130,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const nav = allNav.filter((item) => {
     if (user.role === "admin") return true;
     const req = PERMISSION_MAP[item[2]];
-    return !req || user.permissions.includes(req);
+    return req && hasAccess(user, req);
+  }).map((item) => {
+    // Rewrite admin/inventory to cashier/inventory for cashiers
+    if (user.role !== "admin" && item[2] === "/admin/inventory") {
+      return [item[0], item[1], "/cashier/inventory"] as const;
+    }
+    return item;
   });
 
   const signOut = () => {
@@ -146,7 +165,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Link 
               key={label} 
               href={href} 
-              className={pathname === href || (label === "Dashboard" && pathname === "/admin/dashboard") ? "active" : ""}
+              className={pathname === href || pathname.startsWith(href) || (label === "Dashboard" && pathname === "/admin/dashboard") || (label === "Inventory" && pathname.endsWith("/inventory")) ? "active" : ""}
               onClick={() => {
                 if (typeof window !== 'undefined' && window.innerWidth <= 520) {
                   setMobileNavOpen(false);
