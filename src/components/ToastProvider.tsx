@@ -22,6 +22,7 @@ type Toast = Required<Pick<ToastInput, "type" | "message" | "duration">> & {
 
 type ToastContextValue = {
   showToast: (toast: ToastInput | string, type?: ToastType) => void;
+  addToast: (toast: ToastInput | string, type?: ToastType) => void;
   dismissToast: (id: number) => void;
 };
 
@@ -61,7 +62,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }
   }, [dismissToast]);
 
-  const value = useMemo(() => ({ showToast, dismissToast }), [showToast, dismissToast]);
+  const value = useMemo(() => ({ showToast, addToast: showToast, dismissToast }), [showToast, dismissToast]);
 
   return (
     <ToastContext.Provider value={value}>

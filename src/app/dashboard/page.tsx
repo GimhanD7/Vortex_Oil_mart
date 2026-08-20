@@ -175,9 +175,14 @@ type PendingRevocation = {
 
 type SaleSummaryRow = {
   id: number;
-  total_amount: string | number;
+  subtotal_amount?: string | number;
+  discount_rate?: string | number;
   discount_amount?: string | number;
+  tax_rate?: string | number;
   tax_amount?: string | number;
+  cash_received?: string | number | null;
+  cash_balance?: string | number | null;
+  total_amount: string | number;
   payment_method: string;
   status: string;
   created_at: string;
@@ -277,9 +282,9 @@ function calculateSummary(rows: SaleSummaryRow[], cashCycle: CashCycle | null): 
   const sourceRows = currentCycleRows.length ? currentCycleRows : rows;
   return sourceRows.reduce(
     (totals, row) => {
+      totals.invoiceCount += 1;
       if (row.status === "cancelled" || row.status === "voided") return totals;
       const totalAmount = Math.max(0, Number(row.total_amount || 0) - Number(row.returned_amount || 0));
-      totals.invoiceCount += 1;
       totals.itemCount += Number(row.item_count || 0);
       totals.totalSales += totalAmount;
       totals.discount += Number(row.discount_amount || 0);
@@ -381,7 +386,7 @@ export default function PosBilling() {
   const currentBusinessDate = businessDate(currentTime);
 
   const loadCashierSummary = useCallback(async () => {
-    if (!user || user.role === "admin") return [];
+    if (!user) return [];
     const range = summaryRange(new Date(`${currentBusinessDate}T00:00:00`));
     const params = new URLSearchParams({
       cashier: user.username,
@@ -499,7 +504,7 @@ export default function PosBilling() {
   }, [user, showToast]);
 
   useEffect(() => {
-    if (!user || user.role === "admin") return;
+    if (!user) return;
     const prefix = `oil-mart-cash-cycle-${user.id}-`;
     let foundCycle: CashCycle | null = null;
 
@@ -532,7 +537,7 @@ export default function PosBilling() {
   }, [cashCycle, currentBusinessDate, autoCloseExpiredCycle]);
 
   useEffect(() => {
-    if (!user || user.role === "admin" || !cashCycle) return;
+    if (!user) return;
     let active = true;
     const timer = window.setTimeout(() => {
       loadCashierSummary()
@@ -1134,7 +1139,7 @@ export default function PosBilling() {
             <p>{isCashier ? "Cashier workspace" : "Admin billing workspace"} / Welcome back, {user.username}</p>
           </div>
           <div className="pos-top-actions">
-            {isCashier && cashCycle && (
+            {cashCycle && (
               <div className="pos-status-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '6px 12px', borderRadius: '8px', fontSize: '13px', whiteSpace: 'nowrap' }}>
                 <Banknote size={16} aria-hidden="true" style={{ color: '#16a34a' }} />
                 <span>O/C: <b style={{ fontWeight: 700 }}>{money(cashCycle.openingBalance || 0)}</b></span>
@@ -1153,7 +1158,7 @@ export default function PosBilling() {
               <RotateCcw size={16} aria-hidden="true" style={{ color: '#475569' }} />
               <span style={{ color: '#334155', fontWeight: 500 }}>Returns & Exchanges</span>
             </button>
-            {isCashier && cashCycle && (
+            {cashCycle && (
               <button 
                 type="button"
                 onClick={() => void openCloseCycle()}
@@ -1331,7 +1336,7 @@ export default function PosBilling() {
               </div>
             )}
 
-            {isCashier && (
+            {(isCashier || cashCycle || summaryRows.length > 0) && (
               <section className="cashier-summary-card">
                 <header>
                   <div>

@@ -783,13 +783,13 @@ if ($id === 'cycles') {
                     SELECT
                         s.sales_cycle_id,
                         COUNT(DISTINCT s.id) AS invoice_count,
-                        COALESCE(SUM(s.total_amount), 0) AS total_sales,
-                        COALESCE(SUM(CASE WHEN s.payment_method = 'Cash' THEN s.total_amount ELSE 0 END), 0) AS cash_sales,
-                        COALESCE(SUM(CASE WHEN s.payment_method = 'Card' THEN s.total_amount ELSE 0 END), 0) AS card_sales,
-                        COALESCE(SUM(CASE WHEN s.payment_method = 'Bank Transfer' THEN s.total_amount ELSE 0 END), 0) AS bank_sales,
-                        COALESCE(SUM(s.discount_amount), 0) AS discount_total,
-                        COALESCE(SUM(s.tax_amount), 0) AS tax_total,
-                        COALESCE(SUM(items.item_count), 0) AS item_count
+                        COALESCE(SUM(CASE WHEN s.status NOT IN ('cancelled', 'voided') THEN s.total_amount ELSE 0 END), 0) AS total_sales,
+                        COALESCE(SUM(CASE WHEN s.payment_method = 'Cash' AND s.status NOT IN ('cancelled', 'voided') THEN s.total_amount ELSE 0 END), 0) AS cash_sales,
+                        COALESCE(SUM(CASE WHEN s.payment_method = 'Card' AND s.status NOT IN ('cancelled', 'voided') THEN s.total_amount ELSE 0 END), 0) AS card_sales,
+                        COALESCE(SUM(CASE WHEN s.payment_method = 'Bank Transfer' AND s.status NOT IN ('cancelled', 'voided') THEN s.total_amount ELSE 0 END), 0) AS bank_sales,
+                        COALESCE(SUM(CASE WHEN s.status NOT IN ('cancelled', 'voided') THEN s.discount_amount ELSE 0 END), 0) AS discount_total,
+                        COALESCE(SUM(CASE WHEN s.status NOT IN ('cancelled', 'voided') THEN s.tax_amount ELSE 0 END), 0) AS tax_total,
+                        COALESCE(SUM(CASE WHEN s.status NOT IN ('cancelled', 'voided') THEN items.item_count ELSE 0 END), 0) AS item_count
                     FROM sales s
                     LEFT JOIN (
                         SELECT sale_id, SUM(quantity) AS item_count
@@ -927,7 +927,7 @@ if ($method === 'GET' && $id === 'items') {
             JOIN sales s ON s.id = si.sale_id
             LEFT JOIN products p ON p.id = si.product_id
             WHERE COALESCE(s.business_date, DATE(s.created_at)) = ?
-              AND (s.status IS NULL OR s.status != 'refunded')
+              AND (s.status IS NULL OR (s.status != 'refunded' AND s.status != 'cancelled' AND s.status != 'voided'))
             GROUP BY si.product_id, p.name, p.sku, p.category, p.unit, p.product_type
             ORDER BY quantity DESC, total_amount DESC, product_name ASC
         ");
@@ -951,7 +951,6 @@ if ($method === 'GET' && $id === 'items') {
             SELECT COUNT(DISTINCT id) AS invoice_count
             FROM sales
             WHERE COALESCE(business_date, DATE(created_at)) = ?
-              AND (status IS NULL OR status != 'refunded')
         ");
         $stmt->execute([$date]);
         $row = $stmt->fetch();
