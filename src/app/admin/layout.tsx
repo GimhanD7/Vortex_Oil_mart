@@ -15,6 +15,7 @@ import {
   Menu,
   Package,
   PackageCheck,
+  RotateCcw,
   Settings,
   ShoppingCart,
   TrendingUp,
@@ -29,6 +30,7 @@ const allNav = [
   ["sales", "Sales", "/admin/sales"],
   ["cycles", "Sales Cycles", "/admin/sales-cycles"],
   ["products", "Products", "/admin/products"],
+  ["returns", "Returns & Exchanges", "/cashier/returns"],
   ["inventory", "Inventory", "/admin/inventory"],
   ["customers", "Customers", "/admin/customers"],
   ["reports", "Reports", "/admin/reports"],
@@ -43,6 +45,7 @@ const PERMISSION_MAP: Record<string, string> = {
   "/admin/products": "manage_products",
   "/admin/inventory": "view_inventory",
   "/cashier/inventory": "view_inventory",
+  "/cashier/returns": "view_inventory",
   "/admin/customers": "manage_customers",
   "/admin/reports": "view_reports",
   "/admin/dashboard": "view_reports",
@@ -59,6 +62,7 @@ const navIcons: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
   sales: TrendingUp,
   cycles: ClipboardList,
+  returns: RotateCcw,
   products: Package,
   inventory: Boxes,
   customers: Users,
@@ -162,9 +166,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <nav className="admin-nav">
           {nav.map(([icon, label, href]) => (
-            <Link 
-              key={label} 
-              href={href} 
+            <Link
+              key={label}
+              href={href}
               className={pathname === href || pathname.startsWith(href) || (label === "Dashboard" && pathname === "/admin/dashboard") || (label === "Inventory" && pathname.endsWith("/inventory")) ? "active" : ""}
               onClick={() => {
                 if (typeof window !== 'undefined' && window.innerWidth <= 520) {

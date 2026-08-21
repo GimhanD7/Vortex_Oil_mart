@@ -104,5 +104,28 @@ if ($method === 'GET' && $id === 'me') {
     ]);
 }
 
+if ($method === 'POST' && $id === 'verify-admin') {
+    $username = isset($inputData['username']) ? $inputData['username'] : '';
+    $password = isset($inputData['password']) ? $inputData['password'] : '';
+
+    if (empty($username) || empty($password)) {
+        sendJson(["error" => "Admin username and password are required"], 400);
+    }
+
+    $stmt = $pdo->prepare('SELECT id, password, role FROM users WHERE username = ? LIMIT 1');
+    $stmt->execute([$username]);
+    $adminUser = $stmt->fetch();
+
+    if (!$adminUser || $adminUser['role'] !== 'admin') {
+        sendJson(["error" => "Invalid admin credentials or insufficient permissions"], 403);
+    }
+
+    if (!password_verify($password, $adminUser['password'])) {
+        sendJson(["error" => "Invalid admin password"], 401);
+    }
+
+    sendJson(["success" => true, "admin_id" => $adminUser['id']]);
+}
+
 sendJson(["error" => "Endpoint not found"], 404);
 ?>

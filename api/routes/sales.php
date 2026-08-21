@@ -341,6 +341,23 @@ if ($method === 'POST' && is_numeric($id) && $action === 'returns') {
         if (!$sale || in_array($sale['status'], ['cancelled', 'voided'], true)) {
             throw new Exception('Only an active completed invoice can be returned');
         }
+
+        // Check if invoice is from a past date
+        $today = date('Y-m-d');
+        $invoiceDate = substr($sale['business_date'] ?: $sale['created_at'], 0, 10);
+        if ($invoiceDate !== $today && $user['role'] !== 'admin') {
+            $adminUser = $inputData['admin_username'] ?? '';
+            $adminPass = $inputData['admin_password'] ?? '';
+            if (empty($adminUser) || empty($adminPass)) {
+                throw new Exception('Admin credentials required to return past-date invoices.');
+            }
+            $stmtAdmin = $pdo->prepare('SELECT password, role FROM users WHERE username = ? LIMIT 1');
+            $stmtAdmin->execute([$adminUser]);
+            $adminRow = $stmtAdmin->fetch();
+            if (!$adminRow || $adminRow['role'] !== 'admin' || !password_verify($adminPass, $adminRow['password'])) {
+                throw new Exception('Invalid admin credentials.');
+            }
+        }
         $availableItems = [];
         foreach (detailedSaleItems((int)$id) as $row) $availableItems[(int)$row['sale_item_id']] = $row;
         $discountFactor = max(0, 1 - ((float)$sale['discount_rate'] / 100));
@@ -467,9 +484,11 @@ if ($method === 'GET' && !$id) {
             $values[] = '%' . $customerPhone . '%';
         }
         if ($searchQuery) {
-            $where[] = '(s.id = ? OR c.name LIKE ? OR c.phone LIKE ? OR si.product_id IN (SELECT id FROM products WHERE name LIKE ? OR sku LIKE ?))';
+            $cleanInv = (int)preg_replace('/[^0-9]/', '', $searchQuery);
             $searchTerm = '%' . $searchQuery . '%';
-            $values[] = (int)str_replace('INV-', '', $searchQuery);
+            $where[] = '(s.id = ? OR CAST(s.id AS CHAR) LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR si.product_id IN (SELECT id FROM products WHERE name LIKE ? OR sku LIKE ?))';
+            $values[] = $cleanInv;
+            $values[] = $searchTerm;
             $values[] = $searchTerm;
             $values[] = $searchTerm;
             $values[] = $searchTerm;
