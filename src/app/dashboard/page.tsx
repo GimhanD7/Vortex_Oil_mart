@@ -282,8 +282,7 @@ function summaryRange(date: Date) {
 }
 
 function calculateSummary(rows: SaleSummaryRow[], cashCycle: CashCycle | null): SummaryTotals {
-  const currentCycleRows = cashCycle ? rows.filter((row) => row.sales_cycle_id === cashCycle.id) : rows;
-  const sourceRows = currentCycleRows.length ? currentCycleRows : rows;
+  const sourceRows = cashCycle ? rows.filter((row) => row.sales_cycle_id === cashCycle.id) : rows;
   return sourceRows.reduce(
     (totals, row) => {
       totals.invoiceCount += 1;
@@ -1248,7 +1247,7 @@ export default function PosBilling() {
                       </button>
                     </>
                   )}
-                  <button onClick={() => { setShowProfile(false); setShowReturnsPanel(true); loadReturnsSalesList("", "", ""); }}>
+                  <button onClick={() => { setShowProfile(false); router.push("/cashier/returns"); }}>
                     <RotateCcw size={16} aria-hidden="true" /> Returns &amp; Exchanges
                   </button>
                   <button onClick={() => { router.push("/cashier/inventory"); setShowProfile(false); }}>
