@@ -177,10 +177,10 @@ if ($method === 'GET') {
 
         $voidRefundResult = safeQuery("
             SELECT
-                SUM(CASE WHEN status = 'voided' THEN 1 ELSE 0 END) AS voided_count,
-                COALESCE(SUM(CASE WHEN status = 'voided' THEN total_amount ELSE 0 END), 0) AS voided_amount,
-                SUM(CASE WHEN status = 'refunded' THEN 1 ELSE 0 END) AS refund_count,
-                COALESCE(SUM(CASE WHEN status = 'refunded' THEN total_amount ELSE 0 END), 0) AS refund_amount
+                SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS voided_count,
+                COALESCE(SUM(CASE WHEN status = 'cancelled' THEN total_amount ELSE 0 END), 0) AS voided_amount,
+                SUM(CASE WHEN status IN ('returned', 'partially_returned') THEN 1 ELSE 0 END) AS refund_count,
+                COALESCE(SUM(CASE WHEN status IN ('returned', 'partially_returned') THEN total_amount ELSE 0 END), 0) AS refund_amount
             FROM sales
             WHERE COALESCE(business_date, DATE(created_at)) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
         ");

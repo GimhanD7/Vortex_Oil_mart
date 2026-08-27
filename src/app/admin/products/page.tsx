@@ -2,34 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cachedFetch } from "@/lib/api-client";
+import { ProductCategoryIcon } from "@/components/ProductCategoryIcon";
 import { useToast } from "@/components/ToastProvider";
 import {
-  Armchair,
-  BatteryCharging,
-  Box,
   ChevronLeft,
   ChevronRight,
-  CircleStop,
-  CloudRain,
-  Cog,
   Columns3,
   Download,
   Eye,
   EyeOff,
-  Filter,
-  Lightbulb,
-  Link,
-  Package,
-  PackageSearch,
   Pencil,
   Plus,
   Search,
-  Sparkles,
   Trash2,
   Upload,
-  Wrench,
   X,
-  Zap,
 } from "lucide-react";
 
 type Product = {
@@ -48,26 +35,6 @@ type Product = {
   brand?: string;
   visual?: string;
 };
-
-function CategoryIcon({ category, className = "" }: { category: string; className?: string }) {
-  const props = { className: className || "catalog-icon", "aria-hidden": true, size: 22, strokeWidth: 1.9 };
-  if (category === "All") return <PackageSearch {...props} color="#3b82f6" />;
-  const c = category.toLowerCase();
-  if (c.includes("engine") || c.includes("oil")) return <Package {...props} color="#f59e0b" />;
-  if (c.includes("gear") || c.includes("lubricant") || c.includes("grease")) return <Cog {...props} color="#64748b" />;
-  if (c.includes("filter")) return <Filter {...props} color="#10b981" />;
-  if (c.includes("brake") || c.includes("pad") || c.includes("shoe")) return <CircleStop {...props} color="#ef4444" />;
-  if (c.includes("batter")) return <BatteryCharging {...props} color="#eab308" />;
-  if (c.includes("spark") || c.includes("ignition") || c.includes("plug")) return <Zap {...props} color="#8b5cf6" />;
-  if (c.includes("coolant") || c.includes("radiator") || c.includes("wiper") || c.includes("wash")) return <CloudRain {...props} color="#0ea5e9" />;
-  if (c.includes("bulb") || c.includes("light") || c.includes("lamp")) return <Lightbulb {...props} color="#fcd34d" />;
-  if (c.includes("tire") || c.includes("tyre") || c.includes("wheel")) return <CircleStop {...props} color="#334155" />;
-  if (c.includes("belt") || c.includes("chain")) return <Link {...props} color="#d97706" />;
-  if (c.includes("suspension") || c.includes("shock") || c.includes("spring") || c.includes("tool") || c.includes("equipment")) return <Wrench {...props} color="#6366f1" />;
-  if (c.includes("polish") || c.includes("wax") || c.includes("cleaner") || c.includes("shampoo")) return <Sparkles {...props} color="#ec4899" />;
-  if (c.includes("accessory") || c.includes("mat") || c.includes("cover")) return <Armchair {...props} color="#14b8a6" />;
-  return <Box {...props} color="#94a3b8" />;
-}
 
 function stockBadge(stockQuantity: number | string, reorderLevel: number | string = 10) {
   const stock = Number(stockQuantity || 0);
@@ -454,7 +421,7 @@ export default function ProductsPage() {
             onClick={() => { setCat(c); setSubCatFilter("All Sub-Categories"); }}
             className={cat === c ? "active" : ""}
           >
-            <CategoryIcon category={c} />
+            <ProductCategoryIcon category={c} className="catalog-icon" colored />
             {c}
           </button>
         ))}
@@ -520,7 +487,7 @@ export default function ProductsPage() {
             const status = stockBadge(p.stock_quantity, Number(p.reorder_level || 10));
             return (
               <article key={p.id}>
-                {showIcons && <CategoryIcon category={p.category || "General"} className="product-card-icon" />}
+                {showIcons && <ProductCategoryIcon category={p.category} productName={p.name} className="product-card-icon" colored />}
                 <b>{p.name}</b>
                 <small>SKU: {p.sku}</small>
                 {/* <small style={{ color: '#64748b', fontSize: '0.8em', marginTop: '-4px', marginBottom: '4px' }}>
@@ -607,7 +574,7 @@ export default function ProductsPage() {
                 <tr key={p.id}>
                   {cols.prod && (
                     <td>
-                      <CategoryIcon category={p.category || "General"} className="table-product-icon" />
+                      <ProductCategoryIcon category={p.category} productName={p.name} className="table-product-icon" colored />
                       <b>{p.name}</b>
                     </td>
                   )}
@@ -654,7 +621,7 @@ export default function ProductsPage() {
           <form className="product-modal-form" onSubmit={add}>
             <header>
               <h2>
-                <CategoryIcon category={form.category || "General"} className="modal-title-icon" />
+                <ProductCategoryIcon category={form.category} productName={form.name} className="modal-title-icon" colored />
                 {editId ? "Edit Product" : "Add New Product"}
               </h2>
               <button type="button" onClick={() => { setShow(false); setEditId(null); }}>

@@ -77,7 +77,7 @@ try {
                 "title" => "Out of stock",
                 "message" => notificationStockMessage($row),
                 "created_at" => date("c", $stamp),
-                "href" => "/admin/inventory"
+                "href" => $isAdmin ? "/admin/inventory" : "/cashier/inventory"
             ];
         }
 
@@ -106,7 +106,7 @@ try {
                 "title" => "Low stock alert",
                 "message" => notificationStockMessage($row),
                 "created_at" => date("c", $stamp),
-                "href" => "/admin/inventory"
+                "href" => $isAdmin ? "/admin/inventory" : "/cashier/inventory"
             ];
         }
     }

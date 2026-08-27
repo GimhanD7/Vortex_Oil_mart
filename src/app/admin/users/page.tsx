@@ -31,6 +31,7 @@ const emptyForm: FormState = {
 
 const AVAILABLE_PERMISSIONS = [
   { id: 'view_sales', label: 'View Sales' },
+  { id: 'view_inventory', label: 'View Inventory' },
   { id: 'manage_inventory', label: 'Manage Inventory' },
   { id: 'manage_products', label: 'Manage Products' },
   { id: 'manage_customers', label: 'Manage Customers' },

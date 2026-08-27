@@ -1,6 +1,7 @@
 <?php
 global $pdo, $method;
 requireAuth();
+require_once __DIR__ . '/../credit.php';
 
 function ensureReportColumns() {
     global $pdo;
@@ -70,6 +71,7 @@ function selectedReportScope() {
 if ($method === 'GET') {
     try {
         ensureReportColumns();
+        ensureCreditAccountTables();
 
         $completedSaleWhere = "(s.status IS NULL OR s.status = '' OR s.status = 'completed')";
         $completedPlainWhere = "(status IS NULL OR status = '' OR status = 'completed')";
@@ -224,6 +226,28 @@ if ($method === 'GET') {
             ORDER BY total DESC
         ");
 
+        $paymentDateWhere = str_replace('created_at', 'payment_date', $scope['created_where']);
+        $credit_collections = reportQuery("
+            SELECT payment_method, COUNT(*) AS payments, COALESCE(SUM(amount), 0) AS total
+            FROM customer_credit_payments
+            WHERE status = 'completed' AND {$paymentDateWhere}
+            GROUP BY payment_method
+            ORDER BY total DESC
+        ");
+
+        $receivables = reportQuery("
+            SELECT id AS customer_id, name AS customer, credit_limit, outstanding_balance,
+                   GREATEST(0, credit_limit - outstanding_balance) AS available_credit,
+                   CASE
+                     WHEN outstanding_balance <= 0 THEN 'Settled'
+                     WHEN outstanding_balance >= credit_limit AND credit_limit > 0 THEN 'Limit Reached'
+                     ELSE 'Outstanding'
+                   END AS account_status
+            FROM customers
+            WHERE credit_limit > 0 OR outstanding_balance > 0
+            ORDER BY outstanding_balance DESC, name ASC
+        ");
+
         $purchases = reportQuery("
             SELECT DATE(created_at) AS date, supplier, payment_method, COUNT(*) AS purchases, COALESCE(SUM(total_amount), 0) AS total
             FROM purchases
@@ -284,6 +308,8 @@ if ($method === 'GET') {
                 "categories" => $categories,
                 "staff" => $staff,
                 "payment_methods" => $payment_methods,
+                "credit_collections" => $credit_collections,
+                "receivables" => $receivables,
                 "purchases" => $purchases,
                 "inventory_movements" => $inventory_movements,
                 "revocations" => $revocations

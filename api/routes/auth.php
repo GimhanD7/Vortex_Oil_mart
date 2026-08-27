@@ -33,8 +33,8 @@ if ($method === 'POST' && $id === 'login') {
         }
     } else {
         $permissions = $user['role'] === 'admin' 
-            ? ['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing']
-            : ['pos_billing'];
+            ? ['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing', 'view_inventory']
+            : ['pos_billing', 'view_inventory'];
     }
 
     $payload = [
@@ -92,8 +92,8 @@ if ($method === 'GET' && $id === 'me') {
         }
     } else {
         $permissions = $dbUser['role'] === 'admin' 
-            ? ['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing']
-            : ['pos_billing'];
+            ? ['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing', 'view_inventory']
+            : ['pos_billing', 'view_inventory'];
     }
 
     sendJson([
@@ -102,6 +102,29 @@ if ($method === 'GET' && $id === 'me') {
         "role" => $dbUser['role'],
         "permissions" => $permissions
     ]);
+}
+
+if ($method === 'POST' && $id === 'verify-admin') {
+    $username = isset($inputData['username']) ? $inputData['username'] : '';
+    $password = isset($inputData['password']) ? $inputData['password'] : '';
+
+    if (empty($username) || empty($password)) {
+        sendJson(["error" => "Admin username and password are required"], 400);
+    }
+
+    $stmt = $pdo->prepare('SELECT id, password, role FROM users WHERE username = ? LIMIT 1');
+    $stmt->execute([$username]);
+    $adminUser = $stmt->fetch();
+
+    if (!$adminUser || $adminUser['role'] !== 'admin') {
+        sendJson(["error" => "Invalid admin credentials or insufficient permissions"], 403);
+    }
+
+    if (!password_verify($password, $adminUser['password'])) {
+        sendJson(["error" => "Invalid admin password"], 401);
+    }
+
+    sendJson(["success" => true, "admin_id" => $adminUser['id']]);
 }
 
 sendJson(["error" => "Endpoint not found"], 404);

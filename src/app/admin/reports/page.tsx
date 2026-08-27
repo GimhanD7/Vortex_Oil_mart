@@ -13,6 +13,8 @@ type BreakdownRow = { brand?: string | null; category?: string | null; payment_m
 type PurchaseRow = { date: string; supplier: string; payment_method: string; purchases: string | number; total: string | number };
 type MovementRow = { movement_type: string; transactions: string | number; quantity: string | number; value: string | number };
 type RevocationRow = { created_at: string; sale_id: number | null; action_type: string; reason: string; affected_amount: string | number; cashier: string; approver: string };
+type CreditCollectionRow = { payment_method: string; payments: string | number; total: string | number };
+type ReceivableRow = { customer_id: number; customer: string; credit_limit: string | number; outstanding_balance: string | number; available_credit: string | number; account_status: string };
 
 type SelectedReport = {
   period: "daily" | "monthly" | "yearly";
@@ -29,6 +31,8 @@ type SelectedReport = {
   categories: BreakdownRow[];
   staff: BreakdownRow[];
   payment_methods: BreakdownRow[];
+  credit_collections: CreditCollectionRow[];
+  receivables: ReceivableRow[];
   purchases: PurchaseRow[];
   inventory_movements: MovementRow[];
   revocations: RevocationRow[];
@@ -57,6 +61,8 @@ const fallbackSelected: SelectedReport = {
   categories: [],
   staff: [],
   payment_methods: [],
+  credit_collections: [],
+  receivables: [],
   purchases: [],
   inventory_movements: [],
   revocations: [],
@@ -414,6 +420,169 @@ function buildStructuredPdf(selected: SelectedReport) {
   return new Blob([pdf], { type: "application/pdf" });
 }
 
+function SalesTimelineChart({ rows }: { rows: TimelineRow[]; period: string }) {
+  const [activeHoverIndex, setActiveHoverIndex] = useState<number | null>(null);
+
+  if (!rows || rows.length === 0) {
+    return (
+      <div style={{ padding: "48px 24px", textAlign: "center", color: "#94a3b8", fontSize: "14px", fontWeight: 500 }}>
+        No timeline data available for this period.
+      </div>
+    );
+  }
+
+  const totals = rows.map((r) => Number(r.total || 0));
+  const maxVal = Math.max(1, ...totals);
+  const count = rows.length;
+
+  const svgWidth = 820;
+  const svgHeight = 220;
+  const padLeft = 70;
+  const padRight = 30;
+  const padTop = 30;
+  const padBottom = 40;
+
+  const chartW = svgWidth - padLeft - padRight;
+  const chartH = svgHeight - padTop - padBottom;
+
+  const points = rows.map((row, i) => {
+    const val = Number(row.total || 0);
+    const x = count === 1 ? padLeft + chartW / 2 : padLeft + (i / (count - 1)) * chartW;
+    const y = padTop + chartH - (val / maxVal) * chartH;
+    const label = String(row.date || row.month || row.year || "");
+    return { x, y, val, label, orders: row.orders || 0 };
+  });
+
+  let pathD = "";
+  let areaD = "";
+
+  if (points.length === 1) {
+    const p = points[0];
+    pathD = `M ${padLeft} ${p.y} L ${svgWidth - padRight} ${p.y}`;
+    areaD = `M ${padLeft} ${p.y} L ${svgWidth - padRight} ${p.y} L ${svgWidth - padRight} ${padTop + chartH} L ${padLeft} ${padTop + chartH} Z`;
+  } else {
+    pathD = points.reduce((acc, p, i, arr) => {
+      if (i === 0) return `M ${p.x} ${p.y}`;
+      const prev = arr[i - 1];
+      const cx1 = prev.x + (p.x - prev.x) / 3;
+      const cy1 = prev.y;
+      const cx2 = prev.x + (2 * (p.x - prev.x)) / 3;
+      const cy2 = p.y;
+      return `${acc} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${p.x} ${p.y}`;
+    }, "");
+
+    const first = points[0];
+    const last = points[points.length - 1];
+    areaD = `${pathD} L ${last.x} ${padTop + chartH} L ${first.x} ${padTop + chartH} Z`;
+  }
+
+  const yTicks = [0, 0.33, 0.66, 1].map((pct) => {
+    const val = maxVal * pct;
+    const y = padTop + chartH - pct * chartH;
+    return { val, y };
+  });
+
+  const peakPoint = [...points].sort((a, b) => b.val - a.val)[0];
+  const totalPeriodSales = totals.reduce((a, b) => a + b, 0);
+
+  return (
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, background: "#fafbfc", padding: "12px 18px", borderRadius: 12, border: "1px solid #f1f5f9" }}>
+        <div style={{ display: "flex", gap: 24 }}>
+          <div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>Period Total</span>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>{money(totalPeriodSales)}</div>
+          </div>
+          <div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>Peak Period</span>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#e7a700" }}>{money(peakPoint?.val || 0)} <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8" }}>({peakPoint?.label})</span></div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fffbeb", color: "#a16207", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "1px solid #fde68a" }}>
+          <TrendingUp size={14} /> Line &amp; Area Chart
+        </div>
+      </div>
+
+      <div style={{ position: "relative", width: "100%", overflowX: "auto" }}>
+        <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", minWidth: 600, overflow: "visible" }}>
+          <defs>
+            <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ffbd00" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#ffbd00" stopOpacity="0.02" />
+            </linearGradient>
+            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#ffbd00" floodOpacity="0.3" />
+            </filter>
+          </defs>
+
+          {yTicks.map((tick, i) => (
+            <g key={i}>
+              <line
+                x1={padLeft}
+                y1={tick.y}
+                x2={svgWidth - padRight}
+                y2={tick.y}
+                stroke="#f1f5f9"
+                strokeWidth="1.5"
+                strokeDasharray={i === 0 || i === yTicks.length - 1 ? "none" : "4,4"}
+              />
+              <text
+                x={padLeft - 10}
+                y={tick.y + 4}
+                textAnchor="end"
+                fontSize="10"
+                fontWeight="600"
+                fill="#94a3b8"
+              >
+                {tick.val >= 1000 ? `Rs. ${(tick.val / 1000).toFixed(1)}k` : `Rs. ${Math.round(tick.val)}`}
+              </text>
+            </g>
+          ))}
+
+          <path d={areaD} fill="url(#salesGradient)" />
+          <path d={pathD} fill="none" stroke="#f0ab00" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" filter="url(#shadow)" />
+
+          {points.map((p, i) => {
+            const isHovered = activeHoverIndex === i;
+            return (
+              <g key={i} onMouseEnter={() => setActiveHoverIndex(i)} onMouseLeave={() => setActiveHoverIndex(null)} style={{ cursor: "pointer" }}>
+                {isHovered && <circle cx={p.x} cy={p.y} r="10" fill="#fffbeb" stroke="#f0ab00" strokeWidth="2" opacity="0.8" />}
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={isHovered ? "6" : "4.5"}
+                  fill="#ffffff"
+                  stroke="#f0ab00"
+                  strokeWidth="2.5"
+                  style={{ transition: "all 0.15s ease" }}
+                />
+                <text
+                  x={p.x}
+                  y={padTop + chartH + 20}
+                  textAnchor="middle"
+                  fontSize="11"
+                  fontWeight={isHovered ? "800" : "600"}
+                  fill={isHovered ? "#111827" : "#64748b"}
+                >
+                  {p.label}
+                </text>
+                {(isHovered || points.length <= 6) && (
+                  <g transform={`translate(${p.x}, ${p.y - 12})`}>
+                    <rect x="-50" y="-28" width="100" height="24" rx="6" fill="#111827" filter="drop-shadow(0px 2px 4px rgba(0,0,0,0.2))" />
+                    <text x="0" y="-13" textAnchor="middle" fontSize="10" fontWeight="700" fill="#ffffff">
+                      {money(p.val)}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 function TablePanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="report-panel">
@@ -522,24 +691,22 @@ export default function ReportsPage() {
               <h2>{period.charAt(0).toUpperCase() + period.slice(1)} Sales Timeline</h2>
               <small>{timeline.rows.length} periods</small>
             </header>
-            <div className="report-timeline-bars">
-              {timeline.rows.length === 0 && <p>No timeline data available.</p>}
-              {timeline.rows.map((row) => {
-                const value = Number(row.total || 0);
-                const height = Math.max(4, (value / timeline.max) * 100);
-                const label = row.date || row.month || row.year;
-                return (
-                  <div key={String(label)} className="report-bar-item">
-                    <div className="report-bar-track"><i style={{ height: `${height}%` }} /></div>
-                    <b>{money(value)}</b>
-                    <small>{String(label)}</small>
-                  </div>
-                );
-              })}
-            </div>
+            <SalesTimelineChart rows={timeline.rows} period={period} />
           </section>
 
           <section className="report-breakdown-grid">
+            <TablePanel title="Credit Collections">
+              <table><thead><tr><th>Method</th><th>Payments</th><th>Collected</th></tr></thead><tbody>
+                {selected.credit_collections.map((row) => <tr key={row.payment_method}><td>{row.payment_method}</td><td>{row.payments}</td><td>{money(row.total)}</td></tr>)}
+                {!selected.credit_collections.length && <tr><td colSpan={3}>No credit collections for this period.</td></tr>}
+              </tbody></table>
+            </TablePanel>
+            <TablePanel title="Customer Receivables">
+              <table><thead><tr><th>Customer</th><th>Limit</th><th>Outstanding</th><th>Available</th><th>Status</th></tr></thead><tbody>
+                {selected.receivables.map((row) => <tr key={row.customer_id}><td>{row.customer}</td><td>{money(row.credit_limit)}</td><td>{money(row.outstanding_balance)}</td><td>{money(row.available_credit)}</td><td>{row.account_status}</td></tr>)}
+                {!selected.receivables.length && <tr><td colSpan={5}>No customer credit accounts.</td></tr>}
+              </tbody></table>
+            </TablePanel>
             <TablePanel title="Payment Methods">
               <table><thead><tr><th>Method</th><th>Orders</th><th>Total</th></tr></thead><tbody>
                 {selected.payment_methods.map((row) => <tr key={row.payment_method}><td>{row.payment_method}</td><td>{row.orders}</td><td>{money(row.total)}</td></tr>)}

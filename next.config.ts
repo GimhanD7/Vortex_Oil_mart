@@ -8,7 +8,8 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  reactCompiler: true,
+  // Keep development route compilation fast; enable the compiler for production builds.
+  reactCompiler: isProd,
   typescript: {
     ignoreBuildErrors: true,
   },
