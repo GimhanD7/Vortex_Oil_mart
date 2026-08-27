@@ -50,10 +50,31 @@ function verifyJWT($token, $secret) {
     return false;
 }
 
+function getAuthorizationHeader() {
+    if (isset($_SERVER['Authorization'])) {
+        return trim($_SERVER['Authorization']);
+    }
+    if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        return trim($_SERVER['HTTP_AUTHORIZATION']);
+    }
+    if (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        return trim($_SERVER['REDIRECT_HTTP_AUTHORIZATION']);
+    }
+    if (function_exists('apache_request_headers')) {
+        $headers = apache_request_headers();
+        if (isset($headers['Authorization'])) {
+            return trim($headers['Authorization']);
+        }
+        if (isset($headers['authorization'])) {
+            return trim($headers['authorization']);
+        }
+    }
+    return null;
+}
+
 function authenticate() {
     global $jwt_secret;
-    $headers = apache_request_headers();
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : (isset($headers['authorization']) ? $headers['authorization'] : '');
+    $authHeader = getAuthorizationHeader();
     
     $token = null;
     if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
@@ -78,19 +99,4 @@ function requireAuth() {
     }
     return $user;
 }
-
-// Function to handle CORS
-function handleCORS() {
-    header("Access-Control-Allow-Origin: *");
-    header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-    header("Access-Control-Allow-Headers: Content-Type, Authorization");
-    
-    if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
-        http_response_code(200);
-        exit;
-    }
-}
-
-// Execute CORS on every request
-handleCORS();
 ?>

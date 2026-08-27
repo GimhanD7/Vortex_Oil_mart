@@ -1,0 +1,21 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # 1. Do NOT rewrite API requests (let /api/.htaccess handle them)
+  RewriteRule ^api/ - [L]
+
+  # 2. If the request matches an existing file or directory, serve it directly
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # 3. Clean URLs: If a matching .html file exists, serve it (e.g. /dashboard -> /dashboard.html)
+  RewriteCond %{REQUEST_FILENAME}.html -f
+  RewriteRule ^(.*)$ $1.html [L]
+
+  # 4. Fallback to index.html for SPA routing
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.html [L]
+</IfModule>
