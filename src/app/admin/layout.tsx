@@ -17,7 +17,6 @@ import {
   PackageCheck,
   RotateCcw,
   Settings,
-  ShoppingCart,
   TrendingUp,
   UserCog,
   Users,
@@ -25,7 +24,6 @@ import {
 } from "lucide-react";
 
 const allNav = [
-  ["pos", "POS Billing", "/dashboard"],
   ["dashboard", "Dashboard", "/admin/dashboard"],
   ["sales", "Sales", "/admin/sales"],
   ["cycles", "Sales Cycles", "/admin/sales-cycles"],
@@ -52,13 +50,11 @@ const PERMISSION_MAP: Record<string, string> = {
   "/admin/users": "manage_users",
   "/admin/purchases": "manage_inventory",
   "/admin/settings": "manage_settings",
-  "/dashboard": "pos_billing",
 };
 
 type NavIcon = (typeof allNav)[number][0];
 
 const navIcons: Record<NavIcon, LucideIcon> = {
-  pos: ShoppingCart,
   dashboard: LayoutDashboard,
   sales: TrendingUp,
   cycles: ClipboardList,
@@ -83,6 +79,12 @@ function hasAccess(user: { permissions: string[] }, required?: string) {
 function AdminNavIcon({ name }: { name: NavIcon }) {
   const Icon = navIcons[name];
   return <Icon className="admin-nav-icon" aria-hidden="true" strokeWidth={1.9} />;
+}
+
+function isActiveNav(pathname: string, href: string) {
+  if (pathname === href) return true;
+  if (href === "/admin/sales" || href === "/admin/sales-cycles") return false;
+  return pathname.startsWith(`${href}/`);
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -169,7 +171,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Link
               key={label}
               href={href}
-              className={pathname === href || pathname.startsWith(href) || (label === "Dashboard" && pathname === "/admin/dashboard") || (label === "Inventory" && pathname.endsWith("/inventory")) ? "active" : ""}
+              className={isActiveNav(pathname, href) ? "active" : ""}
               onClick={() => {
                 if (typeof window !== 'undefined' && window.innerWidth <= 520) {
                   setMobileNavOpen(false);
