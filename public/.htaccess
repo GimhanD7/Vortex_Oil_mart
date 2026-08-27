@@ -2,19 +2,26 @@
   RewriteEngine On
   RewriteBase /
 
-  # 1. Do NOT rewrite API requests (let /api/.htaccess handle them)
+  # 1. Do NOT touch API requests (handled by /api/.htaccess)
   RewriteRule ^api/ - [L]
 
-  # 2. If the request matches an existing file or directory, serve it directly
-  RewriteCond %{REQUEST_FILENAME} -f [OR]
-  RewriteCond %{REQUEST_FILENAME} -d
+  # 2. Existing real files (JS, CSS, images) -> serve directly
+  RewriteCond %{REQUEST_FILENAME} -f
   RewriteRule ^ - [L]
 
-  # 3. Clean URLs: If a matching .html file exists, serve it (e.g. /dashboard -> /dashboard.html)
-  RewriteCond %{REQUEST_FILENAME}.html -f
+  # 3. Existing directory with index.html -> serve directly
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteCond %{REQUEST_FILENAME}/index.html -f
+  RewriteRule ^ - [L]
+
+  # 4. Handle clean URLs (e.g. /dashboard -> /dashboard.html or /dashboard/)
+  RewriteCond %{DOCUMENT_ROOT}/$1.html -f
   RewriteRule ^(.*)$ $1.html [L]
 
-  # 4. Fallback to index.html for SPA routing
+  RewriteCond %{DOCUMENT_ROOT}/$1/index.html -f
+  RewriteRule ^(.*)$ $1/index.html [L]
+
+  # 5. SPA Fallback for client-side routing & back/forward history navigation
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^ index.html [L]
