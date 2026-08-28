@@ -144,7 +144,7 @@ export default function SalesCyclesPage() {
                     <td>{money(cycle.total_sales)}</td>
                     <td>{Number(cycle.invoice_count || 0)}</td>
                     <td><em className={cycle.status === "open" ? "low" : ""}>{cycle.status}</em></td>
-                    <td><button onClick={() => setSelected(cycle)} aria-label={`View ${cycle.cycle_id}`}><Eye size={15} aria-hidden="true" /></button></td>
+                    <td className="table-actions-cell"><button onClick={() => setSelected(cycle)} aria-label={`View ${cycle.cycle_id}`}><Eye size={15} aria-hidden="true" /></button></td>
                   </tr>
                 ))}
               </tbody>

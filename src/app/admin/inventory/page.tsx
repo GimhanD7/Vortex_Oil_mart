@@ -101,7 +101,7 @@ export default function InventoryPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [openActions, setOpenActions] = useState<number | null>(null);
 
-  const canManage = !currentUser || currentUser.role === "admin" || currentUser.permissions.includes("manage_inventory");
+  const canManage = currentUser?.role === "admin" || currentUser?.permissions?.includes("manage_inventory") || false;
 
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
@@ -156,16 +156,16 @@ export default function InventoryPage() {
       })
       .catch(() => {});
 
-    loadMovements();
-  }, [loadMovements]);
+    if (canManage) loadMovements();
+  }, [canManage, loadMovements]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
-    loadMovements();
-  }, [loadMovements]);
+    if (canManage) loadMovements();
+  }, [canManage, loadMovements]);
 
   const shown = useMemo(() => {
     return products.filter(
@@ -190,6 +190,11 @@ export default function InventoryPage() {
   const totalPages = Math.max(1, Math.ceil(shown.length / itemsPerPage));
   const activePage = Math.min(currentPage, totalPages);
   const paginatedShown = shown.slice((activePage - 1) * itemsPerPage, activePage * itemsPerPage);
+  const visibleCols = {
+    ...cols,
+    check: canManage && cols.check,
+    actions: canManage && cols.actions,
+  };
   const visibleIds = paginatedShown.map((product) => product.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
   const someVisibleSelected = visibleIds.some((id) => selectedIds.includes(id));
@@ -371,11 +376,11 @@ export default function InventoryPage() {
             {canManage && (
               <button onClick={() => { if(products.length > 0) setAdjust(products[0]) }}><SlidersHorizontal size={15} aria-hidden="true" /> Stock Adjustment</button>
             )}
-            <div style={{ position: 'relative' }}>
+            <div className="inventory-column-picker">
               <button onClick={() => setShowCols(!showCols)} style={{ marginLeft: '4px', height: '34px', padding: '0 12px' }}><Columns3 size={15} aria-hidden="true" /> Columns</button>
               {showCols && (
-                <div style={{ position: 'absolute', right: 0, top: '40px', background: '#fff', border: '1px solid #e2e4e7', padding: '12px', borderRadius: '8px', zIndex: 50, display: 'grid', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', textAlign: 'left', minWidth: '150px' }}>
-                  <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.check} onChange={(e) => setCols({...cols, check: e.target.checked})} /> Checkbox</label>
+                <div className="column-menu">
+                  {canManage && <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.check} onChange={(e) => setCols({...cols, check: e.target.checked})} /> Checkbox</label>}
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.prod} onChange={(e) => setCols({...cols, prod: e.target.checked})} /> Product</label>
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.sku} onChange={(e) => setCols({...cols, sku: e.target.checked})} /> SKU / Barcode</label>
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.cat} onChange={(e) => setCols({...cols, cat: e.target.checked})} /> Category / Brand</label>
@@ -390,7 +395,7 @@ export default function InventoryPage() {
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.supplier} onChange={(e) => setCols({...cols, supplier: e.target.checked})} /> Supplier</label>
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.status} onChange={(e) => setCols({...cols, status: e.target.checked})} /> Status</label>
                   <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.updated} onChange={(e) => setCols({...cols, updated: e.target.checked})} /> Last Updated</label>
-                  <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.actions} onChange={(e) => setCols({...cols, actions: e.target.checked})} /> Actions</label>
+                  {canManage && <label style={{ display: 'flex', gap: '6px', alignItems: 'center' }}><input type="checkbox" checked={cols.actions} onChange={(e) => setCols({...cols, actions: e.target.checked})} /> Actions</label>}
                 </div>
               )}
             </div>
@@ -401,7 +406,7 @@ export default function InventoryPage() {
           <table>
             <thead>
               <tr>
-                {cols.check && (
+                {visibleCols.check && (
                   <th className="select-cell">
                     <input
                       type="checkbox"
@@ -415,27 +420,27 @@ export default function InventoryPage() {
                     />
                   </th>
                 )}
-                {cols.prod && <th>Item Details</th>}
-                {cols.sku && <th>SKU / Barcode</th>}
-                {cols.cat && <th>Category / Brand</th>}
-                {cols.start_stock && <th style={{ textAlign: 'right' }}>Start Stock</th>}
-                {cols.monthly_in && <th style={{ textAlign: 'right' }}>In</th>}
-                {cols.monthly_out && <th style={{ textAlign: 'right' }}>Out</th>}
-                {cols.stock && <th>Current Stock</th>}
-                {cols.reorder && <th>Reorder Level</th>}
-                {cols.loc && <th>Location</th>}
-                {cols.batch && <th>Batch No.</th>}
-                {cols.price && <th>Unit Price</th>}
-                {cols.supplier && <th>Supplier</th>}
-                {cols.status && <th>Status</th>}
-                {cols.updated && <th>Last Updated</th>}
-                {cols.actions && <th>Actions</th>}
+                {visibleCols.prod && <th>Item Details</th>}
+                {visibleCols.sku && <th>SKU / Barcode</th>}
+                {visibleCols.cat && <th>Category / Brand</th>}
+                {visibleCols.start_stock && <th style={{ textAlign: 'right' }}>Start Stock</th>}
+                {visibleCols.monthly_in && <th style={{ textAlign: 'right' }}>In</th>}
+                {visibleCols.monthly_out && <th style={{ textAlign: 'right' }}>Out</th>}
+                {visibleCols.stock && <th>Current Stock</th>}
+                {visibleCols.reorder && <th>Reorder Level</th>}
+                {visibleCols.loc && <th>Location</th>}
+                {visibleCols.batch && <th>Batch No.</th>}
+                {visibleCols.price && <th>Unit Price</th>}
+                {visibleCols.supplier && <th>Supplier</th>}
+                {visibleCols.status && <th>Status</th>}
+                {visibleCols.updated && <th>Last Updated</th>}
+                {visibleCols.actions && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {paginatedShown.map((p, i) => (
                 <tr key={p.id} className={stockState(p).className === "low" ? "warning-row" : ""}>
-                  {cols.check && (
+                  {visibleCols.check && (
                     <td className="select-cell">
                       <input
                         type="checkbox"
@@ -446,29 +451,29 @@ export default function InventoryPage() {
                       />
                     </td>
                   )}
-                  {cols.prod && (
-                    <td>
+                  {visibleCols.prod && (
+                    <td className="inventory-product-cell">
                       <ProductCategoryIcon category={p.category} productName={p.name} className="table-product-icon" />
                       <b>{p.name}</b>
                       <small>{p.brand}</small>
                     </td>
                   )}
-                  {cols.sku && (
-                    <td>
+                  {visibleCols.sku && (
+                    <td className="inventory-sku-cell">
                       <b>{p.sku}</b>
                       <small>8901040900{String(i).padStart(3, "0")}</small>
                     </td>
                   )}
-                  {cols.cat && (
-                    <td>
+                  {visibleCols.cat && (
+                    <td className="inventory-category-cell">
                       <b>{p.category}</b>
                       <small>{p.brand}</small>
                     </td>
                   )}
-                  {cols.start_stock && <td style={{ textAlign: 'right' }}>{p.monthly_start_stock}</td>}
-                  {cols.monthly_in && <td style={{ textAlign: 'right', color: '#16a34a' }}>+{p.monthly_in}</td>}
-                  {cols.monthly_out && <td style={{ textAlign: 'right', color: '#dc2626' }}>-{p.monthly_out}</td>}
-                  {cols.stock && (
+                  {visibleCols.start_stock && <td style={{ textAlign: 'right' }}>{p.monthly_start_stock}</td>}
+                  {visibleCols.monthly_in && <td style={{ textAlign: 'right', color: '#16a34a' }}>+{p.monthly_in}</td>}
+                  {visibleCols.monthly_out && <td style={{ textAlign: 'right', color: '#dc2626' }}>-{p.monthly_out}</td>}
+                  {visibleCols.stock && (
                     <td>
                       <b className={stockState(p).className === "" ? "success" : "danger"}>
                         {formatQty(p.stock_quantity, p.unit)}
@@ -478,16 +483,16 @@ export default function InventoryPage() {
                       </small>
                     </td>
                   )}
-                  {cols.reorder && <td>{p.reorder_level || 10}</td>}
-                  {cols.loc && <td>{p.location || "Main Store"}</td>}
-                  {cols.batch && <td>{p.batch_no || "-"}</td>}
-                  {cols.price && (
+                  {visibleCols.reorder && <td>{p.reorder_level || 10}</td>}
+                  {visibleCols.loc && <td>{p.location || "Main Store"}</td>}
+                  {visibleCols.batch && <td>{p.batch_no || "-"}</td>}
+                  {visibleCols.price && (
                     <td>
                       Rs. {Number(p.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                     </td>
                   )}
-                  {cols.supplier && <td>{p.supplier || p.brand}</td>}
-                  {cols.status && (
+                  {visibleCols.supplier && <td>{p.supplier || p.brand}</td>}
+                  {visibleCols.status && (
                     <td>
                       <em
                         className={stockState(p).className}
@@ -496,13 +501,13 @@ export default function InventoryPage() {
                       </em>
                     </td>
                   )}
-                  {cols.updated && (
+                  {visibleCols.updated && (
                     <td>
                       {p.updated_at ? new Date(p.updated_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
                       {p.updated_at && <small>{new Date(p.updated_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</small>}
                     </td>
                   )}
-                  {cols.actions && (
+                  {visibleCols.actions && (
                     <td className="inventory-actions-cell">
                       {canManage && (
                         <button onClick={() => setAdjust(p)} aria-label={`Adjust ${p.name}`}>
@@ -515,7 +520,7 @@ export default function InventoryPage() {
                       {openActions === p.id && (
                         <div className="inventory-action-menu">
                           {canManage && <button onClick={() => router.push(`/admin/products?edit=${p.id}`)}>Edit product</button>}
-                          <button onClick={() => { setMovementProduct(String(p.id)); setOpenActions(null); }}>View movements</button>
+                          {canManage && <button onClick={() => { setMovementProduct(String(p.id)); setOpenActions(null); }}>View movements</button>}
                           {canManage && <button onClick={() => { setAdjust(p); setOpenActions(null); }}>Adjust stock</button>}
                         </div>
                       )}

@@ -17,6 +17,7 @@ import {
   PackageCheck,
   RotateCcw,
   Settings,
+  ShoppingCart,
   TrendingUp,
   UserCog,
   Users,
@@ -25,6 +26,7 @@ import {
 
 const allNav = [
   ["dashboard", "Dashboard", "/admin/dashboard"],
+  ["billing", "POS Billing", "/dashboard"],
   ["sales", "Sales", "/admin/sales"],
   ["cycles", "Sales Cycles", "/admin/sales-cycles"],
   ["products", "Products", "/admin/products"],
@@ -39,6 +41,7 @@ const allNav = [
 
 const PERMISSION_MAP: Record<string, string> = {
   "/admin/sales": "view_sales",
+  "/dashboard": "pos_billing",
   "/admin/sales-cycles": "view_sales",
   "/admin/products": "manage_products",
   "/admin/inventory": "view_inventory",
@@ -56,6 +59,7 @@ type NavIcon = (typeof allNav)[number][0];
 
 const navIcons: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
+  billing: ShoppingCart,
   sales: TrendingUp,
   cycles: ClipboardList,
   returns: RotateCcw,
@@ -81,10 +85,15 @@ function AdminNavIcon({ name }: { name: NavIcon }) {
   return <Icon className="admin-nav-icon" aria-hidden="true" strokeWidth={1.9} />;
 }
 
+function normalizePath(path: string) {
+  if (path === "/") return path;
+  return path.replace(/\/+$/, "");
+}
+
 function isActiveNav(pathname: string, href: string) {
-  if (pathname === href) return true;
-  if (href === "/admin/sales" || href === "/admin/sales-cycles") return false;
-  return pathname.startsWith(`${href}/`);
+  const currentPath = normalizePath(pathname);
+  const targetPath = normalizePath(href);
+  return currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -115,7 +124,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (loading || !user || user.role === "admin") return;
 
-    const requiredPermission = PERMISSION_MAP[pathname];
+    const requiredPermission = PERMISSION_MAP[normalizePath(pathname)];
     if (requiredPermission && !hasAccess(user, requiredPermission)) {
       const available = allNav.find((item) => {
         const req = PERMISSION_MAP[item[2]];
@@ -134,7 +143,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   const nav = allNav.filter((item) => {
-    if (user.role === "admin") return true;
+    if (user.role === "admin") return item[2] !== "/dashboard";
     const req = PERMISSION_MAP[item[2]];
     return req && hasAccess(user, req);
   }).map((item) => {
@@ -172,6 +181,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               key={label}
               href={href}
               className={isActiveNav(pathname, href) ? "active" : ""}
+              aria-current={isActiveNav(pathname, href) ? "page" : undefined}
               onClick={() => {
                 if (typeof window !== 'undefined' && window.innerWidth <= 520) {
                   setMobileNavOpen(false);

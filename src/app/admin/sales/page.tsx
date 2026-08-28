@@ -659,7 +659,7 @@ export default function SalesPage() {
                       {cols.total && <td>{money(sale.total_amount)}</td>}
                       {cols.status && <td><em className={sale.status === "refunded" ? "refund" : sale.status === "cancelled" || sale.status === "voided" ? "cancel" : ""}>{sale.status || "completed"}</em></td>}
                       {cols.actions && (
-                        <td>
+                        <td className="table-actions-cell">
                           <button aria-label="View invoice" onClick={(event) => { event.stopPropagation(); setSelected(sale); }}><Eye size={15} aria-hidden="true" /></button>
                           <button aria-label="Print invoice" onClick={(event) => { event.stopPropagation(); void printReceipt(sale); }}><Printer size={15} aria-hidden="true" /></button>
                         </td>

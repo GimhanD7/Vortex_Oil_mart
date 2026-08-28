@@ -503,7 +503,7 @@ function SalesTimelineChart({ rows }: { rows: TimelineRow[]; period: string }) {
         </div>
       </div>
 
-      <div style={{ position: "relative", width: "100%", overflowX: "auto" }}>
+      <div style={{ position: "relative", width: "100%", overflow: "visible", paddingTop: 6 }}>
         <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "auto", minWidth: 600, overflow: "visible" }}>
           <defs>
             <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
@@ -544,6 +544,10 @@ function SalesTimelineChart({ rows }: { rows: TimelineRow[]; period: string }) {
 
           {points.map((p, i) => {
             const isHovered = activeHoverIndex === i;
+            const tooltipX = Math.max(54, Math.min(svgWidth - padRight - 54, p.x));
+            const tooltipY = p.y < 58 ? p.y + 44 : p.y - 12;
+            const tooltipTextY = p.y < 58 ? 17 : -13;
+            const tooltipRectY = p.y < 58 ? 2 : -28;
             return (
               <g key={i} onMouseEnter={() => setActiveHoverIndex(i)} onMouseLeave={() => setActiveHoverIndex(null)} style={{ cursor: "pointer" }}>
                 {isHovered && <circle cx={p.x} cy={p.y} r="10" fill="#fffbeb" stroke="#f0ab00" strokeWidth="2" opacity="0.8" />}
@@ -567,9 +571,9 @@ function SalesTimelineChart({ rows }: { rows: TimelineRow[]; period: string }) {
                   {p.label}
                 </text>
                 {(isHovered || points.length <= 6) && (
-                  <g transform={`translate(${p.x}, ${p.y - 12})`}>
-                    <rect x="-50" y="-28" width="100" height="24" rx="6" fill="#111827" filter="drop-shadow(0px 2px 4px rgba(0,0,0,0.2))" />
-                    <text x="0" y="-13" textAnchor="middle" fontSize="10" fontWeight="700" fill="#ffffff">
+                  <g transform={`translate(${tooltipX}, ${tooltipY})`}>
+                    <rect x="-54" y={tooltipRectY} width="108" height="26" rx="6" fill="#111827" filter="drop-shadow(0px 2px 4px rgba(0,0,0,0.2))" />
+                    <text x="0" y={tooltipTextY} textAnchor="middle" fontSize="10" fontWeight="700" fill="#ffffff">
                       {money(p.val)}
                     </text>
                   </g>

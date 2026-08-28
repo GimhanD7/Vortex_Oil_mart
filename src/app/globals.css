@@ -2177,3 +2177,145 @@ body {
     font-size: 18px;
   }
 }
+
+/* Table action and stock-status polish */
+.sales-table .table-actions-cell,
+.cycle-list .table-actions-cell,
+.products-page .management-table .table-actions-cell {
+  min-width: 86px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.cycle-list .table-actions-cell {
+  min-width: 54px;
+}
+
+.sales-table .table-actions-cell button,
+.cycle-list .table-actions-cell button,
+.products-page .management-table .table-actions-cell button {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  margin: 0 8px 0 0;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #dfe4ea;
+  border-radius: 8px;
+  background: #fff;
+  color: #273241;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sales-table .table-actions-cell button:last-child,
+.cycle-list .table-actions-cell button:last-child,
+.products-page .management-table .table-actions-cell button:last-child {
+  margin-right: 0;
+}
+
+.sales-table .table-actions-cell button:hover,
+.cycle-list .table-actions-cell button:hover,
+.products-page .management-table .table-actions-cell button:hover {
+  border-color: #f5bf25;
+  background: #fffaf0;
+}
+
+.products-page .management-table .product-actions-cell button.delete {
+  color: #ef4444;
+}
+
+.products-page .management-table .product-actions-cell button.delete:hover {
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+
+.products-page .management-table .product-stock-status-cell {
+  min-width: 150px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.products-page .management-table .product-stock-status-cell em {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+.products-page .management-table .product-stock-status-cell small {
+  display: inline-block;
+  margin: 0;
+  color: #475569;
+  line-height: 1.2;
+}
+
+.report-timeline-panel {
+  overflow: visible;
+}
+
+/* Cashier inventory read-only layout and column picker visibility */
+.inventory-board {
+  overflow: visible;
+}
+
+.inventory-board > .table-scroll {
+  overflow: auto;
+}
+
+.inventory-column-picker {
+  position: relative;
+  z-index: 30;
+}
+
+.inventory-column-picker .column-menu {
+  max-height: min(420px, calc(100vh - 290px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  z-index: 80;
+}
+
+/* Inventory table text alignment: keep stacked labels readable for admin and cashier */
+.inventory-board td.inventory-product-cell {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 3px;
+  align-items: center;
+  min-width: 230px;
+}
+
+.inventory-board td.inventory-product-cell .table-product-icon {
+  grid-row: 1 / 3;
+  width: 22px;
+  height: 22px;
+}
+
+.inventory-board td.inventory-product-cell b,
+.inventory-board td.inventory-product-cell small,
+.inventory-board td.inventory-sku-cell b,
+.inventory-board td.inventory-sku-cell small,
+.inventory-board td.inventory-category-cell b,
+.inventory-board td.inventory-category-cell small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.inventory-board td.inventory-sku-cell,
+.inventory-board td.inventory-category-cell {
+  display: table-cell;
+  min-width: 150px;
+  vertical-align: middle;
+}
+
+.inventory-board td.inventory-sku-cell small,
+.inventory-board td.inventory-category-cell small {
+  margin-top: 5px;
+  color: #64748b;
+}

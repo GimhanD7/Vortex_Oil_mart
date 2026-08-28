@@ -594,13 +594,13 @@ export default function ProductsPage() {
                     </td>
                   )}
                   {cols.status && (
-                    <td>
+                    <td className="product-stock-status-cell">
                       <em className={stockBadge(p.stock_quantity, Number(p.reorder_level || 10)).className}>{stockBadge(p.stock_quantity, Number(p.reorder_level || 10)).label}</em>
                       <small>{formatQty(p.stock_quantity, p.unit)}</small>
                     </td>
                   )}
                   {cols.actions && (
-                    <td>
+                    <td className="table-actions-cell product-actions-cell">
                       <button onClick={() => openEdit(p)} aria-label={`Edit ${p.name}`}>
                         <Pencil size={15} aria-hidden="true" />
                       </button>
