@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { HelpSupportButton } from "@/components/HelpSupport";
@@ -164,9 +165,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="mobile-backdrop" aria-hidden="true" onClick={() => setMobileNavOpen(false)} />
       <aside className="admin-sidebar">
         <div className="admin-logo">
-          <span className="admin-logo-mark" aria-hidden="true">
-            <i />
-          </span>
+          <Image
+            src="/logo.png"
+            alt="Oil Mart POS Logo"
+            width={40}
+            height={40}
+            className="admin-logo-img"
+            priority
+          />
           <div>
             <b>
               <span>OIL</span> <em>MART</em> <i>POS</i>

@@ -55,7 +55,14 @@ export default function LoginPage() {
     <main className="login-page">
       <div className="dot-field" />
       <header className="login-brand" aria-label="Oil Mart POS">
-        <div className="brand-drop"><span /></div>
+        <Image
+          src="/logo.png"
+          alt="Oil Mart POS Logo"
+          width={56}
+          height={56}
+          className="brand-logo-img"
+          priority
+        />
         <div>
           <div className="brand-name"><strong>OIL</strong> <b>MART</b> <em>POS</em></div>
           <p>Oil &amp; Spare Parts Store</p>

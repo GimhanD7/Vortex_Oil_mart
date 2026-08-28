@@ -307,6 +307,29 @@ body {
 .admin-sidebar{width:278px;min-width:278px;padding:24px 22px;overflow-x:hidden;scrollbar-gutter:stable;background:#ffffff}
 .admin-workspace{margin-left:278px;width:calc(100% - 278px);overflow:hidden}
 .admin-logo{gap:12px;align-items:center;padding:0 0 28px;min-width:0}
+.admin-logo-img,
+.pos-logo-img {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 9px;
+  object-fit: contain;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  display: block;
+}
+.brand-logo-img {
+  width: 54px;
+  height: 54px;
+  min-width: 54px;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  display: block;
+}
 .admin-logo-mark{position:relative;flex:0 0 38px;width:38px;height:38px;border-radius:50%;background:#111827;box-shadow:inset 0 0 0 3px #ffbf0d,0 8px 18px rgba(17,24,39,.12)}
 .admin-logo-mark:before{content:"";position:absolute;left:8px;right:8px;top:9px;height:9px;border-radius:999px;background:#fff7d7}
 .admin-logo-mark i{position:absolute;left:11px;right:11px;bottom:8px;height:10px;border-radius:2px 2px 9px 9px;background:#ffbf0d}
