@@ -17,7 +17,7 @@ const script = `
 Add-Type -AssemblyName System.Drawing
 $sourcePath = '${source.replace(/'/g, "''")}'
 $iconDir = '${dir.replace(/'/g, "''")}'
-foreach ($size in @(192, 512)) {
+foreach ($size in @(32, 180, 192, 512)) {
   $image = [System.Drawing.Image]::FromFile($sourcePath)
   $bitmap = New-Object System.Drawing.Bitmap $size, $size
   $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
@@ -27,6 +27,10 @@ foreach ($size in @(192, 512)) {
   $graphics.DrawImage($image, 0, 0, $size, $size)
   $out = Join-Path $iconDir "icon-$($size)x$($size).png"
   $bitmap.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
+  if ($size -eq 32) {
+    $favicon = Join-Path '${path.join(__dirname, "public").replace(/'/g, "''")}' "favicon.png"
+    $bitmap.Save($favicon, [System.Drawing.Imaging.ImageFormat]::Png)
+  }
   $graphics.Dispose()
   $bitmap.Dispose()
   $image.Dispose()

@@ -17,6 +17,8 @@ import {
   CircleDot,
   ClipboardList,
   CreditCard,
+  Eye,
+  EyeOff,
   Gauge,
   LayoutDashboard,
   LogOut,
@@ -349,6 +351,7 @@ export default function PosBilling() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All Items");
   const [subCategory, setSubCategory] = useState("All");
+  const [showProductIcons, setShowProductIcons] = useState(true);
   const [payment, setPayment] = useState("Cash");
   const [customerId, setCustomerId] = useState<number | "">("");
   const [checking, setChecking] = useState(false);
@@ -1306,12 +1309,24 @@ export default function PosBilling() {
                 <button aria-label="Scan barcode"><ScanBarcode size={18} aria-hidden="true" /></button>
               </div>
 
-              <div className="category-tabs" style={{ overflowX: "auto", whiteSpace: "nowrap" }}>
-                {productCategories.map((item) => (
-                  <button className={category === item ? "active" : ""} onClick={() => { setCategory(item); setSubCategory("All"); }} key={item}>
-                    {item}
+              <div className="catalog-category-row">
+                <div className="category-tabs" style={{ overflowX: "auto", whiteSpace: "nowrap" }}>
+                  {productCategories.map((item) => (
+                    <button className={category === item ? "active" : ""} onClick={() => { setCategory(item); setSubCategory("All"); }} key={item}>
+                      {item}
+                    </button>
+                  ))}
+                </div>
+                {isCashier && (
+                  <button
+                    type="button"
+                    className="product-icon-toggle"
+                    onClick={() => setShowProductIcons((current) => !current)}
+                  >
+                    {showProductIcons ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+                    {showProductIcons ? "Hide Icons" : "Show Icons"}
                   </button>
-                ))}
+                )}
               </div>
 
               {category !== "All Items" && productSubCategories.length > 1 && (
@@ -1329,11 +1344,11 @@ export default function PosBilling() {
                 </div>
               )}
 
-              <div className="product-grid">
+              <div className={`product-grid${showProductIcons ? "" : " product-grid-icons-hidden"}`}>
                 {shown.map((product) => (
                   <article key={product.id} onClick={() => add(product)} style={{ opacity: product.stock_quantity <= 0 ? 0.5 : 1 }}>
                     <button className="favorite" aria-label={`Favorite ${product.name}`}><Star size={18} aria-hidden="true" /></button>
-                    <div className="product-visual"><ProductCategoryIcon category={product.category} productName={product.name} className="pos-product-icon large" /></div>
+                    {showProductIcons && <div className="product-visual"><ProductCategoryIcon category={product.category} productName={product.name} className="pos-product-icon large" /></div>}
                     <h3>{product.name}</h3>
                     <small>Stock: {formatQty(product.stock_quantity, product.unit)}</small>
                     <p>SKU: {product.sku}</p>
