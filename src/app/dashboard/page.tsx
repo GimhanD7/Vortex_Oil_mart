@@ -2,6 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { HelpSupportButton } from "@/components/HelpSupport";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { ProductCategoryIcon } from "@/components/ProductCategoryIcon";
@@ -1124,7 +1125,14 @@ export default function PosBilling() {
       {isAdmin && (
         <aside className="pos-sidebar">
           <div className="pos-logo">
-            <span className="admin-logo-mark" aria-hidden="true"><i /></span>
+            <Image
+              src="/logo.png"
+              alt="Oil Mart POS Logo"
+              width={40}
+              height={40}
+              className="admin-logo-img pos-logo-img"
+              priority
+            />
             <div>
               <b>OIL <em>MART</em> <i>POS</i></b>
               <small>Oil &amp; Spare Parts Store</small>
