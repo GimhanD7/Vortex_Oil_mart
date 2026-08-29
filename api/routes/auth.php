@@ -62,6 +62,25 @@ if ($method === 'POST' && $id === 'login') {
     ]);
 }
 
+if ($method === 'POST' && $id === 'logout') {
+    $secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+
+    if (PHP_VERSION_ID >= 70300) {
+        setcookie('auth_token', '', [
+            'expires' => time() - 3600,
+            'path' => '/',
+            'secure' => $secure,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    } else {
+        setcookie('auth_token', '', time() - 3600, '/', '', $secure, true);
+    }
+
+    unset($_COOKIE['auth_token']);
+    sendJson(["message" => "Logged out"]);
+}
+
 if ($method === 'GET' && $id === 'me') {
     // Both cookie and Bearer token check
     $user = authenticate();

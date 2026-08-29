@@ -1,8 +1,8 @@
 {
-  "name": "Oil Mart POS",
-  "short_name": "Oil Mart",
-  "description": "Oil & Spare Parts Store POS System",
-  "start_url": "/dashboard",
+  "name": "Nada Oil Mart Pos System",
+  "short_name": "Nada Oil Mart Pos System",
+  "description": "Nada Oil Mart oil and spare parts POS system",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#f8fafc",
   "theme_color": "#1e293b",
@@ -28,6 +28,18 @@
     {
       "src": "/icons/icon-144x144.png",
       "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-180x180.png",
+      "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
     },

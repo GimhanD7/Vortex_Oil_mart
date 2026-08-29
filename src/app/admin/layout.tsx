@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { HelpSupportButton } from "@/components/HelpSupport";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import { logoutToLogin } from "@/lib/auth-session";
 import {
   BarChart3,
   Boxes,
@@ -156,8 +157,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   });
 
   const signOut = () => {
-    document.cookie = "auth_token=; Max-Age=0; path=/";
-    router.push("/");
+    void logoutToLogin();
   };
 
   return (
@@ -204,8 +204,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <HelpSupportButton iconClassName="sidebar-action-icon" />
           <button
             onClick={() => {
-              document.cookie = "auth_token=; Max-Age=0; path=/";
-              router.push("/");
+              void logoutToLogin();
             }}
           >
             <LogOut className="sidebar-action-icon" aria-hidden="true" strokeWidth={1.9} />
