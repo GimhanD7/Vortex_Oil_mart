@@ -7,6 +7,7 @@ import { HelpSupportButton } from "@/components/HelpSupport";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { ProductCategoryIcon } from "@/components/ProductCategoryIcon";
 import { useToast } from "@/components/ToastProvider";
+import { logoutToLogin } from "@/lib/auth-session";
 import {
   BadgePercent,
   Banknote,
@@ -1073,8 +1074,7 @@ export default function PosBilling() {
   };
 
   const signOut = () => {
-    document.cookie = "auth_token=; Max-Age=0; path=/";
-    router.push("/");
+    void logoutToLogin();
   };
 
   if (loadingAuth || !user) {
@@ -1599,6 +1599,9 @@ export default function PosBilling() {
                     </button>
                     <button className="danger" onClick={() => cancelCompletedSale({ id: lastInvoice.id, total_amount: lastInvoice.total, payment_method: lastInvoice.paymentMethod })}>
                       <X size={15} aria-hidden="true" /> Cancel Bill
+                    </button>
+                    <button className="secondary" onClick={() => setLastInvoice(null)}>
+                      <EyeOff size={15} aria-hidden="true" /> Close Preview
                     </button>
                   </div>
                 </>

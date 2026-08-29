@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useToast } from "@/components/ToastProvider";
+import { clearAuthSession } from "@/lib/auth-session";
 
 function Icon({ name }: { name: "user" | "lock" | "eye" | "cart" | "box" | "chart" | "shield" }) {
   const paths = {
@@ -26,6 +27,28 @@ export default function LoginPage() {
   const router = useRouter();
   const { showToast } = useToast();
 
+  useEffect(() => {
+    let active = true;
+
+    fetch("/api/auth/me", { cache: "no-store", credentials: "include" })
+      .then((res) => {
+        if (!res.ok) throw new Error("No active session");
+        return res.json();
+      })
+      .then((data) => {
+        if (!active) return;
+        const target = data.role === "admin" ? "/admin/dashboard" : "/dashboard";
+        window.location.replace(target);
+      })
+      .catch(() => {
+        void clearAuthSession({ server: false });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -38,7 +61,7 @@ export default function LoginPage() {
       const data = await res.json();
       if (res.ok) {
         showToast({ type: "success", title: "Signed in", message: "Welcome back to Oil Mart POS." });
-        router.push(data.user.role === "admin" ? "/admin/dashboard" : "/dashboard");
+        window.location.replace(data.user.role === "admin" ? "/admin/dashboard" : "/dashboard");
       } else {
         const message = data.error || "Failed to login";
         showToast({ type: "error", title: "Login failed", message });

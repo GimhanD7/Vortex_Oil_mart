@@ -1219,9 +1219,11 @@ body {
 .dot-matrix-invoice .invoice-total p,.dot-matrix-invoice .invoice-total h3{display:flex!important;justify-content:space-between!important;margin:4px 0!important;font-size:11px!important}
 .dot-matrix-invoice .invoice-total h3{font-size:16px!important;border-top:1px dashed #94a3b8!important;padding-top:7px!important}
 .dot-matrix-invoice .thanks{display:block!important;text-align:center!important;margin-top:12px!important;font-size:10px!important;color:#475569!important;line-height:1.5!important}
-.invoice-print-actions{display:flex;justify-content:center;align-items:center;gap:12px;margin:18px 18px 10px;padding-top:2px;text-align:center}
+.invoice-print-actions{display:flex;justify-content:center;align-items:center;gap:12px;margin:18px 18px 10px;padding-top:2px;text-align:center;flex-wrap:wrap}
 .invoice-print-actions button{height:34px;border:0;border-radius:7px;background:#2563eb;color:#fff;padding:0 12px;font-size:12px;display:inline-flex;align-items:center;gap:7px;cursor:pointer}
 .invoice-print-actions button.danger{background:#dc2626}
+.invoice-print-actions button.secondary{background:#fff;color:#334155;border:1px solid #dbe2ea}
+.invoice-print-actions button.secondary:hover{border-color:#cbd5e1;background:#f8fafc}
 @media(max-width:560px){.approval-grid{grid-template-columns:1fr}}
 @media(max-width:1000px){
   .cashier-pos-shell .pos-main{display:block}
@@ -2426,5 +2428,274 @@ body {
 
   .product-icon-toggle {
     width: max-content;
+  }
+}
+
+/* Tablet landscape keeps the desktop working surface while allowing wide tables to scroll. */
+@media (min-width: 768px) and (max-width: 1366px) and (orientation: landscape) {
+  .admin-shell:not(.sidebar-collapsed) {
+    --admin-sidebar-width: 238px;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .admin-sidebar {
+    display: flex !important;
+    width: var(--admin-sidebar-width) !important;
+    min-width: var(--admin-sidebar-width) !important;
+    padding: 16px 14px !important;
+    align-items: stretch !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .admin-logo {
+    justify-content: flex-start !important;
+    min-height: auto !important;
+    padding: 0 6px 16px !important;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .admin-logo > div {
+    display: block !important;
+    min-width: 0;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .admin-logo b {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 18px !important;
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .admin-logo small {
+    display: block !important;
+    font-size: 12px !important;
+    line-height: 1.3;
+    white-space: normal;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .admin-nav {
+    width: 100% !important;
+    justify-items: stretch !important;
+    gap: 4px !important;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .admin-nav a {
+    display: flex !important;
+    width: auto !important;
+    height: 40px !important;
+    padding: 0 10px !important;
+    justify-content: flex-start !important;
+    gap: 9px !important;
+    font-size: 13px !important;
+    line-height: 1.15 !important;
+    white-space: normal !important;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .admin-nav-icon,
+  .admin-shell:not(.sidebar-collapsed) .sidebar-action-icon {
+    width: 17px !important;
+    height: 17px !important;
+    flex: 0 0 17px !important;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .sidebar-promo {
+    display: none !important;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .sidebar-bottom {
+    width: 100% !important;
+    gap: 6px !important;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .sidebar-bottom a,
+  .admin-shell:not(.sidebar-collapsed) .sidebar-bottom button {
+    display: flex !important;
+    width: auto !important;
+    min-height: 36px !important;
+    height: 36px !important;
+    padding: 7px 10px !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    font-size: 12px !important;
+    white-space: normal !important;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .sidebar-bottom span:not(.support-icon):not(.logout-icon) {
+    display: inline !important;
+    margin-left: 0;
+  }
+
+  .admin-shell:not(.sidebar-collapsed) .admin-workspace {
+    width: calc(100% - var(--admin-sidebar-width)) !important;
+    margin-left: var(--admin-sidebar-width) !important;
+  }
+
+  .admin-content {
+    padding: 14px !important;
+    min-width: 0;
+  }
+
+  .admin-topbar {
+    height: 62px !important;
+    padding: 0 16px !important;
+  }
+
+  .topbar-actions > button,
+  .topbar-control {
+    display: inline-flex !important;
+  }
+
+  .admin-profile p {
+    display: grid !important;
+  }
+
+  .sales-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 320px) !important;
+    gap: 12px !important;
+    align-items: start;
+  }
+
+  .crm-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 320px) !important;
+    gap: 12px !important;
+    align-items: start;
+  }
+
+  .invoice-preview,
+  .customer-detail {
+    display: block !important;
+    min-width: 0;
+    max-height: calc(100vh - 92px);
+    overflow: auto;
+    position: sticky;
+    top: 76px;
+    align-self: start;
+  }
+
+  .sales-table,
+  .crm-table,
+  .management-table,
+  .inventory-board,
+  .report-panel,
+  .purchase-history,
+  .sales-cycle-panel {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .table-scroll,
+  .crm-table.table-scroll,
+  .sales-table .table-scroll,
+  .management-table .table-scroll,
+  .inventory-board > .table-scroll,
+  .report-panel .table-scroll {
+    max-width: 100%;
+    overflow-x: auto !important;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sales-table table,
+  .crm-table table,
+  .management-table table,
+  .inventory-board table,
+  .report-panel table {
+    min-width: 900px;
+  }
+
+  .preview-paper {
+    min-width: 238px;
+  }
+
+  .modal,
+  .management-modal form,
+  .purchase-modal,
+  .cycle-invoices-modal,
+  .invoice-detail-modal,
+  .return-sale-modal {
+    max-width: 96vw !important;
+    max-height: 90vh !important;
+    overflow: auto !important;
+  }
+
+  .cashier-pos-shell .admin-mode-bar {
+    min-height: 74px !important;
+    height: auto !important;
+    padding: 8px 14px !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    align-items: center !important;
+  }
+
+  .cashier-pos-shell .pos-page-title {
+    flex: 0 0 245px;
+    min-width: 245px !important;
+    max-width: 245px !important;
+    padding-block: 6px !important;
+  }
+
+  .cashier-pos-shell .pos-page-title h1 {
+    font-size: 22px !important;
+    line-height: 1.15 !important;
+  }
+
+  .cashier-pos-shell .pos-page-title p {
+    font-size: 13px !important;
+    line-height: 1.25 !important;
+    white-space: normal !important;
+  }
+
+  .cashier-pos-shell .pos-top-actions {
+    flex: 1 0 auto;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-end;
+    gap: 8px !important;
+    overflow-x: auto !important;
+  }
+
+  .cashier-pos-shell .pos-top-actions > button,
+  .cashier-pos-shell .pos-status-pill,
+  .cashier-pos-shell .cashier {
+    display: inline-flex !important;
+    flex: 0 0 auto;
+  }
+
+  .cashier-pos-shell .pos-status-pill {
+    max-width: 220px;
+  }
+
+  .cashier-pos-shell .pos-status-pill span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cashier-pos-shell .pos-main {
+    display: grid !important;
+    grid-template-columns: minmax(560px, 1.55fr) minmax(350px, 0.9fr) !important;
+    min-width: 0;
+  }
+
+  .cashier-pos-shell .catalog {
+    min-width: 0;
+    padding: 14px !important;
+    border-right: 1px solid #e4e6e9 !important;
+  }
+
+  .cashier-pos-shell .cart-pane {
+    min-width: 0;
+    border-left: 1px solid #e4e6e9 !important;
+    border-top: 0 !important;
+    overflow: auto;
+  }
+
+  .cashier-pos-shell .product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .cashier-pos-shell .product-grid article {
+    min-width: 0;
   }
 }

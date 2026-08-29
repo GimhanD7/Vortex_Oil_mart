@@ -1,4 +1,10 @@
-const CACHE_NAME = 'oil-mart-v1';
+const CACHE_NAME = 'oil-mart-v2';
+
+const PROTECTED_ROUTES = ['/dashboard', '/admin', '/cashier'];
+
+function isProtectedRoute(pathname) {
+  return PROTECTED_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -19,6 +25,14 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'CLEAR_OIL_MART_CACHE') return;
+
+  event.waitUntil(
+    caches.keys().then((cacheNames) => Promise.all(cacheNames.map((name) => caches.delete(name))))
+  );
+});
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -33,17 +47,25 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cachedResponse) => {
       // Network-first strategy for HTML pages, cache-first for static assets
       const isHtml = event.request.headers.get('accept')?.includes('text/html');
+      const isProtected = isProtectedRoute(url.pathname);
       
       if (isHtml) {
         return fetch(event.request)
           .then((response) => {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone);
-            });
+            if (!isProtected && response.ok) {
+              const responseClone = response.clone();
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(event.request, responseClone);
+              });
+            }
             return response;
           })
-          .catch(() => cachedResponse || new Response('Offline', { status: 503 }));
+          .catch(() => {
+            if (isProtected) {
+              return Response.redirect(new URL('/', self.location.origin).href, 302);
+            }
+            return cachedResponse || new Response('Offline', { status: 503 });
+          });
       }
 
       // For JS, CSS, Images: Try Cache first, then Network
