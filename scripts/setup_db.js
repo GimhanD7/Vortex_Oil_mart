@@ -24,6 +24,14 @@ async function setup() {
         password VARCHAR(255) NOT NULL,
         role ENUM('admin', 'cashier') DEFAULT 'cashier',
         permissions JSON NULL,
+        full_name VARCHAR(150) NULL,
+        address VARCHAR(500) NULL,
+        phone VARCHAR(30) NULL,
+        id_number VARCHAR(80) NULL,
+        employment_start_date DATE NULL,
+        employment_end_date DATE NULL,
+        employment_status VARCHAR(20) NOT NULL DEFAULT 'active',
+        employee_notes VARCHAR(1000) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);

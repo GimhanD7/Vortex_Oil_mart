@@ -1,6 +1,15 @@
 <?php
 global $pdo, $jwt_secret, $inputData, $id, $action;
 
+// Keep authentication compatible while an existing installation receives the
+// employee-history migration for the first time.
+try {
+    $statusColumn = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'employment_status'")->fetchColumn();
+    if (!(int)$statusColumn) $pdo->exec("ALTER TABLE users ADD COLUMN employment_status VARCHAR(20) NOT NULL DEFAULT 'active'");
+} catch (PDOException $e) {
+    sendJson(["error" => "Unable to prepare user account status"], 500);
+}
+
 if ($method === 'POST' && $id === 'login') {
     $username = isset($inputData['username']) ? $inputData['username'] : '';
     $password = isset($inputData['password']) ? $inputData['password'] : '';
@@ -9,13 +18,14 @@ if ($method === 'POST' && $id === 'login') {
         sendJson(["error" => "Username and password are required"], 400);
     }
 
-    $stmt = $pdo->prepare('SELECT id, username, password, role, permissions FROM users WHERE username = ? LIMIT 1');
+    $stmt = $pdo->prepare("SELECT id, username, password, role, permissions, employment_status FROM users WHERE username = ? LIMIT 1");
     $stmt->execute([$username]);
     $user = $stmt->fetch();
 
     if (!$user) {
         sendJson(["error" => "Invalid credentials"], 401);
     }
+    if (($user['employment_status'] ?? 'active') !== 'active') sendJson(["error" => "This user account is inactive"], 403);
 
     // Verify password (bcrypt)
     if (!password_verify($password, $user['password'])) {
@@ -92,13 +102,14 @@ if ($method === 'GET' && $id === 'me') {
         sendJson(["error" => "Unauthorized"], 401);
     }
 
-    $stmt = $pdo->prepare('SELECT id, username, role, permissions FROM users WHERE id = ? LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, username, role, permissions, employment_status FROM users WHERE id = ? LIMIT 1');
     $stmt->execute([$user['id']]);
     $dbUser = $stmt->fetch();
 
     if (!$dbUser) {
         sendJson(["error" => "User not found"], 401);
     }
+    if (($dbUser['employment_status'] ?? 'active') !== 'active') sendJson(["error" => "This user account is inactive"], 401);
 
     // Normalize permissions
     $permissions = [];

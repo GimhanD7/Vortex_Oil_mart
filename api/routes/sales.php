@@ -749,6 +749,22 @@ if ($id === 'cycles') {
         try {
             ensureSalesCyclesTable();
             ensureSalesColumns();
+
+            // The cashier workspace must get its active cycle from the database,
+            // not from browser-local state. Scope this lookup to the signed-in user.
+            if (isset($_GET['active']) && $_GET['active'] === '1') {
+                $stmt = $pdo->prepare("
+                    SELECT cycle_id, cashier_id, opened_at, opened_date, opening_balance,
+                           closing_balance, closed_at, status
+                    FROM sales_cycles
+                    WHERE cashier_id = ? AND status = 'open'
+                    ORDER BY opened_at ASC
+                    LIMIT 1
+                ");
+                $stmt->execute([(int)$user['id']]);
+                $activeCycle = $stmt->fetch();
+                sendJson($activeCycle ?: null);
+            }
             
             $dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : null;
             $dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : null;
@@ -834,10 +850,11 @@ if ($id === 'cycles') {
     }
 
     if ($method === 'POST') {
+        $lockAcquired = false;
         try {
             ensureSalesCyclesTable();
             $cycle_id = isset($inputData['cycle_id']) ? $inputData['cycle_id'] : null;
-            $cashier_id = isset($inputData['cashier_id']) ? $inputData['cashier_id'] : null;
+            $cashier_id = (int)$user['id'];
             $opened_at = isset($inputData['opened_at']) ? $inputData['opened_at'] : null;
             $opened_date = isset($inputData['opened_date']) ? $inputData['opened_date'] : null;
             $opening_balance = isset($inputData['opening_balance']) ? (float)$inputData['opening_balance'] : null;
@@ -846,21 +863,46 @@ if ($id === 'cycles') {
                 sendJson(["error" => "Invalid sales cycle data"], 400);
             }
 
+            // Serialize opens for this cashier so simultaneous browsers cannot
+            // both pass the existence check and create duplicate open cycles.
+            $lockName = 'sales-cycle-cashier-' . $cashier_id;
+            $stmt = $pdo->prepare("SELECT GET_LOCK(?, 10)");
+            $stmt->execute([$lockName]);
+            $lockAcquired = (int)$stmt->fetchColumn() === 1;
+            if (!$lockAcquired) {
+                sendJson(["error" => "Unable to lock cashier sales cycle. Please try again."], 409);
+            }
+
+            $stmt = $pdo->prepare("
+                SELECT cycle_id, cashier_id, opened_at, opened_date, opening_balance,
+                       closing_balance, closed_at, status
+                FROM sales_cycles
+                WHERE cashier_id = ? AND status = 'open'
+                ORDER BY opened_at ASC
+                LIMIT 1
+            ");
+            $stmt->execute([$cashier_id]);
+            $existingCycle = $stmt->fetch();
+            if ($existingCycle) {
+                $pdo->prepare("SELECT RELEASE_LOCK(?)")->execute([$lockName]);
+                $lockAcquired = false;
+                sendJson(["message" => "Existing sales cycle resumed", "resumed" => true, "cycle" => $existingCycle]);
+            }
+
             $stmt = $pdo->prepare("
                 INSERT INTO sales_cycles (cycle_id, cashier_id, opened_at, opened_date, opening_balance, status)
                 VALUES (?, ?, ?, ?, ?, 'open')
-                ON DUPLICATE KEY UPDATE
-                    opened_at = VALUES(opened_at),
-                    opened_date = VALUES(opened_date),
-                    opening_balance = VALUES(opening_balance),
-                    status = 'open',
-                    closing_balance = NULL,
-                    closed_at = NULL
             ");
             $stmt->execute([$cycle_id, $cashier_id, $opened_at, $opened_date, $opening_balance]);
 
+            $pdo->prepare("SELECT RELEASE_LOCK(?)")->execute([$lockName]);
+            $lockAcquired = false;
+
             sendJson(["message" => "Sales cycle opened", "cycle_id" => $cycle_id]);
         } catch (PDOException $e) {
+            if ($lockAcquired) {
+                $pdo->prepare("SELECT RELEASE_LOCK(?)")->execute([$lockName]);
+            }
             sendJson(["error" => "Internal server error"], 500);
         }
     }
@@ -870,6 +912,7 @@ if ($id === 'cycles') {
         try {
             ensureSalesCyclesTable();
             $cycle_id = isset($inputData['cycle_id']) ? $inputData['cycle_id'] : null;
+            $adminClose = !empty($inputData['admin_close']);
             $cashier_id = isset($inputData['cashier_id']) ? $inputData['cashier_id'] : null;
             $opened_at = isset($inputData['opened_at']) ? $inputData['opened_at'] : null;
             $opened_date = isset($inputData['opened_date']) ? $inputData['opened_date'] : null;
@@ -879,6 +922,23 @@ if ($id === 'cycles') {
 
             if (!$cycle_id || $closing_balance === null || $closing_balance < 0) {
                 sendJson(["error" => "Invalid closing balance"], 400);
+            }
+
+            if ($adminClose && $user['role'] !== 'admin') {
+                sendJson(["error" => "Only an administrator can force-close a sales cycle"], 403);
+            }
+
+            $stmt = $pdo->prepare("SELECT cashier_id, status FROM sales_cycles WHERE cycle_id = ? LIMIT 1");
+            $stmt->execute([$cycle_id]);
+            $cycleRecord = $stmt->fetch();
+            if (!$cycleRecord) {
+                sendJson(["error" => "Sales cycle not found"], 404);
+            }
+            if ($cycleRecord['status'] !== 'open') {
+                sendJson(["error" => "This sales cycle is already closed"], 409);
+            }
+            if (!$adminClose && (int)$cycleRecord['cashier_id'] !== (int)$user['id']) {
+                sendJson(["error" => "You can close only your own active sales cycle"], 403);
             }
 
             $stmt = $pdo->prepare("
@@ -897,21 +957,13 @@ if ($id === 'cycles') {
             $stmt = $pdo->prepare("
                 UPDATE sales_cycles
                 SET closing_balance = ?, closed_at = ?, status = 'closed'
-                WHERE cycle_id = ?
+                WHERE cycle_id = ? AND status = 'open'
             ");
             $closedAtDate = $closed_at ? $closed_at : date('Y-m-d H:i:s');
             $stmt->execute([$closing_balance, $closedAtDate, $cycle_id]);
 
             if ($stmt->rowCount() === 0) {
-                if (!$cashier_id || !$opened_at || !$opened_date || $opening_balance === null) {
-                    sendJson(["error" => "Sales cycle not found"], 404);
-                }
-                $stmt = $pdo->prepare("
-                    INSERT INTO sales_cycles
-                    (cycle_id, cashier_id, opened_at, opened_date, opening_balance, closing_balance, closed_at, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'closed')
-                ");
-                $stmt->execute([$cycle_id, $cashier_id, $opened_at, $opened_date, $opening_balance, $closing_balance, $closedAtDate]);
+                sendJson(["error" => "This sales cycle was already closed"], 409);
             }
 
             sendJson([

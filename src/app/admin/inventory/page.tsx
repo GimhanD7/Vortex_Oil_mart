@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Columns3,
-  IndianRupee,
   MapPinHouse,
   MoreVertical,
   Package,
@@ -230,7 +229,8 @@ export default function InventoryPage() {
         label: "Total Stock Value",
         value: `Rs. ${stockValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
         summary: "At selling price",
-        Icon: IndianRupee,
+        Icon: null,
+        currencyMark: "Rs.",
         tone: "blue",
       },
     ]),
@@ -300,7 +300,7 @@ export default function InventoryPage() {
       </div>
 
       <section className="inventory-kpis">
-        {kpiCards.map(({ label, value, summary, Icon, tone }) => (
+        {kpiCards.map(({ label, value, summary, Icon, tone, ...card }) => (
           <article key={label}>
             <p>
               <small>{label}</small>
@@ -308,7 +308,7 @@ export default function InventoryPage() {
               <em>{summary}</em>
             </p>
             <span className={tone}>
-              <Icon size={22} strokeWidth={1.9} aria-hidden="true" />
+              {Icon ? <Icon size={22} strokeWidth={1.9} aria-hidden="true" /> : <b className="lkr-currency-mark">{card.currencyMark}</b>}
             </span>
           </article>
         ))}
@@ -317,20 +317,24 @@ export default function InventoryPage() {
         {canManage && (
           <section className="inventory-stats analysis-grid" style={{ marginTop: "1rem" }}>
             <div>
-              <small>Monthly Start Stock (Units)</small>
+              <small>Stock at Start of This Month</small>
               <b>{globalStartStock}</b>
+              <em>Units carried forward from last month</em>
             </div>
             <div>
-              <small>Stock Increases (In)</small>
-              <b className="good">+{globalMonthlyIn}</b>
+              <small>Units Added This Month</small>
+              <b className="good">{globalMonthlyIn}</b>
+              <em>Purchases, restocking, returns and positive adjustments</em>
             </div>
             <div>
-              <small>Stock Decreases (Out)</small>
-              <b className="bad">-{globalMonthlyOut}</b>
+              <small>Units Removed This Month</small>
+              <b className="bad">{globalMonthlyOut}</b>
+              <em>Sales, damaged stock and negative adjustments</em>
             </div>
             <div>
-              <small>Monthly End Stock (Current)</small>
+              <small>Current Stock</small>
               <b>{globalCurrentStock}</b>
+              <em>{globalStartStock} starting + {globalMonthlyIn} added − {globalMonthlyOut} removed</em>
             </div>
           </section>
         )}
@@ -424,8 +428,8 @@ export default function InventoryPage() {
                 {visibleCols.sku && <th>SKU / Barcode</th>}
                 {visibleCols.cat && <th>Category / Brand</th>}
                 {visibleCols.start_stock && <th style={{ textAlign: 'right' }}>Start Stock</th>}
-                {visibleCols.monthly_in && <th style={{ textAlign: 'right' }}>In</th>}
-                {visibleCols.monthly_out && <th style={{ textAlign: 'right' }}>Out</th>}
+                {visibleCols.monthly_in && <th style={{ textAlign: 'right' }} title="Units added this month">Added</th>}
+                {visibleCols.monthly_out && <th style={{ textAlign: 'right' }} title="Units removed this month">Removed</th>}
                 {visibleCols.stock && <th>Current Stock</th>}
                 {visibleCols.reorder && <th>Reorder Level</th>}
                 {visibleCols.loc && <th>Location</th>}
@@ -471,8 +475,8 @@ export default function InventoryPage() {
                     </td>
                   )}
                   {visibleCols.start_stock && <td style={{ textAlign: 'right' }}>{p.monthly_start_stock}</td>}
-                  {visibleCols.monthly_in && <td style={{ textAlign: 'right', color: '#16a34a' }}>+{p.monthly_in}</td>}
-                  {visibleCols.monthly_out && <td style={{ textAlign: 'right', color: '#dc2626' }}>-{p.monthly_out}</td>}
+                  {visibleCols.monthly_in && <td style={{ textAlign: 'right', color: '#16a34a' }}>{p.monthly_in}</td>}
+                  {visibleCols.monthly_out && <td style={{ textAlign: 'right', color: '#dc2626' }}>{p.monthly_out}</td>}
                   {visibleCols.stock && (
                     <td>
                       <b className={stockState(p).className === "" ? "success" : "danger"}>

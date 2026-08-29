@@ -9,6 +9,14 @@ type User = {
   role: "admin" | "cashier";
   permissions: string[];
   created_at: string;
+  full_name: string | null;
+  address: string | null;
+  phone: string | null;
+  id_number: string | null;
+  employment_start_date: string | null;
+  employment_end_date: string | null;
+  employment_status: "active" | "inactive";
+  employee_notes: string | null;
 };
 
 type ApiUser = Omit<User, "permissions"> & {
@@ -20,6 +28,14 @@ type FormState = {
   password: string;
   role: "admin" | "cashier";
   permissions: string[];
+  full_name: string;
+  address: string;
+  phone: string;
+  id_number: string;
+  employment_start_date: string;
+  employment_end_date: string;
+  employment_status: "active" | "inactive";
+  employee_notes: string;
 };
 
 const emptyForm: FormState = {
@@ -27,6 +43,9 @@ const emptyForm: FormState = {
   password: "",
   role: "cashier",
   permissions: [],
+  full_name: "", address: "", phone: "", id_number: "",
+  employment_start_date: new Date().toISOString().slice(0, 10),
+  employment_end_date: "", employment_status: "active", employee_notes: "",
 };
 
 const AVAILABLE_PERMISSIONS = [
@@ -88,7 +107,7 @@ export default function UsersPage() {
       users.filter(
         (u) =>
           (roleFilter === "all" || u.role === roleFilter) &&
-          u.username.toLowerCase().includes(query.toLowerCase())
+          `${u.username} ${u.full_name || ""} ${u.id_number || ""} ${u.phone || ""}`.toLowerCase().includes(query.toLowerCase())
       ),
     [users, query, roleFilter]
   );
@@ -107,7 +126,7 @@ export default function UsersPage() {
   };
 
   const openEdit = (u: User) => {
-    setForm({ username: u.username, password: "", role: u.role, permissions: u.permissions || [] });
+    setForm({ username: u.username, password: "", role: u.role, permissions: u.permissions || [], full_name: u.full_name || "", address: u.address || "", phone: u.phone || "", id_number: u.id_number || "", employment_start_date: u.employment_start_date || "", employment_end_date: u.employment_end_date || "", employment_status: u.employment_status || "active", employee_notes: u.employee_notes || "" });
     setEditingId(u.id);
     setError("");
     setModal("edit");
@@ -150,17 +169,17 @@ export default function UsersPage() {
       showToast({ type: "error", title: "Delete failed", message });
       return;
     }
-    setUsers((current) => current.filter((x) => x.id !== u.id));
-    showToast({ type: "success", title: "User deleted", message: "User removed successfully." });
+    await loadUsers();
+    showToast({ type: "success", title: "User archived", message: "Login was disabled and the employee history was preserved." });
   };
 
   const remove = (u: User) => {
     showToast({
       type: "warning",
-      title: "Delete user?",
-      message: `${u.username} will be removed if they are not linked to sales records.`,
+      title: "Archive user?",
+      message: `${u.username} will lose login access, but their employee and sales history will be preserved.`,
       duration: 0,
-      actionLabel: "Delete",
+      actionLabel: "Archive",
       onAction: () => void deleteUser(u),
     });
   };
@@ -246,7 +265,7 @@ export default function UsersPage() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search username..."
+                placeholder="Search name, username, ID or phone..."
               />
             </label>
             <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
@@ -266,8 +285,9 @@ export default function UsersPage() {
               <tr>
                 <th>User</th>
                 <th>Username</th>
+                <th>Employee</th>
                 <th>Role</th>
-                <th>Created</th>
+                <th>Employment</th>
                 <th>Access</th>
                 <th>Actions</th>
               </tr>
@@ -275,7 +295,7 @@ export default function UsersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6}>Loading users from database…</td>
+                  <td colSpan={7}>Loading users from database…</td>
                 </tr>
               ) : (
                 filtered.map((u) => (
@@ -289,16 +309,17 @@ export default function UsersPage() {
                     <td>
                       <b>{u.username}</b>
                     </td>
+                    <td><b>{u.full_name || "Details not recorded"}</b><small>{u.phone || "No phone"} · ID: {u.id_number || "-"}</small></td>
                     <td>
                       <em className={u.role === "admin" ? "admin-role" : ""}>{u.role}</em>
                     </td>
-                    <td>{new Date(u.created_at).toLocaleDateString()}</td>
+                    <td><em className={u.employment_status === "inactive" ? "inactive-role" : ""}>{u.employment_status}</em><small>{u.employment_start_date || "-"} → {u.employment_end_date || "Present"}</small></td>
                     <td><div style={{display: 'flex', gap: '4px', flexWrap: 'wrap', maxWidth: '200px'}}>{(Array.isArray(u.permissions) && u.permissions.length > 0) ? u.permissions.map(p => <span key={p} style={{background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', textTransform: 'capitalize'}}>{p.replace('_', ' ')}</span>) : <span style={{color: '#94a3b8', fontSize: '11px'}}>No special access</span>}</div></td>
                     <td>
                       <button onClick={() => openEdit(u)} title="Edit user">
                         ✎
                       </button>
-                      <button className="delete" onClick={() => void remove(u)} title="Delete user">
+                      <button className="delete" onClick={() => void remove(u)} title="Archive user" disabled={u.employment_status === "inactive"}>
                         ♲
                       </button>
                     </td>
@@ -307,7 +328,7 @@ export default function UsersPage() {
               )}
               {!loading && !filtered.length && (
                 <tr>
-                  <td colSpan={6}>No users match the selected filters.</td>
+                  <td colSpan={7}>No users match the selected filters.</td>
                 </tr>
               )}
             </tbody>
@@ -317,7 +338,7 @@ export default function UsersPage() {
 
       {modal && (
         <div className="management-modal">
-          <form onSubmit={submit}>
+          <form className="user-employee-form" onSubmit={submit}>
             <header>
               <h2>{modal === "add" ? "Add Database User" : "Edit Database User"}</h2>
               <button type="button" onClick={() => setModal(null)}>
@@ -359,6 +380,18 @@ export default function UsersPage() {
                 <option value="admin">Admin</option>
               </select>
             </label>
+
+            <h3 className="employee-details-title">Employee Details {form.role === "cashier" && <small>Required for cashier accounts</small>}</h3>
+            <div className="employee-form-grid">
+              <label>Full Name<input required={form.role === "cashier"} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></label>
+              <label>Phone Number<input required={form.role === "cashier"} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
+              <label>National ID / ID Number<input required={form.role === "cashier"} value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} /></label>
+              <label>Employment Start Date<input type="date" required={form.role === "cashier"} value={form.employment_start_date} onChange={(e) => setForm({ ...form, employment_start_date: e.target.value })} /></label>
+              <label className="employee-address">Home Address<textarea required={form.role === "cashier"} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></label>
+              {modal === "edit" && <label>Employment Status<select value={form.employment_status} onChange={(e) => setForm({ ...form, employment_status: e.target.value as FormState["employment_status"] })}><option value="active">Active</option><option value="inactive">Inactive</option></select></label>}
+              {modal === "edit" && <label>Employment End Date<input type="date" value={form.employment_end_date} onChange={(e) => setForm({ ...form, employment_end_date: e.target.value })} /></label>}
+              <label className="employee-address">Notes<textarea value={form.employee_notes} onChange={(e) => setForm({ ...form, employee_notes: e.target.value })} placeholder="Optional employment or identification notes" /></label>
+            </div>
 
             <div style={{ marginTop: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <strong style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#334155' }}>Specific Permissions</strong>

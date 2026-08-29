@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Eye, RefreshCw, Search } from "lucide-react";
+import { CalendarDays, CheckCircle2, Eye, RefreshCw, Search, X } from "lucide-react";
 
 type SalesCycle = {
   cycle_id: string;
@@ -49,6 +49,10 @@ export default function SalesCyclesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [selected, setSelected] = useState<SalesCycle | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showCloseCycle, setShowCloseCycle] = useState(false);
+  const [closingCash, setClosingCash] = useState("");
+  const [closingCycle, setClosingCycle] = useState(false);
+  const [closeError, setCloseError] = useState("");
   const [filters, setFilters] = useState({ from: "", to: "", cashier: "All Cashiers", status: "All Status" });
 
   const cashiers = useMemo(() => ["All Cashiers", ...Array.from(new Set(cycles.map((cycle) => cycle.cashier_name)))], [cycles]);
@@ -96,6 +100,44 @@ export default function SalesCyclesPage() {
       .then((data) => setSales(Array.isArray(data) ? data : []))
       .catch(() => setSales([]));
   }, [selected]);
+
+  const openCloseCycle = () => {
+    if (!selected || selected.status !== "open") return;
+    setClosingCash(Number(selected.expected_cash || 0).toFixed(2));
+    setCloseError("");
+    setShowCloseCycle(true);
+  };
+
+  const closeSelectedCycle = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selected) return;
+    const amount = Number(closingCash);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setCloseError("Enter a valid closing cash amount.");
+      return;
+    }
+    setClosingCycle(true);
+    setCloseError("");
+    try {
+      const response = await fetch("/api/sales/cycles", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cycle_id: selected.cycle_id,
+          closing_balance: amount,
+          admin_close: true,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to close the sales cycle.");
+      setShowCloseCycle(false);
+      await loadCycles();
+    } catch (error) {
+      setCloseError(error instanceof Error ? error.message : "Unable to close the sales cycle.");
+    } finally {
+      setClosingCycle(false);
+    }
+  };
 
   return (
     <div className="management-page cycle-page">
@@ -172,6 +214,11 @@ export default function SalesCyclesPage() {
                 <div><dt>Card Sales</dt><dd>{money(selected.card_sales)}</dd></div>
                 <div><dt>Bank Transfer</dt><dd>{money(selected.bank_sales)}</dd></div>
               </dl>
+              {selected.status === "open" && (
+                <button className="admin-close-cycle-btn" onClick={openCloseCycle}>
+                  <CheckCircle2 size={16} aria-hidden="true" /> Close Sales Cycle
+                </button>
+              )}
             </>
           ) : <p>No cycle selected.</p>}
         </aside>
@@ -201,6 +248,35 @@ export default function SalesCyclesPage() {
           </table>
         </div>
       </section>
+
+      {showCloseCycle && selected && (
+        <div className="management-modal" role="dialog" aria-modal="true" aria-labelledby="close-cycle-title">
+          <form onSubmit={closeSelectedCycle}>
+            <header>
+              <h2 id="close-cycle-title">Close Sales Cycle</h2>
+              <button type="button" onClick={() => setShowCloseCycle(false)} aria-label="Close"><X aria-hidden="true" /></button>
+            </header>
+            <p className="close-cycle-warning">
+              You are closing <b>{selected.cycle_id}</b> for <b>{selected.cashier_name}</b>. The cashier will need to open a new cycle before making more sales.
+            </p>
+            <div className="close-cycle-summary">
+              <span>Expected cash <b>{money(selected.expected_cash)}</b></span>
+              <span>Cash sales <b>{money(selected.cash_sales)}</b></span>
+            </div>
+            <label>
+              Actual closing cash
+              <input value={closingCash} onChange={(event) => setClosingCash(event.target.value)} inputMode="decimal" autoFocus />
+            </label>
+            {closeError && <p className="close-cycle-error">{closeError}</p>}
+            <footer>
+              <button type="button" onClick={() => setShowCloseCycle(false)} disabled={closingCycle}>Cancel</button>
+              <button className="gold-btn" type="submit" disabled={closingCycle}>
+                <CheckCircle2 size={16} aria-hidden="true" /> {closingCycle ? "Closing..." : "Confirm Close"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
