@@ -1,4 +1,4 @@
-const CACHE_NAME = 'oil-mart-v2';
+const CACHE_NAME = 'oil-mart-v3';
 
 const PROTECTED_ROUTES = ['/dashboard', '/admin', '/cashier'];
 
@@ -39,6 +39,9 @@ self.addEventListener('fetch', (event) => {
   // We only cache GET requests
   if (event.request.method !== 'GET') return;
 
+  // Browser extensions and custom schemes cannot be stored in Cache API.
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
   // We explicitly IGNORE /api/ routes in the Service Worker.
   // Our application code (api-client.ts) handles /api/ caching manually via LocalStorage.
   if (url.pathname.startsWith('/api/')) return;
@@ -70,10 +73,12 @@ self.addEventListener('fetch', (event) => {
 
       // For JS, CSS, Images: Try Cache first, then Network
       return cachedResponse || fetch(event.request).then((response) => {
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone);
-        });
+        if (response.ok) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+        }
         return response;
       }).catch((e) => {
         console.warn('[SW] Fetch failed for', event.request.url, e);

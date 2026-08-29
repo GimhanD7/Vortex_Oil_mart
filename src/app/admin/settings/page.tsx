@@ -43,7 +43,7 @@ const defaultSettings: Settings = {
   invoice_footer: "Thank you for your visit. Drive safe. Stay protected.",
   invoice_logo_text: "OM",
   invoice_print_style: "Dot Matrix",
-  payment_methods: ["Cash", "Card", "Bank Transfer"],
+  payment_methods: ["Cash", "Card", "Bank Transfer", "Credit"],
 };
 
 const paymentOptions = ["Cash", "Card", "Bank Transfer", "Credit"];

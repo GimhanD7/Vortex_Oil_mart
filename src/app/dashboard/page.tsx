@@ -308,7 +308,8 @@ function calculateSummary(rows: SaleSummaryRow[], cashCycle: CashCycle | null): 
 
 function normalizePaymentMethods(methods: string[]) {
   const normalized = methods.map((method) => method === "UPI" ? "Bank Transfer" : method);
-  return Array.from(new Set(normalized)).filter((method) => method !== "UPI");
+  const visibleMethods = Array.from(new Set(normalized)).filter((method) => method !== "UPI");
+  return visibleMethods.includes("Credit") ? visibleMethods : [...visibleMethods, "Credit"];
 }
 
 const revokeReasons = {
