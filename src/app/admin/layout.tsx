@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HelpSupportButton } from "@/components/HelpSupport";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { logoutToLogin } from "@/lib/auth-session";
@@ -107,6 +107,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [user, setUser] = useState<{ username: string; role: string; permissions: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
+  const profileControlRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
@@ -136,6 +137,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [loading, pathname, router, user]);
 
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (profileControlRef.current && !profileControlRef.current.contains(e.target as Node)) {
+        setShowProfile(false);
+      }
+    };
+    if (showProfile) {
+      document.addEventListener("mousedown", handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [showProfile]);
+
+  useEffect(() => {
+    setShowProfile(false);
+    setMobileNavOpen(false);
+  }, [pathname]);
+
   if (loading || !user) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: "#f8fafc" }}>
@@ -155,6 +175,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
     return item;
   });
+
+  const activeNavItem = nav.find((item) => isActiveNav(pathname, item[2]));
+  const currentTitle = activeNavItem ? activeNavItem[1] : (pathname.includes("settings") ? "Settings" : "Administration");
 
   const signOut = () => {
     void logoutToLogin();
@@ -189,7 +212,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               className={isActiveNav(pathname, href) ? "active" : ""}
               aria-current={isActiveNav(pathname, href) ? "page" : undefined}
               onClick={() => {
-                if (typeof window !== 'undefined' && window.innerWidth <= 520) {
+                if (typeof window !== 'undefined' && window.innerWidth <= 850) {
                   setMobileNavOpen(false);
                 }
               }}
@@ -215,54 +238,77 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       <div className="admin-workspace">
         <header className="admin-topbar">
-          <button
-            className="menu-button"
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-expanded={!sidebarCollapsed}
-            onClick={() => {
-              if (typeof window !== 'undefined' && window.innerWidth <= 520) {
-                setMobileNavOpen(!mobileNavOpen);
-              } else {
-                setSidebarCollapsed(!sidebarCollapsed);
-              }
-            }}
-          >
-            <Menu aria-hidden="true" size={24} strokeWidth={2} />
-          </button>
+          <div className="topbar-left">
+            <button
+              type="button"
+              className="menu-button"
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-expanded={!sidebarCollapsed}
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.innerWidth <= 850) {
+                  setMobileNavOpen((prev) => !prev);
+                } else {
+                  setSidebarCollapsed((prev) => !prev);
+                }
+              }}
+            >
+              <Menu aria-hidden="true" size={20} strokeWidth={2} />
+            </button>
+
+            <div className="page-title">
+              <h1>{currentTitle}</h1>
+            </div>
+          </div>
 
           <div className="topbar-actions">
             <NotificationCenter />
 
-            <div className="profile-control">
+            <div className="profile-control" ref={profileControlRef}>
               <button
+                type="button"
                 className="admin-profile"
                 aria-label="Open profile menu"
                 aria-expanded={showProfile}
-                onClick={() => setShowProfile(!showProfile)}
+                onClick={() => setShowProfile((prev) => !prev)}
               >
-                <span>{user.username.charAt(0).toUpperCase()}</span>
-                <p>
+                <span className="profile-avatar">{user.username.charAt(0).toUpperCase()}</span>
+                <div className="profile-details">
                   <b>{user.username}</b>
                   <small>{user.role === "admin" ? "Super Admin" : "Cashier"}</small>
-                </p>
+                </div>
                 <ChevronDown className="profile-chevron" aria-hidden="true" size={16} strokeWidth={2} />
               </button>
               {showProfile && (
                 <div className="profile-menu">
-                  <div>
-                    <span>{user.username.charAt(0).toUpperCase()}</span>
-                    <p>
+                  <div className="profile-menu-header">
+                    <span className="profile-avatar">{user.username.charAt(0).toUpperCase()}</span>
+                    <div>
                       <b>{user.username}</b>
                       <small>{user.role === "admin" ? "Super Admin" : "Cashier"}</small>
-                    </p>
+                    </div>
                   </div>
                   {user.role === "admin" && (
-                    <button onClick={() => router.push("/admin/settings")}>
-                      <Settings size={16} aria-hidden="true" /> Settings
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfile(false);
+                        router.push("/admin/settings");
+                      }}
+                    >
+                      <Settings size={16} aria-hidden="true" />
+                      <span>Settings</span>
                     </button>
                   )}
-                  <button className="danger" onClick={signOut}>
-                    <LogOut size={16} aria-hidden="true" /> Logout
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={() => {
+                      setShowProfile(false);
+                      signOut();
+                    }}
+                  >
+                    <LogOut size={16} aria-hidden="true" />
+                    <span>Logout</span>
                   </button>
                 </div>
               )}
