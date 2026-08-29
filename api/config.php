@@ -4,7 +4,8 @@ $is_production = ($host_name !== 'localhost' && $host_name !== '127.0.0.1');
 
 if ($is_production) {
     // === cPanel Production Database Credentials ===
-     $db = 'vortdbyg_oil_mart';
+    $host = 'localhost';
+    $db   = 'vortdbyg_oil_mart';
     $user = 'vortdbyg_gimhana';
     $pass = '_je-P_vSa}09V21J';
 } else {
