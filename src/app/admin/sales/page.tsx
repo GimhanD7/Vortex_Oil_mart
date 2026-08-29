@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Columns3, Download, Eye, Printer, RotateCcw, X } from "lucide-react";
+import { Columns3, Download, Eye, Printer, X } from "lucide-react";
 import { useToast } from "@/components/ToastProvider";
 
 type Sale = {
@@ -277,7 +276,6 @@ function buildReceiptHtml(sale: Sale, items: SaleItem[], settings: InvoiceSettin
 }
 
 export default function SalesPage() {
-  const router = useRouter();
   const [sales, setSales] = useState<Sale[]>([]);
   const [selected, setSelected] = useState<Sale | null>(null);
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
@@ -750,7 +748,6 @@ export default function SalesPage() {
             <footer>
               <button onClick={() => void printReceipt()}><Printer size={15} aria-hidden="true" /> Print</button>
               <button onClick={() => void downloadReceipt()}><Download size={15} aria-hidden="true" /> Download Receipt</button>
-              <button onClick={() => router.push("/dashboard")} disabled={selected.status === "cancelled" || selected.status === "returned"}><RotateCcw size={15} aria-hidden="true" /> Process Return in POS</button>
             </footer>
           </aside>
         )}

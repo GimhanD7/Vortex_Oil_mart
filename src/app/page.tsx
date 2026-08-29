@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Image from "next/image";
 import { useToast } from "@/components/ToastProvider";
-import { clearAuthSession } from "@/lib/auth-session";
 
 function Icon({ name }: { name: "user" | "lock" | "eye" | "cart" | "box" | "chart" | "shield" }) {
   const paths = {
@@ -24,30 +22,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const { showToast } = useToast();
-
-  useEffect(() => {
-    let active = true;
-
-    fetch("/api/auth/me", { cache: "no-store", credentials: "include" })
-      .then((res) => {
-        if (!res.ok) throw new Error("No active session");
-        return res.json();
-      })
-      .then((data) => {
-        if (!active) return;
-        const target = data.role === "admin" ? "/admin/dashboard" : "/dashboard";
-        window.location.replace(target);
-      })
-      .catch(() => {
-        void clearAuthSession({ server: false });
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
