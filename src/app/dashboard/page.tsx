@@ -281,6 +281,64 @@ function cycleIdFor(date: Date, userId: number) {
   return `CSH-${day}-${String(userId).padStart(3, "0")}-${time}`;
 }
 
+function receiptEscape(value: string | number | null | undefined) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function cashierReceiptHtml(invoice: LastInvoice, settings: PosSettings, cashierName: string) {
+  const words = (settings.store_name || defaultPosSettings.store_name).trim().split(/\s+/).filter(Boolean);
+  const accent = words.length > 1 ? words.pop() : "";
+  const primary = (words.join(" ") || accent || "OIL").toUpperCase();
+  const brandTitle = `${receiptEscape(primary)}${words.length || primary !== accent ? ` <span>${receiptEscape((accent || "").toUpperCase())}</span>` : ""}`;
+  const invoiceNumber = `${settings.invoice_prefix || "INV"}-${String(invoice.id).padStart(6, "0")}`;
+  const rows = invoice.items.map((item) => `
+    <tr>
+      <td>${receiptEscape(item.name)}</td>
+      <td>${receiptEscape(formatQty(item.cartQuantity, item.unit))}</td>
+      <td>${receiptEscape(money(Number(item.price)))}</td>
+      <td>${receiptEscape(money(Number(item.price) * item.cartQuantity))}</td>
+    </tr>`).join("");
+
+  return `<!doctype html><html><head><meta charset="utf-8" />
+  <title>${receiptEscape(invoiceNumber)} Receipt</title>
+  <style>
+    @page{size:80mm auto;margin:4mm}*{box-sizing:border-box}
+    body{margin:0;background:#fff;color:#111827;font-family:"Courier New",monospace;font-size:11px}
+    .receipt{width:72mm;margin:0 auto;padding:4mm 0}.brand{text-align:center;border-bottom:1px dashed #9ca3af;padding-bottom:10px;margin-bottom:10px}
+    .brand h1{margin:0 0 4px;font:800 20px Arial,sans-serif}.brand h1 span{color:#eaa600}.brand p{margin:0;line-height:1.45}
+    .meta{border-bottom:1px dashed #9ca3af;padding-bottom:8px;margin-bottom:8px}.row{display:flex;justify-content:space-between;gap:10px;margin:5px 0}
+    .row b{text-align:right;font-weight:700;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;margin-top:8px}
+    th{border-bottom:1px dashed #9ca3af;padding:5px 2px;text-align:left}td{border-bottom:1px dotted #d1d5db;padding:6px 2px;vertical-align:top}
+    th:nth-child(n+2),td:nth-child(n+2){text-align:right}td:first-child{text-align:left}.totals{border-top:1px dashed #9ca3af;margin-top:9px;padding-top:7px}
+    .total{border-top:1px dashed #9ca3af;padding-top:7px;margin-top:7px;font-size:15px;font-weight:800}.thanks{text-align:center;margin-top:14px;line-height:1.5;color:#475569}
+    @media screen{body{background:#f3f4f6;padding:16px}.receipt{background:#fff;box-shadow:0 12px 35px #0002;padding:8mm}}
+  </style></head><body><main class="receipt">
+    <section class="brand"><h1>${brandTitle}</h1><p>Oil &amp; Spare Parts Store<br />${receiptEscape(settings.store_address).replace(/\r?\n/g, "<br />")}${settings.store_phone ? `<br />Phone: ${receiptEscape(settings.store_phone)}` : ""}</p></section>
+    <section class="meta">
+      <div class="row"><span>Invoice No.</span><b>${receiptEscape(invoiceNumber)}</b></div>
+      <div class="row"><span>Date</span><b>${receiptEscape(invoice.date)}</b></div>
+      <div class="row"><span>Business Date</span><b>${receiptEscape(invoice.date.split(",")[0])}</b></div>
+      <div class="row"><span>Sales Cycle</span><b>${receiptEscape(invoice.cycleId || "-")}</b></div>
+      <div class="row"><span>Cashier</span><b>${receiptEscape(cashierName)}</b></div>
+      <div class="row"><span>Customer</span><b>${receiptEscape(invoice.customerName || "Walk-in Customer")}</b></div>
+      <div class="row"><span>Payment</span><b>${receiptEscape(invoice.paymentMethod || "Cash")}</b></div>
+      <div class="row"><span>Status</span><b>completed</b></div>
+    </section>
+    <table><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>
+    <section class="totals">
+      <div class="row"><span>Subtotal</span><b>${receiptEscape(money(invoice.subtotal))}</b></div>
+      <div class="row"><span>Discount (${receiptEscape(invoice.discountRate)}%)</span><b>- ${receiptEscape(money(invoice.discount))}</b></div>
+      ${invoice.paymentMethod === "Cash" ? `<div class="row"><span>Cash Received</span><b>${receiptEscape(money(invoice.cashReceived || 0))}</b></div><div class="row"><span>Balance Returned</span><b>${receiptEscape(money(invoice.cashBalance || 0))}</b></div>` : ""}
+      <div class="row total"><span>Total</span><b>${receiptEscape(money(invoice.total))}</b></div>
+    </section><p class="thanks">${receiptEscape(settings.invoice_footer).replace(/\r?\n/g, "<br />")}</p>
+  </main></body></html>`;
+}
+
 function summaryRange(date: Date) {
   return { from: businessDate(date), to: businessDate(date), label: "Today" };
 }
@@ -363,6 +421,7 @@ export default function PosBilling() {
   const [settings, setSettings] = useState<PosSettings>(defaultPosSettings);
   const [lastInvoice, setLastInvoice] = useState<LastInvoice | null>(null);
   const [cashCycle, setCashCycle] = useState<CashCycle | null>(null);
+  const [loadingCashCycle, setLoadingCashCycle] = useState(true);
   const [openingBalance, setOpeningBalance] = useState("");
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [discountRate, setDiscountRate] = useState("0");
@@ -533,30 +592,37 @@ export default function PosBilling() {
 
   useEffect(() => {
     if (!user) return;
-    const prefix = `oil-mart-cash-cycle-${user.id}-`;
-    let foundCycle: CashCycle | null = null;
-
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const key = window.localStorage.key(i);
-      if (key && key.startsWith(prefix)) {
-        try {
-          const item = JSON.parse(window.localStorage.getItem(key) || "");
-          if (item && item.openedDate) {
-            foundCycle = item;
-            break;
-          }
-        } catch { }
-      }
-    }
-
-    if (foundCycle) {
-      if (foundCycle.openedDate !== currentBusinessDate) {
-        void autoCloseExpiredCycle(foundCycle);
-      } else {
-        setCashCycle(foundCycle);
-      }
-    }
-  }, [user, currentBusinessDate, autoCloseExpiredCycle]);
+    let active = true;
+    setLoadingCashCycle(true);
+    fetch("/api/sales/cycles?active=1", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to load active sales cycle.");
+        return data;
+      })
+      .then((data) => {
+        if (!active) return;
+        if (!data?.cycle_id) {
+          setCashCycle(null);
+          return;
+        }
+        const cycle: CashCycle = {
+          id: data.cycle_id,
+          openedAt: data.opened_at,
+          openedDate: data.opened_date,
+          openingBalance: Number(data.opening_balance || 0),
+        };
+        window.localStorage.setItem(cashierCycleKey(user.id), JSON.stringify(cycle));
+        setCashCycle(cycle);
+      })
+      .catch((error) => {
+        if (active) showToast({ type: "error", title: "Shift check failed", message: error instanceof Error ? error.message : "Unable to check the active shift." });
+      })
+      .finally(() => {
+        if (active) setLoadingCashCycle(false);
+      });
+    return () => { active = false; };
+  }, [user, showToast]);
 
   useEffect(() => {
     if (cashCycle && cashCycle.openedDate !== currentBusinessDate) {
@@ -830,8 +896,14 @@ export default function PosBilling() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Unable to open sales cycle.");
-      window.localStorage.setItem(cashierCycleKey(user.id), JSON.stringify(nextCycle));
-      setCashCycle(nextCycle);
+      const activeCycle = data.cycle ? {
+        id: data.cycle.cycle_id,
+        openedAt: data.cycle.opened_at,
+        openedDate: data.cycle.opened_date,
+        openingBalance: Number(data.cycle.opening_balance || 0),
+      } : nextCycle;
+      window.localStorage.setItem(cashierCycleKey(user.id), JSON.stringify(activeCycle));
+      setCashCycle(activeCycle);
       setNotice("");
       setClosingNotice("");
       showToast({ type: "success", title: "Sales cycle opened", message: "POS billing is ready." });
@@ -1078,7 +1150,7 @@ export default function PosBilling() {
     void logoutToLogin();
   };
 
-  if (loadingAuth || !user) {
+  if (loadingAuth || !user || loadingCashCycle) {
     return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>Loading POS...</div>;
   }
 
@@ -1587,11 +1659,17 @@ export default function PosBilling() {
                   </div>
                   <div className="no-print invoice-print-actions">
                     <button onClick={() => {
-                      const message = "Print command sent successfully.";
-                      setNotice(message);
-                      showToast({ type: "success", title: "Print started", message });
-                      window.print();
-                      setTimeout(() => setNotice(""), 4000);
+                      const printWindow = window.open("", "_blank", "width=420,height=720");
+                      if (!printWindow) {
+                        showToast({ type: "warning", title: "Print blocked", message: "Please allow pop-ups to print the receipt." });
+                        return;
+                      }
+                      printWindow.document.open();
+                      printWindow.document.write(cashierReceiptHtml(lastInvoice, settings, user.username));
+                      printWindow.document.close();
+                      printWindow.focus();
+                      printWindow.setTimeout(() => printWindow.print(), 250);
+                      showToast({ type: "success", title: "Print started", message: "The branded receipt is ready to print." });
                     }}>
                       <Printer size={15} aria-hidden="true" /> Print Invoice
                     </button>
