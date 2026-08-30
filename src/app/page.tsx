@@ -35,6 +35,9 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (res.ok) {
+        if (data.token) {
+          localStorage.setItem("oil-mart-auth-token", data.token);
+        }
         showToast({ type: "success", title: "Signed in", message: "Welcome back to Oil Mart POS." });
         window.location.replace(data.user.role === "admin" ? "/admin/dashboard" : "/dashboard");
       } else {

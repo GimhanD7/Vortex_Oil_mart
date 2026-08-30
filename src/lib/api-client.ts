@@ -1,14 +1,33 @@
+function withAuthHeaders(headers?: HeadersInit) {
+  const nextHeaders = new Headers(headers);
+
+  if (typeof window !== "undefined" && !nextHeaders.has("Authorization")) {
+    const token = window.localStorage.getItem("oil-mart-auth-token");
+    if (token) nextHeaders.set("Authorization", `Bearer ${token}`);
+  }
+
+  return nextHeaders;
+}
+
+export function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  return fetch(url, {
+    ...options,
+    credentials: options.credentials ?? "include",
+    headers: withAuthHeaders(options.headers),
+  });
+}
+
 export async function cachedFetch(url: string, options?: RequestInit): Promise<Response> {
   const isGET = !options?.method || options.method === "GET";
   
   if (!isGET) {
     // We only cache GET requests. For mutations, pass through directly.
-    return fetch(url, options);
+    return apiFetch(url, options);
   }
 
   try {
     // 1. Try fetching from network first
-    const response = await fetch(url, options);
+    const response = await apiFetch(url, options);
     
     // If successful and ok, save to Local Storage
     if (response.ok) {

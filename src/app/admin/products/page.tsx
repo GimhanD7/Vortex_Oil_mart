@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cachedFetch } from "@/lib/api-client";
+import { apiFetch, cachedFetch } from "@/lib/api-client";
 import { ProductCategoryIcon } from "@/components/ProductCategoryIcon";
 import { useToast } from "@/components/ToastProvider";
 import {
@@ -195,14 +195,14 @@ export default function ProductsPage() {
     setSaving(true);
     
     // Auto-create category, sub-category, and brand if they don't exist
-    if (form.category && isNewCat) await fetch("/api/categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.category }) });
-    if (form.sub_category && isNewSubCat) await fetch("/api/sub_categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category_name: form.category, name: form.sub_category }) });
-    if (form.brand && isNewBrand) await fetch("/api/brands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.brand }) });
+    if (form.category && isNewCat) await apiFetch("/api/categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.category }) });
+    if (form.sub_category && isNewSubCat) await apiFetch("/api/sub_categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category_name: form.category, name: form.sub_category }) });
+    if (form.brand && isNewBrand) await apiFetch("/api/brands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.brand }) });
 
     const method = editId ? "PUT" : "POST";
     const url = editId ? `/api/products/${editId}` : "/api/products";
 
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -296,13 +296,13 @@ export default function ProductsPage() {
       };
 
       if (existingProduct) {
-        await fetch(`/api/products/${existingProduct.id}`, {
+        await apiFetch(`/api/products/${existingProduct.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       } else {
-        await fetch("/api/products", {
+        await apiFetch("/api/products", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -337,7 +337,7 @@ export default function ProductsPage() {
   };
 
   const deleteProduct = async (id: number) => {
-    const r = await fetch(`/api/products/${id}`, { method: "DELETE" });
+    const r = await apiFetch(`/api/products/${id}`, { method: "DELETE" });
     const data = await r.json();
     if (r.ok) {
       setProducts((p) => p.filter((x) => x.id !== id));

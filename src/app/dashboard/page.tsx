@@ -1314,12 +1314,12 @@ export default function PosBilling() {
               </button>
               {showProfile && (
                 <div className="profile-menu pos-profile-menu">
-                  <div>
-                    <span>{user.username.charAt(0).toUpperCase()}</span>
-                    <p>
+                  <div className="profile-menu-header">
+                    <span className="profile-avatar">{user.username.charAt(0).toUpperCase()}</span>
+                    <div>
                       <b>{user.username}</b>
                       <small>{user.role === "admin" ? "Super Admin" : "Cashier"}</small>
-                    </p>
+                    </div>
                   </div>
                   {isAdmin && (
                     <>

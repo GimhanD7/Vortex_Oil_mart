@@ -1257,6 +1257,23 @@ body {
   color: #64748b;
 }
 
+.pos-profile-menu .profile-menu-header {
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 12px;
+}
+
+.pos-profile-menu .profile-menu-header div {
+  gap: 4px;
+  line-height: 1.2;
+}
+
+.pos-profile-menu .profile-menu-header b,
+.pos-profile-menu .profile-menu-header small {
+  display: block;
+  line-height: 1.25;
+}
+
 .profile-menu button {
   width: 100%;
   height: 36px;
@@ -3500,3 +3517,36 @@ body {
 }
 .inventory-kpis .lkr-currency-mark{font-size:15px;font-weight:900;letter-spacing:-.4px}
 .inventory-stats.analysis-grid>div{min-height:124px;height:auto;align-content:start}.inventory-stats.analysis-grid em{display:block;margin-top:8px;color:#707986;font-size:10px;font-style:normal;line-height:1.35;max-width:230px}
+
+/* Product modal must sit above sticky tablet topbars/profile layers. */
+.products-page .management-modal {
+  z-index: 1300;
+}
+
+.products-page .product-modal-form {
+  max-height: min(90vh, 720px);
+  overflow: auto;
+}
+
+@media (min-width: 768px) and (max-width: 1180px) {
+  .products-page .management-modal {
+    align-items: start;
+    padding-top: 72px;
+  }
+
+  .products-page .product-modal-form {
+    width: min(680px, calc(100vw - 96px));
+    max-height: calc(100vh - 92px);
+    padding: 18px;
+  }
+
+  .products-page .product-modal-form header {
+    min-height: 38px;
+  }
+
+  .products-page .product-form-grid,
+  .products-page .product-form-grid-two,
+  .products-page .product-form-grid-three {
+    gap: 10px;
+  }
+}
