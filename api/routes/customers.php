@@ -77,7 +77,7 @@ if ($method === 'GET' && $id === 'credit-collections') {
         foreach ($rows as $row) $totals[$row['payment_method']] = (float)$row['total'];
         sendJson(['date' => $date, 'sales_cycle_id' => $cycleId ?: null, 'totals' => $totals, 'rows' => $rows]);
     } catch (PDOException $e) {
-        sendJson(['error' => 'Unable to load credit collections'], 500);
+        sendJson(['error' => 'Unable to load credit collections', 'details' => $e->getMessage()], 500);
     }
 }
 

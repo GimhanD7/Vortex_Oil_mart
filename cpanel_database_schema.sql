@@ -142,15 +142,15 @@ CREATE TABLE IF NOT EXISTS `sales_cycles` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `cycle_id` VARCHAR(60) NOT NULL UNIQUE,
   `cashier_id` INT NOT NULL,
-  `opening_cash` DECIMAL(10,2) NOT NULL DEFAULT 0,
-  `closing_cash` DECIMAL(10,2) NULL,
-  `declared_cash` DECIMAL(10,2) NULL,
-  `cash_discrepancy` DECIMAL(10,2) NULL,
-  `status` VARCHAR(30) NOT NULL DEFAULT 'open',
   `opened_at` DATETIME NOT NULL,
+  `opened_date` DATE NOT NULL,
+  `opening_balance` DECIMAL(10,2) NOT NULL DEFAULT 0,
+  `closing_balance` DECIMAL(10,2) NULL,
   `closed_at` DATETIME NULL,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'open',
   `notes` VARCHAR(500) NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_sales_cycle_cashier (`cashier_id`),
   INDEX idx_sales_cycle_status (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -159,15 +159,21 @@ CREATE TABLE IF NOT EXISTS `sales_cycles` (
 CREATE TABLE IF NOT EXISTS `sale_returns` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `original_sale_id` INT NOT NULL,
-  `cashier_id` INT NOT NULL,
+  `return_number` VARCHAR(40) NULL,
+  `transaction_type` VARCHAR(20) NOT NULL DEFAULT 'return',
+  `resolution` VARCHAR(30) NOT NULL DEFAULT 'Cash',
   `refund_amount` DECIMAL(10,2) NOT NULL DEFAULT 0,
-  `resolution_type` VARCHAR(40) NOT NULL DEFAULT 'refund',
-  `status` VARCHAR(30) NOT NULL DEFAULT 'completed',
   `reason` VARCHAR(255) NULL,
+  `notes` TEXT NULL,
+  `replacement_sale_id` INT NULL,
+  `cashier_id` INT NOT NULL,
   `sales_cycle_id` VARCHAR(60) NULL,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'completed',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_returns_original_sale (`original_sale_id`),
+  INDEX idx_returns_replacement (`replacement_sale_id`),
   INDEX idx_returns_cycle (`sales_cycle_id`),
+  INDEX idx_returns_created (`created_at`),
   FOREIGN KEY (`original_sale_id`) REFERENCES `sales`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -179,7 +185,10 @@ CREATE TABLE IF NOT EXISTS `sale_return_items` (
   `product_id` INT NOT NULL,
   `quantity` DECIMAL(12,3) NOT NULL,
   `unit_price` DECIMAL(10,2) NOT NULL,
-  `line_total` DECIMAL(10,2) NOT NULL,
+  `line_refund` DECIMAL(10,2) NOT NULL,
+  `disposition` VARCHAR(30) NOT NULL DEFAULT 'resellable',
+  INDEX idx_return_items_return (`return_id`),
+  INDEX idx_return_items_sale_item (`sale_item_id`),
   FOREIGN KEY (`return_id`) REFERENCES `sale_returns`(`id`) ON DELETE CASCADE,
   FOREIGN KEY (`product_id`) REFERENCES `products`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -231,7 +240,7 @@ CREATE TABLE IF NOT EXISTS `purchase_items` (
 CREATE TABLE IF NOT EXISTS `inventory_movements` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `product_id` INT NOT NULL,
-  `movement_type` ENUM('in', 'out', 'adjustment', 'sale') NOT NULL,
+  `movement_type` ENUM('in', 'out', 'adjustment', 'sale', 'purchase', 'return') NOT NULL,
   `quantity_change` DECIMAL(12,3) NOT NULL,
   `stock_before` DECIMAL(12,3) NOT NULL,
   `stock_after` DECIMAL(12,3) NOT NULL,
@@ -287,11 +296,16 @@ CREATE TABLE IF NOT EXISTS `customer_credit_ledger` (
   `transaction_type` VARCHAR(40) NOT NULL,
   `debit_amount` DECIMAL(12,2) NOT NULL DEFAULT 0,
   `credit_amount` DECIMAL(12,2) NOT NULL DEFAULT 0,
-  `balance_after` DECIMAL(12,2) NOT NULL,
-  `reference_type` VARCHAR(40) NOT NULL,
-  `reference_id` INT NOT NULL,
+  `balance_after` DECIMAL(12,2) NOT NULL DEFAULT 0,
+  `sale_id` INT NULL,
+  `payment_id` INT NULL,
+  `reference_number` VARCHAR(120) NULL,
+  `notes` VARCHAR(500) NULL,
+  `created_by` INT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_credit_ledger_customer (`customer_id`),
+  INDEX idx_credit_ledger_sale (`sale_id`),
+  INDEX idx_credit_ledger_payment (`payment_id`),
   INDEX idx_credit_ledger_created (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

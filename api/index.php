@@ -15,6 +15,14 @@ $inputData = json_decode(file_get_contents('php://input'), true);
 
 // Routing
 switch ($resource) {
+    case null:
+    case '':
+        sendJson([
+            "status" => "online",
+            "message" => "Nada POS API is running",
+            "version" => "1.0.0"
+        ]);
+        break;
     case 'auth':
         require_once 'routes/auth.php';
         break;

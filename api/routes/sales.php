@@ -141,6 +141,62 @@ function saleItems($saleId) {
     return $stmt->fetchAll();
 }
 
+function ensureSalesTableColumn($table, $column, $definition) {
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+        $stmt->execute([$table, $column]);
+        if ((int)$stmt->fetchColumn() === 0) {
+            $pdo->exec("ALTER TABLE `$table` ADD COLUMN $definition");
+        }
+    } catch (Exception $e) {}
+}
+
+function ensureSalesCyclesTable() {
+    global $pdo;
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS sales_cycles (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            cycle_id VARCHAR(60) NOT NULL UNIQUE,
+            cashier_id INT NOT NULL,
+            opened_at DATETIME NOT NULL,
+            opened_date DATE NOT NULL,
+            opening_balance DECIMAL(10,2) NOT NULL DEFAULT 0,
+            closing_balance DECIMAL(10,2) NULL,
+            closed_at DATETIME NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'open',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_sales_cycle_cashier (cashier_id),
+            INDEX idx_sales_cycle_status (status)
+        )
+    ");
+
+    ensureSalesTableColumn('sales_cycles', 'opened_date', '`opened_date` DATE NULL');
+    ensureSalesTableColumn('sales_cycles', 'opening_balance', '`opening_balance` DECIMAL(10,2) NOT NULL DEFAULT 0');
+    ensureSalesTableColumn('sales_cycles', 'closing_balance', '`closing_balance` DECIMAL(10,2) NULL');
+    ensureSalesTableColumn('sales_cycles', 'closed_at', '`closed_at` DATETIME NULL');
+    ensureSalesTableColumn('sales_cycles', 'updated_at', '`updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+
+    try {
+        $pdo->exec("UPDATE sales_cycles SET opened_date = DATE(opened_at) WHERE opened_date IS NULL AND opened_at IS NOT NULL");
+    } catch (Exception $e) {}
+
+    try {
+        $stmt = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sales_cycles' AND COLUMN_NAME = 'opening_cash'");
+        if ((int)$stmt->fetchColumn() > 0) {
+            $pdo->exec("UPDATE sales_cycles SET opening_balance = opening_cash WHERE (opening_balance = 0 OR opening_balance IS NULL) AND opening_cash IS NOT NULL");
+        }
+    } catch (Exception $e) {}
+
+    try {
+        $stmt = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sales_cycles' AND COLUMN_NAME = 'closing_cash'");
+        if ((int)$stmt->fetchColumn() > 0) {
+            $pdo->exec("UPDATE sales_cycles SET closing_balance = closing_cash WHERE closing_balance IS NULL AND closing_cash IS NOT NULL");
+        }
+    } catch (Exception $e) {}
+}
+
 function ensureSaleReturnTables() {
     global $pdo;
     $pdo->exec("
@@ -164,6 +220,24 @@ function ensureSaleReturnTables() {
             INDEX idx_sale_returns_created (created_at)
         )
     ");
+
+    ensureSalesTableColumn('sale_returns', 'return_number', '`return_number` VARCHAR(40) NULL');
+    ensureSalesTableColumn('sale_returns', 'transaction_type', "`transaction_type` VARCHAR(20) NOT NULL DEFAULT 'return'");
+    ensureSalesTableColumn('sale_returns', 'resolution', "`resolution` VARCHAR(30) NOT NULL DEFAULT 'Cash'");
+    ensureSalesTableColumn('sale_returns', 'refund_amount', '`refund_amount` DECIMAL(10,2) NOT NULL DEFAULT 0');
+    ensureSalesTableColumn('sale_returns', 'reason', "`reason` VARCHAR(255) NULL");
+    ensureSalesTableColumn('sale_returns', 'notes', '`notes` TEXT NULL');
+    ensureSalesTableColumn('sale_returns', 'replacement_sale_id', '`replacement_sale_id` INT NULL');
+    ensureSalesTableColumn('sale_returns', 'sales_cycle_id', '`sales_cycle_id` VARCHAR(60) NULL');
+    ensureSalesTableColumn('sale_returns', 'status', "`status` VARCHAR(20) NOT NULL DEFAULT 'completed'");
+
+    try {
+        $stmt = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sale_returns' AND COLUMN_NAME = 'resolution_type'");
+        if ((int)$stmt->fetchColumn() > 0) {
+            $pdo->exec("UPDATE sale_returns SET resolution = resolution_type WHERE resolution IS NULL OR resolution = 'Cash'");
+        }
+    } catch (Exception $e) {}
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS sale_return_items (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -178,6 +252,16 @@ function ensureSaleReturnTables() {
             INDEX idx_return_items_sale_item (sale_item_id)
         )
     ");
+
+    ensureSalesTableColumn('sale_return_items', 'line_refund', '`line_refund` DECIMAL(10,2) NOT NULL DEFAULT 0');
+    ensureSalesTableColumn('sale_return_items', 'disposition', "`disposition` VARCHAR(30) NOT NULL DEFAULT 'resellable'");
+
+    try {
+        $stmt = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sale_return_items' AND COLUMN_NAME = 'line_total'");
+        if ((int)$stmt->fetchColumn() > 0) {
+            $pdo->exec("UPDATE sale_return_items SET line_refund = line_total WHERE (line_refund = 0 OR line_refund IS NULL) AND line_total > 0");
+        }
+    } catch (Exception $e) {}
 }
 
 function detailedSaleItems($saleId) {
@@ -727,24 +811,6 @@ if ($method === 'POST' && !$id) {
 }
 
 if ($id === 'cycles') {
-    function ensureSalesCyclesTable() {
-        global $pdo;
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS sales_cycles (
-                cycle_id VARCHAR(60) PRIMARY KEY,
-                cashier_id INT NOT NULL,
-                opened_at DATETIME NOT NULL,
-                opened_date DATE NOT NULL,
-                opening_balance DECIMAL(10,2) NOT NULL DEFAULT 0,
-                closing_balance DECIMAL(10,2) NULL,
-                closed_at DATETIME NULL,
-                status VARCHAR(20) NOT NULL DEFAULT 'open',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            )
-        ");
-    }
-
     if ($method === 'GET') {
         try {
             ensureSalesCyclesTable();
@@ -845,7 +911,7 @@ if ($id === 'cycles') {
 
             sendJson($cycles);
         } catch (PDOException $e) {
-            sendJson(["error" => "Internal server error"], 500);
+            sendJson(["error" => "Internal server error", "details" => $e->getMessage()], 500);
         }
     }
 
@@ -903,7 +969,7 @@ if ($id === 'cycles') {
             if ($lockAcquired) {
                 $pdo->prepare("SELECT RELEASE_LOCK(?)")->execute([$lockName]);
             }
-            sendJson(["error" => "Internal server error"], 500);
+            sendJson(["error" => "Internal server error", "details" => $e->getMessage()], 500);
         }
     }
 
@@ -972,7 +1038,7 @@ if ($id === 'cycles') {
                 "summary" => $summary
             ]);
         } catch (PDOException $e) {
-            sendJson(["error" => "Internal server error"], 500);
+            sendJson(["error" => "Internal server error", "details" => $e->getMessage()], 500);
         }
     }
 }

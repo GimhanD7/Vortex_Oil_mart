@@ -1,5 +1,16 @@
 <?php
 
+function ensureCreditColumn($table, $column, $definition) {
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+        $stmt->execute([$table, $column]);
+        if ((int)$stmt->fetchColumn() === 0) {
+            $pdo->exec("ALTER TABLE `$table` ADD COLUMN $definition");
+        }
+    } catch (Exception $e) {}
+}
+
 function ensureCreditAccountTables() {
     global $pdo;
 
@@ -26,16 +37,14 @@ function ensureCreditAccountTables() {
         )
     ");
 
-    $columnStmt = $pdo->query("
-        SELECT COUNT(*) FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'customer_credit_payments'
-          AND COLUMN_NAME = 'sales_cycle_id'
-    ");
-    if ((int)$columnStmt->fetchColumn() === 0) {
-        $pdo->exec("ALTER TABLE customer_credit_payments ADD COLUMN sales_cycle_id VARCHAR(60) NULL AFTER received_by");
-        $pdo->exec("ALTER TABLE customer_credit_payments ADD INDEX idx_credit_payment_cycle (sales_cycle_id)");
-    }
+    ensureCreditColumn('customer_credit_payments', 'received_by', '`received_by` INT NULL');
+    ensureCreditColumn('customer_credit_payments', 'sales_cycle_id', '`sales_cycle_id` VARCHAR(60) NULL');
+    ensureCreditColumn('customer_credit_payments', 'reference_number', '`reference_number` VARCHAR(120) NULL');
+    ensureCreditColumn('customer_credit_payments', 'notes', '`notes` VARCHAR(500) NULL');
+    ensureCreditColumn('customer_credit_payments', 'status', "`status` VARCHAR(30) NOT NULL DEFAULT 'completed'");
+    ensureCreditColumn('customer_credit_payments', 'reversed_at', '`reversed_at` DATETIME NULL');
+    ensureCreditColumn('customer_credit_payments', 'reversed_by', '`reversed_by` INT NULL');
+    ensureCreditColumn('customer_credit_payments', 'reversal_reason', '`reversal_reason` VARCHAR(255) NULL');
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS customer_credit_allocations (
@@ -72,17 +81,30 @@ function ensureCreditAccountTables() {
         )
     ");
 
-    $pdo->exec("
-        INSERT INTO customer_credit_ledger
-            (customer_id, transaction_type, debit_amount, credit_amount, balance_after, reference_number, notes)
-        SELECT c.id, 'opening_balance', c.outstanding_balance, 0, c.outstanding_balance,
-               'MIGRATION', 'Opening balance migrated from existing customer account'
-        FROM customers c
-        WHERE c.outstanding_balance > 0
-          AND NOT EXISTS (
-              SELECT 1 FROM customer_credit_ledger l WHERE l.customer_id = c.id
-          )
-    ");
+    ensureCreditColumn('customer_credit_ledger', 'sale_id', '`sale_id` INT NULL');
+    ensureCreditColumn('customer_credit_ledger', 'payment_id', '`payment_id` INT NULL');
+    ensureCreditColumn('customer_credit_ledger', 'reference_number', '`reference_number` VARCHAR(120) NULL');
+    ensureCreditColumn('customer_credit_ledger', 'notes', '`notes` VARCHAR(500) NULL');
+    ensureCreditColumn('customer_credit_ledger', 'created_by', '`created_by` INT NULL');
+
+    try {
+        $pdo->exec("ALTER TABLE customer_credit_ledger MODIFY COLUMN reference_type VARCHAR(40) NULL");
+        $pdo->exec("ALTER TABLE customer_credit_ledger MODIFY COLUMN reference_id INT NULL");
+    } catch (Exception $e) {}
+
+    try {
+        $pdo->exec("
+            INSERT INTO customer_credit_ledger
+                (customer_id, transaction_type, debit_amount, credit_amount, balance_after, reference_number, notes)
+            SELECT c.id, 'opening_balance', c.outstanding_balance, 0, c.outstanding_balance,
+                   'MIGRATION', 'Opening balance migrated from existing customer account'
+            FROM customers c
+            WHERE c.outstanding_balance > 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM customer_credit_ledger l WHERE l.customer_id = c.id
+              )
+        ");
+    } catch (Exception $e) {}
 }
 
 function addCreditLedgerEntry($customerId, $type, $debit, $credit, $balanceAfter, $saleId = null, $paymentId = null, $reference = null, $notes = null, $createdBy = null) {
