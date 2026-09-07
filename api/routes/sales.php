@@ -82,18 +82,20 @@ function ensureRevocationAuditTable() {
 
 function supervisorApproval() {
     global $pdo, $inputData;
-    $username = isset($inputData['approver_username']) ? trim($inputData['approver_username']) : '';
+    $username = $inputData['approver_username'] ?? '';
     $pin = isset($inputData['approver_pin']) ? $inputData['approver_pin'] : '';
 
-    if ($username === '' || $pin === '') {
+    if (!is_string($username) || !is_string($pin) || trim($username) === '' || $pin === '' || strlen($username) > 255 || strlen($pin) > 1024) {
         sendJson(["error" => "Supervisor/admin approval is required"], 400);
     }
 
-    $stmt = $pdo->prepare("SELECT id, username, password, role FROM users WHERE username = ? LIMIT 1");
+    $username = trim($username);
+    enforceLoginRateLimit($username);
+    $stmt = $pdo->prepare("SELECT id, username, password, role, employment_status FROM users WHERE username = ? LIMIT 1");
     $stmt->execute([$username]);
     $approver = $stmt->fetch();
 
-    if (!$approver || $approver['role'] !== 'admin' || !password_verify($pin, $approver['password'])) {
+    if (!$approver || $approver['role'] !== 'admin' || $approver['employment_status'] !== 'active' || !password_verify($pin, $approver['password'])) {
         sendJson(["error" => "Invalid supervisor/admin PIN"], 403);
     }
 
@@ -617,7 +619,10 @@ if ($method === 'POST' && !$id) {
         ensureCreditAccountTables();
         ensureSaleReturnTables();
         
-        $cashier_id = isset($inputData['cashier_id']) ? (int)$inputData['cashier_id'] : 0;
+        $cashier_id = (int)$user['id'];
+        if (isset($inputData['cashier_id']) && (int)$inputData['cashier_id'] !== $cashier_id) {
+            sendJson(['error' => 'Sales must be recorded under the signed-in user.'], 403);
+        }
         $customer_id = !empty($inputData['customer_id']) ? (int)$inputData['customer_id'] : null;
         $items = isset($inputData['items']) ? $inputData['items'] : [];
         $payment_method = !empty($inputData['payment_method']) ? $inputData['payment_method'] : 'Cash';
@@ -639,7 +644,15 @@ if ($method === 'POST' && !$id) {
             sendJson(["error" => "Invalid sale data"], 400);
         }
 
+        ensureSalesCyclesTable();
         $pdo->beginTransaction();
+        if ($user['role'] !== 'admin' || $sales_cycle_id) {
+            $cycle = $pdo->prepare("SELECT opening_balance FROM sales_cycles WHERE cycle_id = ? AND cashier_id = ? AND status = 'open' FOR UPDATE");
+            $cycle->execute([$sales_cycle_id, $cashier_id]);
+            $activeCycle = $cycle->fetch();
+            if (!$activeCycle) throw new Exception('Open your own sales cycle before recording a sale.');
+            $opening_cash_balance = (float)$activeCycle['opening_balance'];
+        }
 
         $subtotalAmount = 0;
         foreach ($items as $item) {
@@ -648,7 +661,7 @@ if ($method === 'POST' && !$id) {
                 throw new Exception("Sale items need a positive quantity");
             }
 
-            $stmt = $pdo->prepare('SELECT price, stock_quantity FROM products WHERE id = ?');
+            $stmt = $pdo->prepare('SELECT price, stock_quantity FROM products WHERE id = ? FOR UPDATE');
             $stmt->execute([$item['product_id']]);
             $product = $stmt->fetch();
             

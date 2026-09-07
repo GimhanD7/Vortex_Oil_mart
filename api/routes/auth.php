@@ -1,161 +1,46 @@
 <?php
-global $pdo, $jwt_secret, $inputData, $id, $action;
+global $pdo, $jwt_secret, $inputData, $id, $method;
 
-// Keep authentication compatible while an existing installation receives the
-// employee-history migration for the first time.
-try {
-    $statusColumn = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'employment_status'")->fetchColumn();
-    if (!(int)$statusColumn) $pdo->exec("ALTER TABLE users ADD COLUMN employment_status VARCHAR(20) NOT NULL DEFAULT 'active'");
-} catch (PDOException $e) {
-    sendJson(["error" => "Unable to prepare user account status"], 500);
-}
+// Compatibility for installations created before employee status was added.
+$statusColumn = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'employment_status'")->fetchColumn();
+if (!(int)$statusColumn) $pdo->exec("ALTER TABLE users ADD COLUMN employment_status VARCHAR(20) NOT NULL DEFAULT 'active'");
 
-if ($method === 'POST' && $id === 'login') {
-    $username = isset($inputData['username']) ? $inputData['username'] : '';
-    $password = isset($inputData['password']) ? $inputData['password'] : '';
-
-    if (empty($username) || empty($password)) {
-        sendJson(["error" => "Username and password are required"], 400);
+if ($method === 'POST' && in_array($id, ['login', 'verify-admin'], true)) {
+    if ($id === 'verify-admin') requireAuth();
+    $username = $inputData['username'] ?? '';
+    $password = $inputData['password'] ?? '';
+    if (!is_string($username) || !is_string($password) || $username === '' || $password === '' || strlen($username) > 255 || strlen($password) > 1024) {
+        sendJson(['error' => 'A valid username and password are required.'], 400);
     }
-
-    $stmt = $pdo->prepare("SELECT id, username, password, role, permissions, employment_status FROM users WHERE username = ? LIMIT 1");
+    enforceLoginRateLimit($username);
+    $stmt = $pdo->prepare('SELECT id, username, password, role, permissions, employment_status FROM users WHERE username = ? LIMIT 1');
     $stmt->execute([$username]);
     $user = $stmt->fetch();
-
-    if (!$user) {
-        sendJson(["error" => "Invalid credentials"], 401);
+    if (!$user || $user['employment_status'] !== 'active' || !password_verify($password, $user['password']) || ($id === 'verify-admin' && $user['role'] !== 'admin')) {
+        sendJson(['error' => 'Invalid credentials.'], 401);
     }
-    if (($user['employment_status'] ?? 'active') !== 'active') sendJson(["error" => "This user account is inactive"], 403);
+    if ($id === 'verify-admin') sendJson(['success' => true, 'admin_id' => $user['id']]);
 
-    // Verify password (bcrypt)
-    if (!password_verify($password, $user['password'])) {
-        sendJson(["error" => "Invalid credentials"], 401);
-    }
-
-    // Normalize permissions
-    $permissions = [];
-    if (!empty($user['permissions'])) {
-        $decoded = json_decode($user['permissions'], true);
-        if (is_array($decoded)) {
-            $permissions = $decoded;
-        } else {
-            $permissions = [$user['permissions']];
-        }
-    } else {
-        $permissions = $user['role'] === 'admin' 
-            ? ['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing', 'view_inventory']
-            : ['pos_billing', 'view_inventory'];
-    }
-
-    $payload = [
-        'id' => $user['id'],
-        'username' => $user['username'],
-        'role' => $user['role'],
-        'permissions' => $permissions,
-        'exp' => time() + (86400) // 1 day expiration
-    ];
-
-    $token = signJWT($payload, $jwt_secret);
-
-    // Set cookie (optional, primarily for Next.js, but good to have)
-    setcookie('auth_token', $token, time() + 86400, '/', '', isset($_SERVER['HTTPS']), true);
-
-    sendJson([
-        "message" => "Login successful",
-        "user" => [
-            "id" => $user['id'],
-            "username" => $user['username'],
-            "role" => $user['role'],
-            "permissions" => $permissions
-        ],
-        "token" => $token // Send token in response body too
-    ]);
+    $expires = time() + 86400;
+    $token = signJWT(['id' => (int)$user['id'], 'iat' => time(), 'exp' => $expires, 'jti' => bin2hex(random_bytes(24))], $jwt_secret);
+    $pdo->prepare('INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, FROM_UNIXTIME(?))')->execute([hash('sha256', $token), $user['id'], $expires]);
+    $pdo->exec('DELETE FROM auth_sessions WHERE expires_at <= NOW() LIMIT 100');
+    setcookie('auth_token', $token, sessionCookieOptions($expires));
+    sendJson(['message' => 'Login successful', 'user' => [
+        'id' => (int)$user['id'], 'username' => $user['username'], 'role' => $user['role'], 'permissions' => userPermissions($user),
+    ]]);
 }
 
 if ($method === 'POST' && $id === 'logout') {
-    $secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
-
-    if (PHP_VERSION_ID >= 70300) {
-        setcookie('auth_token', '', [
-            'expires' => time() - 3600,
-            'path' => '/',
-            'secure' => $secure,
-            'httponly' => true,
-            'samesite' => 'Lax',
-        ]);
-    } else {
-        setcookie('auth_token', '', time() - 3600, '/', '', $secure, true);
-    }
-
-    unset($_COOKIE['auth_token']);
-    sendJson(["message" => "Logged out"]);
+    ensureAuthTables();
+    $tokens = [];
+    if (isset($_COOKIE['auth_token']) && is_string($_COOKIE['auth_token'])) $tokens[] = $_COOKIE['auth_token'];
+    if (preg_match('/Bearer\s(\S+)/', getAuthorizationHeader() ?? '', $matches)) $tokens[] = $matches[1];
+    $stmt = $pdo->prepare('DELETE FROM auth_sessions WHERE token_hash = ?');
+    foreach (array_unique($tokens) as $token) $stmt->execute([hash('sha256', $token)]);
+    setcookie('auth_token', '', sessionCookieOptions(time() - 3600));
+    sendJson(['message' => 'Logged out']);
 }
 
-if ($method === 'GET' && $id === 'me') {
-    // Both cookie and Bearer token check
-    $user = authenticate();
-    if (!$user && isset($_COOKIE['auth_token'])) {
-        $user = verifyJWT($_COOKIE['auth_token'], $jwt_secret);
-    }
-    
-    if (!$user) {
-        sendJson(["error" => "Unauthorized"], 401);
-    }
-
-    $stmt = $pdo->prepare('SELECT id, username, role, permissions, employment_status FROM users WHERE id = ? LIMIT 1');
-    $stmt->execute([$user['id']]);
-    $dbUser = $stmt->fetch();
-
-    if (!$dbUser) {
-        sendJson(["error" => "User not found"], 401);
-    }
-    if (($dbUser['employment_status'] ?? 'active') !== 'active') sendJson(["error" => "This user account is inactive"], 401);
-
-    // Normalize permissions
-    $permissions = [];
-    if (!empty($dbUser['permissions'])) {
-        $decoded = json_decode($dbUser['permissions'], true);
-        if (is_array($decoded)) {
-            $permissions = $decoded;
-        } else {
-            $permissions = [$dbUser['permissions']];
-        }
-    } else {
-        $permissions = $dbUser['role'] === 'admin' 
-            ? ['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing', 'view_inventory']
-            : ['pos_billing', 'view_inventory'];
-    }
-
-    sendJson([
-        "id" => $dbUser['id'],
-        "username" => $dbUser['username'],
-        "role" => $dbUser['role'],
-        "permissions" => $permissions
-    ]);
-}
-
-if ($method === 'POST' && $id === 'verify-admin') {
-    $username = isset($inputData['username']) ? $inputData['username'] : '';
-    $password = isset($inputData['password']) ? $inputData['password'] : '';
-
-    if (empty($username) || empty($password)) {
-        sendJson(["error" => "Admin username and password are required"], 400);
-    }
-
-    $stmt = $pdo->prepare('SELECT id, password, role FROM users WHERE username = ? LIMIT 1');
-    $stmt->execute([$username]);
-    $adminUser = $stmt->fetch();
-
-    if (!$adminUser || $adminUser['role'] !== 'admin') {
-        sendJson(["error" => "Invalid admin credentials or insufficient permissions"], 403);
-    }
-
-    if (!password_verify($password, $adminUser['password'])) {
-        sendJson(["error" => "Invalid admin password"], 401);
-    }
-
-    sendJson(["success" => true, "admin_id" => $adminUser['id']]);
-}
-
-sendJson(["error" => "Endpoint not found"], 404);
-?>
+if ($method === 'GET' && $id === 'me') sendJson(requireAuth());
+sendJson(['error' => 'Endpoint not found'], 404);

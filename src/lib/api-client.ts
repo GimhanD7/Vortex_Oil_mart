@@ -1,19 +1,8 @@
-function withAuthHeaders(headers?: HeadersInit) {
-  const nextHeaders = new Headers(headers);
-
-  if (typeof window !== "undefined" && !nextHeaders.has("Authorization")) {
-    const token = window.localStorage.getItem("oil-mart-auth-token");
-    if (token) nextHeaders.set("Authorization", `Bearer ${token}`);
-  }
-
-  return nextHeaders;
-}
-
 export function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   return fetch(url, {
     ...options,
     credentials: options.credentials ?? "include",
-    headers: withAuthHeaders(options.headers),
+    headers: options.headers,
   });
 }
 

@@ -62,9 +62,9 @@ const blankProductForm = {
   price: "",
   stock_quantity: "",
   sku: "",
-  category: "Engine Oils",
-  brand: "Generic",
-  sub_category: "General",
+  category: "",
+  brand: "",
+  sub_category: "",
   product_type: "packaged",
   unit: "Unit",
   barrel_capacity_liters: "",
@@ -137,7 +137,7 @@ export default function ProductsPage() {
     cachedFetch("/api/products")
       .then((r) => r.json())
       .then((d) => {
-        if (Array.isArray(d) && d.length) {
+        if (Array.isArray(d)) {
           setProducts(
             d.map((p: Product) => ({
               ...p,
@@ -233,10 +233,10 @@ export default function ProductsPage() {
   const importFileRef = useRef<HTMLInputElement>(null);
 
   const exportProducts = () => {
-    let csv = "Name,SKU,Category,Brand,Description,Product Type,Unit,Barrel Capacity Liters,Price,Stock Quantity,Reorder Level\n";
+    let csv = "Name,SKU,Category,Sub-Category,Brand,Description,Product Type,Unit,Barrel Capacity Liters,Price,Stock Quantity,Reorder Level\n";
     products.forEach((p) => {
       const escape = (s: string) => `"${(s || "").replace(/"/g, '""')}"`;
-      csv += `${escape(p.name)},${escape(p.sku || "")},${escape(p.category || "")},${escape(p.brand || "")},${escape(p.description || "")},${escape(p.product_type || "packaged")},${escape(p.unit || "Unit")},${p.barrel_capacity_liters || ""},${p.price},${p.stock_quantity},${p.reorder_level || 10}\n`;
+      csv += `${escape(p.name)},${escape(p.sku || "")},${escape(p.category || "")},${escape(p.sub_category || "")},${escape(p.brand || "")},${escape(p.description || "")},${escape(p.product_type || "packaged")},${escape(p.unit || "Unit")},${p.barrel_capacity_liters || ""},${p.price},${p.stock_quantity},${p.reorder_level ?? 10}\n`;
     });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -246,6 +246,7 @@ export default function ProductsPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -253,68 +254,24 @@ export default function ProductsPage() {
     if (!file) return;
 
     setSaving(true);
-    const text = await file.text();
-    const lines = text.split(/\r?\n/).filter((line) => line.trim() !== "");
-    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-
-    if (!headers.includes("name") || !headers.includes("price") || !headers.includes("stock quantity")) {
-      showToast({ type: "error", title: "Import failed", message: "Invalid CSV format. Missing required columns: Name, Price, Stock Quantity." });
-      setSaving(false);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const response = await apiFetch("/api/products/import", { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not import products.");
+      const warnings = result.blank_stock || result.blank_prices
+        ? ` ${result.blank_stock} blank stock values and ${result.blank_prices} blank prices: existing values kept, new items set to zero.`
+        : "";
+      showToast({ type: warnings ? "warning" : "success", title: "Import completed", message: `${result.created} products created, ${result.updated} updated.${warnings}` });
+      setCurrentPage(1);
+      load();
+    } catch (error) {
+      showToast({ type: "error", title: "Import failed", message: error instanceof Error ? error.message : "Could not import products." });
+    } finally {
       if (importFileRef.current) importFileRef.current.value = "";
-      return;
+      setSaving(false);
     }
-
-    let importedCount = 0;
-    for (let i = 1; i < lines.length; i++) {
-      const row = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((v) => v.replace(/^"|"$/g, "").replace(/""/g, '"').trim());
-      if (row.length < headers.length) continue;
-
-      const getCol = (name: string) => row[headers.indexOf(name)] || "";
-
-      const name = getCol("name");
-      if (!name) continue;
-      const price = Number(getCol("price"));
-      const stock = Number(getCol("stock quantity"));
-      const category = getCol("category") || "General";
-      const brand = getCol("brand") || "Generic";
-
-      const sku = getCol("sku") || generateSku(name, category);
-      const existingProduct = products.find((p) => p.sku === sku || p.name.toLowerCase() === name.toLowerCase());
-
-      const payload = {
-        name,
-        sku,
-        category,
-        brand,
-        description: getCol("description"),
-        price: isNaN(price) ? 0 : price,
-        stock_quantity: isNaN(stock) ? 0 : stock,
-        product_type: getCol("product type") === "loose_oil" ? "loose_oil" : "packaged",
-        unit: getCol("unit") || (getCol("product type") === "loose_oil" ? "L" : "Unit"),
-        barrel_capacity_liters: getCol("barrel capacity liters") ? Number(getCol("barrel capacity liters")) : null,
-        reorder_level: getCol("reorder level") ? Number(getCol("reorder level")) : (getCol("product type") === "loose_oil" ? 20 : 10),
-      };
-
-      if (existingProduct) {
-        await apiFetch(`/api/products/${existingProduct.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      } else {
-        await apiFetch("/api/products", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      }
-      importedCount++;
-    }
-
-    showToast({ type: "success", title: "Import completed", message: `Successfully imported ${importedCount} products.` });
-    if (importFileRef.current) importFileRef.current.value = "";
-    load();
-    setSaving(false);
   };
 
   const openEdit = (p: Product) => {
@@ -379,7 +336,7 @@ export default function ProductsPage() {
           <button onClick={exportProducts}>
             <Download size={15} aria-hidden="true" /> Export
           </button>
-          <button className="gold-btn" onClick={() => { setEditId(null); setForm(blankProductForm); setShow(true); }}>
+          <button className="gold-btn" onClick={() => { setEditId(null); setForm(blankProductForm); setIsNewCat(false); setIsNewSubCat(false); setIsNewBrand(false); setShow(true); }}>
             <Plus size={15} aria-hidden="true" /> Add Product
           </button>
         </aside>
@@ -414,7 +371,7 @@ export default function ProductsPage() {
         </select>
       </div>
 
-      <div className="catalog-cats">
+      <div className="catalog-cats" role="group" aria-label="Product categories" tabIndex={0}>
         {catsList.map((c) => (
           <button
             key={c}
@@ -422,7 +379,7 @@ export default function ProductsPage() {
             className={cat === c ? "active" : ""}
           >
             <ProductCategoryIcon category={c} className="catalog-icon" colored />
-            {c}
+            <span className="catalog-category-label">{c}</span>
           </button>
         ))}
       </div>
@@ -655,14 +612,16 @@ export default function ProductsPage() {
                 Category
                 {!isNewCat ? (
                   <select
+                    required
                     value={form.category}
                     onChange={(e) => {
                       if (e.target.value === "++NEW++") {
                         setIsNewCat(true);
-                        setForm({ ...form, category: "" });
+                        setForm({ ...form, category: "", sub_category: "" });
                       } else {
-                        setForm({ ...form, category: e.target.value });
+                        setForm({ ...form, category: e.target.value, sub_category: "" });
                       }
+                      setIsNewSubCat(false);
                     }}
                     style={{ border: '1px solid #dfe2e5', borderRadius: '7px', padding: '11px', font: 'inherit', width: '100%', outline: 'none' }}
                   >
@@ -689,6 +648,7 @@ export default function ProductsPage() {
                 Sub-Category
                 {!isNewSubCat ? (
                   <select
+                    required
                     value={form.sub_category}
                     onChange={(e) => {
                       if (e.target.value === "++NEW++") {
@@ -723,6 +683,7 @@ export default function ProductsPage() {
                 Brand
                 {!isNewBrand ? (
                   <select
+                    required
                     value={form.brand}
                     onChange={(e) => {
                       if (e.target.value === "++NEW++") {

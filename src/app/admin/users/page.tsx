@@ -363,7 +363,8 @@ export default function UsersPage() {
               <input
                 type="password"
                 required={modal === "add"}
-                minLength={6}
+                minLength={12}
+                maxLength={72}
                 autoComplete="new-password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}

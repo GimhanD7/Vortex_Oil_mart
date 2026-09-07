@@ -6,6 +6,8 @@ import Image from "next/image";
 import { HelpSupportButton } from "@/components/HelpSupport";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { ProductCategoryIcon } from "@/components/ProductCategoryIcon";
+import { PosCatalog } from "@/components/PosCatalog";
+import { apiFetch } from "@/lib/api-client";
 import { useToast } from "@/components/ToastProvider";
 import { logoutToLogin } from "@/lib/auth-session";
 import {
@@ -32,13 +34,11 @@ import {
   Printer,
   Receipt,
   RotateCcw,
-  ScanBarcode,
   Search,
   Settings,
   ShieldAlert,
   ShieldCheck,
   ShoppingCart,
-  Star,
   Replace,
   Trash2,
   TrendingUp,
@@ -409,9 +409,6 @@ export default function PosBilling() {
   const [returnDateFrom, setReturnDateFrom] = useState("");
   const [returnDateTo, setReturnDateTo] = useState("");
   const [returnDirectMode, setReturnDirectMode] = useState(false);
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("All Items");
-  const [subCategory, setSubCategory] = useState("All");
   const [showProductIcons, setShowProductIcons] = useState(true);
   const [payment, setPayment] = useState("Cash");
   const [customerId, setCustomerId] = useState<number | "">("");
@@ -456,7 +453,7 @@ export default function PosBilling() {
   const [exchangeOriginalId, setExchangeOriginalId] = useState<number | null>(null);
 
   const fetchProducts = async () => {
-    const response = await fetch("/api/products", { cache: "no-store" });
+    const response = await apiFetch("/api/products", { cache: "no-store" });
     const data = await response.json();
     if (Array.isArray(data)) {
       return (data as Product[]).map((product) => ({
@@ -649,24 +646,6 @@ export default function PosBilling() {
     };
   }, [cashCycle, loadCashierSummary, summaryRefresh, user]);
 
-  const shown = useMemo(() => {
-    return products.filter((product) => {
-      const matchCategory = category === "All Items" || product.category === category;
-      const matchSubCategory = subCategory === "All" || product.sub_category === subCategory;
-      const matchQuery = !query || `${product.name} ${product.sku}`.toLowerCase().includes(query.toLowerCase());
-      return matchCategory && matchSubCategory && matchQuery;
-    });
-  }, [products, category, subCategory, query]);
-
-  const productCategories = useMemo(() => {
-    const values = Array.from(new Set(products.map((product) => product.category || "Uncategorized")));
-    return ["All Items", ...values];
-  }, [products]);
-
-  const productSubCategories = useMemo(() => {
-    const values = Array.from(new Set(products.filter((p) => p.category === category || category === "All Items").map((p) => p.sub_category).filter(Boolean)));
-    return ["All", ...values];
-  }, [products, category]);
   const paymentMethods = normalizePaymentMethods(settings.payment_methods.length ? settings.payment_methods : defaultPosSettings.payment_methods);
   const subtotal = cart.reduce((sum, item) => sum + Number(item.price) * item.cartQuantity, 0);
   const normalizedDiscountRate = Math.min(100, Math.max(0, Number(discountRate || 0)));
@@ -1384,64 +1363,7 @@ export default function PosBilling() {
         ) : (
           <main className="pos-main">
             <section className="catalog">
-              <div className="product-search">
-                <Search className="catalog-icon" aria-hidden="true" />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Scan barcode, SKU, part number, or product name" />
-                <button aria-label="Scan barcode"><ScanBarcode size={18} aria-hidden="true" /></button>
-              </div>
-
-              <div className="catalog-category-row">
-                <div className="category-tabs" style={{ overflowX: "auto", whiteSpace: "nowrap" }}>
-                  {productCategories.map((item) => (
-                    <button className={category === item ? "active" : ""} onClick={() => { setCategory(item); setSubCategory("All"); }} key={item}>
-                      {item}
-                    </button>
-                  ))}
-                </div>
-                {isCashier && (
-                  <button
-                    type="button"
-                    className="product-icon-toggle"
-                    onClick={() => setShowProductIcons((current) => !current)}
-                  >
-                    {showProductIcons ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
-                    {showProductIcons ? "Hide Icons" : "Show Icons"}
-                  </button>
-                )}
-              </div>
-
-              {category !== "All Items" && productSubCategories.length > 1 && (
-                <div className="category-tabs" style={{ paddingTop: 0, paddingBottom: 10, borderBottom: '1px solid #e3e6e9', marginBottom: 12, overflowX: "auto", whiteSpace: "nowrap" }}>
-                  {productSubCategories.map((item) => (
-                    <button
-                      key={item as string}
-                      className={subCategory === item ? "active" : ""}
-                      onClick={() => setSubCategory(item as string)}
-                      style={{ height: '30px', padding: '0 12px', fontSize: '12px', borderRadius: '15px' }}
-                    >
-                      {item as string}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className={`product-grid${showProductIcons ? "" : " product-grid-icons-hidden"}`}>
-                {shown.map((product) => (
-                  <article key={product.id} onClick={() => add(product)} style={{ opacity: product.stock_quantity <= 0 ? 0.5 : 1 }}>
-                    <button className="favorite" aria-label={`Favorite ${product.name}`}><Star size={18} aria-hidden="true" /></button>
-                    {showProductIcons && <div className="product-visual"><ProductCategoryIcon category={product.category} productName={product.name} className="pos-product-icon large" /></div>}
-                    <h3>{product.name}</h3>
-                    <small>Stock: {formatQty(product.stock_quantity, product.unit)}</small>
-                    <p>SKU: {product.sku}</p>
-                    <strong>{money(Number(product.price))}{isLooseOil(product) ? " / L" : ""}</strong>
-                  </article>
-                ))}
-                {!shown.length && <div className="no-products">No matching products found.</div>}
-              </div>
-
-              <div className="catalog-pagination">
-                <span>Showing 1 to {shown.length} of {products.length} items</span>
-              </div>
+              <PosCatalog products={products} onAdd={add} showIcons={showProductIcons} onToggleIcons={() => setShowProductIcons(current => !current)} />
 
               <div className="customer-bar">
                 <div>

@@ -2,12 +2,8 @@
 global $pdo, $inputData, $method;
 requireAuth(); // Require auth for both GET and POST
 
-$DEFAULT_CATEGORIES = [
-  'Engine Oils', 'Gear Oils', 'Lubricants', 'Filters', 'Brake Pads', 'Batteries', 'Spark Plugs', 'General'
-];
-
 function ensureCategoriesTable() {
-    global $pdo, $DEFAULT_CATEGORIES;
+    global $pdo;
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS categories (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -22,10 +18,6 @@ function ensureCategoriesTable() {
         WHERE category IS NOT NULL AND category != ''
     ");
     
-    $stmt = $pdo->prepare('INSERT IGNORE INTO categories (name) VALUES (?)');
-    foreach ($DEFAULT_CATEGORIES as $category) {
-        $stmt->execute([$category]);
-    }
 }
 
 if ($method === 'GET') {

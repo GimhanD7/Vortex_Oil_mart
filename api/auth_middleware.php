@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php';
+require_once __DIR__ . '/session.php';
 
 function base64url_encode($data) {
     return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
@@ -8,7 +9,7 @@ function base64url_encode($data) {
 function base64url_decode($data) {
     $padding = strlen($data) % 4;
     $padding = $padding !== 0 ? 4 - $padding : 0;
-    return base64_decode(strtr($data, '-_', '+/') . str_repeat('=', $padding));
+    return base64_decode(strtr($data, '-_', '+/') . str_repeat('=', $padding), true);
 }
 
 function signJWT($payload, $secret) {
@@ -29,6 +30,10 @@ function verifyJWT($token, $secret) {
     $header = base64url_decode($tokenParts[0]);
     $payload = base64url_decode($tokenParts[1]);
     $signatureProvided = $tokenParts[2];
+    $headerData = json_decode($header ?: '', true);
+    $payloadData = json_decode($payload ?: '', true);
+    if (!is_array($headerData) || ($headerData['alg'] ?? '') !== 'HS256' || !is_array($payloadData)) return false;
+    if (!isset($payloadData['exp'], $payloadData['id'], $payloadData['jti']) || !is_numeric($payloadData['exp']) || (int)$payloadData['exp'] <= time()) return false;
     
     // Check signature
     $base64UrlHeader = base64url_encode($header);
@@ -73,7 +78,7 @@ function getAuthorizationHeader() {
 }
 
 function authenticate() {
-    global $jwt_secret;
+    global $jwt_secret, $pdo;
     $authHeader = getAuthorizationHeader();
     
     $token = null;
@@ -89,7 +94,17 @@ function authenticate() {
     }
     
     $decoded = verifyJWT($token, $jwt_secret);
-    return $decoded;
+    if (!$decoded) return null;
+    ensureAuthTables();
+    $stmt = $pdo->prepare("SELECT u.id, u.username, u.role, u.permissions, u.employment_status
+        FROM auth_sessions s JOIN users u ON u.id = s.user_id
+        WHERE s.token_hash = ? AND s.user_id = ? AND s.expires_at > NOW() LIMIT 1");
+    $stmt->execute([hash('sha256', $token), (int)$decoded['id']]);
+    $user = $stmt->fetch();
+    if (!$user || $user['employment_status'] !== 'active') return null;
+    $user['permissions'] = userPermissions($user);
+    unset($user['employment_status']);
+    return $user;
 }
 
 function requireAuth() {

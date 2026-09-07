@@ -12,6 +12,9 @@ $action = isset($parts[2]) && $parts[2] !== '' ? $parts[2] : null;
 
 // Get JSON body if any
 $inputData = json_decode(file_get_contents('php://input'), true);
+if (!in_array($method, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], true)) sendJson(['error' => 'Method not allowed.'], 405);
+requireSameOrigin();
+if ($resource !== null && $resource !== 'auth') authorizeEndpoint($resource, $method, $id, $action);
 
 // Routing
 switch ($resource) {

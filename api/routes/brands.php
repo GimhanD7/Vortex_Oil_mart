@@ -2,12 +2,8 @@
 global $pdo, $inputData, $method;
 requireAuth(); // Require auth for both GET and POST
 
-$DEFAULT_BRANDS = [
-  'Shell India', 'ExxonMobil', 'Castrol India', 'Bosch Ltd.', 'Amaron', 'Brembo India', 'NGK India', 'Mann+Hummel', 'Generic'
-];
-
 function ensureBrandsTable() {
-    global $pdo, $DEFAULT_BRANDS;
+    global $pdo;
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS brands (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -22,10 +18,6 @@ function ensureBrandsTable() {
         WHERE brand IS NOT NULL AND brand != ''
     ");
     
-    $stmt = $pdo->prepare('INSERT IGNORE INTO brands (name) VALUES (?)');
-    foreach ($DEFAULT_BRANDS as $brand) {
-        $stmt->execute([$brand]);
-    }
 }
 
 if ($method === 'GET') {

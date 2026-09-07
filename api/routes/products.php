@@ -1,6 +1,7 @@
 <?php
 global $pdo, $inputData, $id, $method;
 requireAuth(); // All product endpoints require authentication
+require_once __DIR__ . '/../product-import.php';
 
 try {
     $pdo->exec("ALTER TABLE products ADD COLUMN sub_category VARCHAR(100) DEFAULT 'General'");
@@ -44,6 +45,33 @@ function ensureLooseOilProductColumns() {
 }
 
 ensureLooseOilProductColumns();
+
+if ($method === 'POST' && $id === 'import') {
+    $user = requireAuth();
+    if (($user['role'] ?? '') !== 'admin' && !in_array('manage_products', $user['permissions'] ?? [], true)) {
+        sendJson(['error' => 'Product management permission is required.'], 403);
+    }
+    if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+        sendJson(['error' => 'Upload a valid product CSV file.'], 400);
+    }
+    try {
+        $stream = fopen($_FILES['file']['tmp_name'], 'rb');
+        try {
+            $rows = readProductCsv($stream);
+        } finally {
+            fclose($stream);
+        }
+        ensureProductImportTables($pdo);
+        $pdo->beginTransaction();
+        $result = importProductRows($pdo, $rows, (int)$user['id']);
+        $pdo->commit();
+        sendJson($result + ['message' => 'Products imported successfully.']);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        $invalid = $e instanceof InvalidArgumentException;
+        sendJson(['error' => $invalid ? $e->getMessage() : 'Import failed. No products were changed. Check for duplicate SKUs or invalid values.'], $invalid ? 400 : 500);
+    }
+}
 
 if ($method === 'GET' && !$id) {
     try {

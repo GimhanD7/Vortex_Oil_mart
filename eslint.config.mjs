@@ -6,7 +6,7 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    files: ["*.js", "scripts/**/*.js", "public/**/*.js"],
+    files: ["*.js", "scripts/**/*.{js,cjs}", "public/**/*.js"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
     },
@@ -22,6 +22,9 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    ".local-checks/**",
+    ".local-backups/**",
+    ".oil-mart-db/**",
     "next-env.d.ts",
   ]),
 ]);

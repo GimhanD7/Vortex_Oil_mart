@@ -21,14 +21,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Insert default admin (password: admin123) and default cashier (password: cashier123)
-INSERT INTO `users` (`id`, `username`, `password`, `role`, `permissions`) VALUES
-(1, 'admin', '$2a$10$tZ2yYq/9v0RZZQ1qB2uK8eeCj4sJ.e0W5Gz9mS7eU1f.C7yN9o4.C', 'admin', '["view_sales", "manage_inventory", "manage_products", "manage_customers", "view_reports", "manage_users", "pos_billing", "view_inventory"]')
-ON DUPLICATE KEY UPDATE `username`=`username`;
-
-INSERT INTO `users` (`id`, `username`, `password`, `role`, `permissions`) VALUES
-(2, 'cashier', '$2a$10$95S1O5/Yg8yM6Cj8T2Bge.s1c2h4i5e6r7.k8e9y0.z1x2c3v4b5n', 'cashier', '["pos_billing", "view_inventory"]')
-ON DUPLICATE KEY UPDATE `username`=`username`;
+-- Provision accounts explicitly using api/.env and npm run db:setup.
 
 -- 2. Categories Table
 CREATE TABLE IF NOT EXISTS `categories` (
@@ -37,18 +30,12 @@ CREATE TABLE IF NOT EXISTS `categories` (
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT IGNORE INTO `categories` (`name`) VALUES
-('Engine Oils'), ('Gear Oils'), ('Lubricants'), ('Filters'), ('Brake Pads'), ('Batteries'), ('Spark Plugs'), ('General');
-
 -- 3. Brands Table
 CREATE TABLE IF NOT EXISTS `brands` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `name` VARCHAR(100) NOT NULL UNIQUE,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-INSERT IGNORE INTO `brands` (`name`) VALUES
-('Shell India'), ('ExxonMobil'), ('Castrol India'), ('Bosch Ltd.'), ('Amaron'), ('Brembo India'), ('NGK India'), ('Mann+Hummel'), ('Generic');
 
 -- 4. Sub-Categories Table
 CREATE TABLE IF NOT EXISTS `sub_categories` (
@@ -69,6 +56,7 @@ CREATE TABLE IF NOT EXISTS `products` (
   `sku` VARCHAR(100) UNIQUE,
   `barcode` VARCHAR(100) UNIQUE,
   `category` VARCHAR(100) NOT NULL DEFAULT 'Uncategorized',
+  `sub_category` VARCHAR(100) NOT NULL DEFAULT 'General',
   `brand` VARCHAR(100) NOT NULL DEFAULT 'Generic',
   `product_type` VARCHAR(30) NOT NULL DEFAULT 'packaged',
   `unit` VARCHAR(20) NOT NULL DEFAULT 'Unit',

@@ -1,5 +1,11 @@
+Options -Indexes
+<FilesMatch "(?i)(^\.|\.(zip|sql|bak|log|ini)$|^(config|environment|auth_middleware|session|product-import|credit|test_db)\.php$)">
+Require all denied
+</FilesMatch>
+
 <IfModule mod_rewrite.c>
 RewriteEngine On
+RewriteRule ^routes/ - [F,L,NC]
 
 # Pass Authorization header to PHP in cPanel / FastCGI / LiteSpeed
 RewriteCond %{HTTP:Authorization} ^(.*)

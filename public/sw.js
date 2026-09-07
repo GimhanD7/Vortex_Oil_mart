@@ -1,4 +1,4 @@
-const CACHE_NAME = 'oil-mart-v4';
+const CACHE_NAME = 'oil-mart-v6';
 
 const PROTECTED_ROUTES = ['/dashboard', '/admin', '/cashier'];
 

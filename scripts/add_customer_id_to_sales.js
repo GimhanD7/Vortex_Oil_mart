@@ -1,14 +1,10 @@
 const mysql = require('mysql2/promise');
+const { databaseOptions } = require('./db-config');
 
 async function updateSalesTable() {
   console.log('Connecting to MySQL...');
   
-  const connection = await mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'oil_mart',
-  });
+  const connection = await mysql.createConnection(databaseOptions());
 
   try {
     console.log('Adding customer_id to sales table...');

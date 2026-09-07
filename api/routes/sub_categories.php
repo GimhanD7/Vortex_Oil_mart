@@ -2,21 +2,8 @@
 global $pdo, $inputData, $method;
 requireAuth(); // Require auth for both GET and POST
 
-$DEFAULT_SUB_CATEGORIES = [
-  ['category_name' => 'Engine Oils', 'name' => 'Synthetic'],
-  ['category_name' => 'Engine Oils', 'name' => 'Semi-Synthetic'],
-  ['category_name' => 'Engine Oils', 'name' => 'Mineral'],
-  ['category_name' => 'Gear Oils', 'name' => 'Automatic Transmission'],
-  ['category_name' => 'Gear Oils', 'name' => 'Manual Transmission'],
-  ['category_name' => 'Filters', 'name' => 'Oil Filter'],
-  ['category_name' => 'Filters', 'name' => 'Air Filter'],
-  ['category_name' => 'Filters', 'name' => 'Fuel Filter'],
-  ['category_name' => 'Brake Pads', 'name' => 'Ceramic'],
-  ['category_name' => 'Brake Pads', 'name' => 'Metallic'],
-];
-
 function ensureSubCategoriesTable() {
-    global $pdo, $DEFAULT_SUB_CATEGORIES;
+    global $pdo;
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS sub_categories (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -27,14 +14,9 @@ function ensureSubCategoriesTable() {
         )
     ");
     
-    // Insert defaults if empty
-    $stmt = $pdo->query('SELECT COUNT(*) FROM sub_categories');
-    if ($stmt->fetchColumn() == 0) {
-        $insert = $pdo->prepare('INSERT IGNORE INTO sub_categories (category_name, name) VALUES (?, ?)');
-        foreach ($DEFAULT_SUB_CATEGORIES as $sub) {
-            $insert->execute([$sub['category_name'], $sub['name']]);
-        }
-    }
+    $pdo->exec("INSERT IGNORE INTO sub_categories (category_name, name)
+        SELECT DISTINCT category, sub_category FROM products
+        WHERE category IS NOT NULL AND category != '' AND sub_category IS NOT NULL AND sub_category != ''");
 }
 
 if ($method === 'GET') {

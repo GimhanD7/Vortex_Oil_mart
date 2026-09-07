@@ -40,8 +40,8 @@ if ($method === 'POST' && !$id) {
             sendJson(["error" => "Username, password, and role are required"], 400);
         }
 
-        if (strlen($username) < 3 || strlen($password) < 6) {
-            sendJson(["error" => "Username must be at least 3 characters and password at least 6 characters"], 400);
+        if (strlen($username) < 3 || strlen($password) < 12 || strlen($password) > 72) {
+            sendJson(["error" => "Username must be at least 3 characters and password between 12 and 72 bytes"], 400);
         }
 
         if (!in_array($role, ['admin', 'cashier'])) {
@@ -90,8 +90,8 @@ if ($method === 'PUT' && $id) {
         if ($role === 'cashier' && (!$fullName || !$address || !$phone || !$idNumber || !$startDate)) sendJson(["error" => "Cashier full name, address, phone, ID number, and employment start date are required"], 400);
         if ($employmentStatus === 'inactive' && !$endDate) $endDate = date('Y-m-d');
 
-        if (!empty($password) && strlen($password) < 6) {
-            sendJson(["error" => "Password must be at least 6 characters"], 400);
+        if (!empty($password) && (strlen($password) < 12 || strlen($password) > 72)) {
+            sendJson(["error" => "Password must be between 12 and 72 bytes"], 400);
         }
 
         $stmt = $pdo->prepare('SELECT id FROM users WHERE username = ? AND id <> ?');
@@ -111,6 +111,8 @@ if ($method === 'PUT' && $id) {
             $stmt->execute([$username,$role,$permsJson,$fullName?:null,$address?:null,$phone?:null,$idNumber?:null,$startDate,$endDate,$employmentStatus,$notes?:null,$id]);
         }
 
+        ensureAuthTables();
+        $pdo->prepare('DELETE FROM auth_sessions WHERE user_id = ?')->execute([$id]);
         sendJson(["message" => "User updated successfully"]);
     } catch (PDOException $e) {
         sendJson(["error" => "Internal server error"], 500);

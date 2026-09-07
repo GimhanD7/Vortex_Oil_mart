@@ -114,7 +114,7 @@ if ($method === 'POST' && !$id) {
         $product_id = isset($inputData['product_id']) ? (int)$inputData['product_id'] : 0;
         $quantity_change = isset($inputData['quantity_change']) ? (float)$inputData['quantity_change'] : 0;
         $notes = !empty($inputData['notes']) ? trim($inputData['notes']) : 'Manual stock adjustment';
-        $created_by = isset($inputData['created_by']) ? (int)$inputData['created_by'] : $user['id'];
+        $created_by = (int)$user['id'];
 
         if ($product_id <= 0 || $quantity_change === 0) {
             sendJson(["error" => "A valid product and non-zero adjustment are required"], 400);

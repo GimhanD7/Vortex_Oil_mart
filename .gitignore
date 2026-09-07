@@ -32,9 +32,15 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+**/.env*
+!api/.env.example
+api/*.zip
 
 # local Oil Mart MariaDB data
 .oil-mart-db/
+.local-backups/*
+!.local-backups/.htaccess
+.local-checks/
 
 # vercel
 .vercel

@@ -1,13 +1,8 @@
 const mysql = require('mysql2/promise');
+const { databaseOptions } = require('./db-config');
 
 async function setupCategoriesAndBrands() {
-  const connection = await mysql.createConnection({
-    host: process.env.MYSQL_HOST || '127.0.0.1',
-    port: Number(process.env.MYSQL_PORT || 3306),
-    user: process.env.MYSQL_USER || 'root',
-    password: process.env.MYSQL_PASSWORD || '',
-    database: process.env.MYSQL_DATABASE || 'oil_mart',
-  });
+  const connection = await mysql.createConnection(databaseOptions());
 
   try {
     // Create Categories Table
@@ -39,16 +34,16 @@ async function setupCategoriesAndBrands() {
       await connection.query(`INSERT IGNORE INTO brands (name) VALUES (?)`, [row.brand]);
     }
 
-    // Default categories if missing
-    const defaultCats = ["Engine Oils", "Gear Oils", "Lubricants", "Filters", "Brake Pads", "Batteries", "Spark Plugs", "General"];
-    for (const c of defaultCats) {
-      await connection.query(`INSERT IGNORE INTO categories (name) VALUES (?)`, [c]);
-    }
-
-    const defaultBrands = ["Shell India", "ExxonMobil", "Castrol India", "Bosch Ltd.", "Amaron", "Brembo India", "NGK India", "Mann+Hummel", "Generic"];
-    for (const b of defaultBrands) {
-      await connection.query(`INSERT IGNORE INTO brands (name) VALUES (?)`, [b]);
-    }
+    await connection.query(`CREATE TABLE IF NOT EXISTS sub_categories (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      category_name VARCHAR(100) NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY cat_subcat_idx (category_name, name)
+    )`);
+    await connection.query(`INSERT IGNORE INTO sub_categories (category_name, name)
+      SELECT DISTINCT category, sub_category FROM products
+      WHERE category IS NOT NULL AND category != '' AND sub_category IS NOT NULL AND sub_category != ''`);
 
     console.log('Categories and Brands successfully migrated to dedicated tables.');
   } catch (err) {

@@ -9,6 +9,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "check:types": "tsc --noEmit --incremental false",
+    "check:secrets": "node scripts/check-secrets.cjs",
+    "test:security": "node scripts/test_api_security.cjs",
+    "package:cpanel": "node scripts/prepare-cpanel.cjs",
     "db:start": "node scripts/start_database.js",
     "db:setup": "node scripts/setup_db.js",
     "db:inventory": "node scripts/setup_inventory_db.js"

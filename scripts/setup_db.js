@@ -1,20 +1,18 @@
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
+const { databaseOptions } = require('./db-config');
 
 async function setup() {
   console.log('Connecting to MySQL...');
   
   // Connect without a specific database first to create it if it doesn't exist
-  const connection = await mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-  });
+  const config = databaseOptions();
+  const connection = await mysql.createConnection({ ...config, database: undefined });
 
   try {
-    console.log('Creating database oil_mart if not exists...');
-    await connection.query('CREATE DATABASE IF NOT EXISTS oil_mart;');
-    await connection.query('USE oil_mart;');
+    console.log('Preparing the configured database...');
+    await connection.query(`CREATE DATABASE IF NOT EXISTS ${mysql.escapeId(config.database)}`);
+    await connection.query(`USE ${mysql.escapeId(config.database)}`);
 
     console.log('Creating users table...');
     await connection.query(`
@@ -53,6 +51,7 @@ async function setup() {
         sku VARCHAR(100) UNIQUE,
         barcode VARCHAR(100) UNIQUE,
         category VARCHAR(100) NOT NULL DEFAULT 'Uncategorized',
+        sub_category VARCHAR(100) NOT NULL DEFAULT 'General',
         brand VARCHAR(100) NOT NULL DEFAULT 'Generic',
         product_type VARCHAR(30) NOT NULL DEFAULT 'packaged',
         unit VARCHAR(20) NOT NULL DEFAULT 'Unit',
@@ -144,37 +143,18 @@ async function setup() {
       )
     `);
 
-    // Insert default admin user if not exists
-    const [rows] = await connection.query('SELECT * FROM users WHERE username = "admin"');
-    if (rows.length === 0) {
-      console.log('Creating default admin user...');
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash('admin123', salt);
-      await connection.query(
-        'INSERT INTO users (username, password, role, permissions) VALUES (?, ?, ?, ?)',
-        ['admin', hashedPassword, 'admin', JSON.stringify(['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'pos_billing'])]
-      );
-      console.log('Default admin created: admin / admin123');
+    for (const role of ['admin', 'cashier']) {
+      const prefix = `INITIAL_${role.toUpperCase()}`;
+      const username = process.env[`${prefix}_USERNAME`];
+      const password = process.env[`${prefix}_PASSWORD`];
+      if (!username && !password) continue;
+      if (!username || !password || password.length < 12 || Buffer.byteLength(password) > 72) throw new Error(`${prefix} requires a username and a password between 12 and 72 bytes.`);
+      const [existing] = await connection.query('SELECT id FROM users WHERE username = ?', [username]);
+      if (existing.length) continue;
+      const permissions = role === 'admin' ? ['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'manage_settings', 'pos_billing', 'view_inventory'] : ['pos_billing', 'view_inventory'];
+      await connection.query('INSERT INTO users (username, password, role, permissions) VALUES (?, ?, ?, ?)', [username, await bcrypt.hash(password, 12), role, JSON.stringify(permissions)]);
+      console.log(`Created configured ${role} account.`);
     }
-
-    // Insert default cashier user if not exists
-    const [cashierRows] = await connection.query('SELECT * FROM users WHERE username = "cashier"');
-    if (cashierRows.length === 0) {
-      console.log('Creating default cashier user...');
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash('cashier123', salt);
-      await connection.query(
-        'INSERT INTO users (username, password, role, permissions) VALUES (?, ?, ?, ?)',
-        ['cashier', hashedPassword, 'cashier', JSON.stringify(['pos_billing'])]
-      );
-      console.log('Default cashier created: cashier / cashier123');
-    }
-
-    await connection.query(
-      `UPDATE users SET permissions = ?
-       WHERE username = 'cashier' AND (permissions IS NULL OR JSON_LENGTH(permissions) = 0)`,
-      [JSON.stringify(['pos_billing'])]
-    );
 
     console.log('Database setup complete!');
   } catch (err) {

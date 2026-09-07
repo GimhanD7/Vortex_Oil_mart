@@ -1,12 +1,8 @@
 const mysql = require('mysql2/promise');
+const { databaseOptions } = require('./db-config');
 
 async function run() {
-  const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'oil_mart',
-  });
+  const pool = mysql.createPool(databaseOptions());
 
   try {
     console.log('Adding permissions column to users table...');

@@ -12,10 +12,9 @@ const nextConfig: NextConfig = {
   // Keep development route compilation fast; enable the compiler for production builds.
   reactCompiler: isProd,
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
-  async rewrites() {
-    if (isProd) return [];
+  ...(!isProd && { async rewrites() {
     return [
       {
         source: '/api/:path*',
@@ -23,7 +22,7 @@ const nextConfig: NextConfig = {
         destination: 'http://localhost/Vortex_Oil_mart/api/:path*',
       }
     ];
-  },
+  } }),
 };
 
 export default nextConfig;

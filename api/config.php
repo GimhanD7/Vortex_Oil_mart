@@ -1,56 +1,35 @@
 <?php
-$host_name = strtok($_SERVER['HTTP_HOST'], ':'); // Removes port if present
-$is_production = ($host_name !== 'localhost' && $host_name !== '127.0.0.1');
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+require_once __DIR__ . '/environment.php';
 
-if ($is_production) {
-    // === cPanel Production Database Credentials ===
-    $host = 'localhost';
-    $db   = 'vortdbyg_oil_mart';
-    $user = 'vortdbyg_gimhana';
-    $pass = '_je-P_vSa}09V21J';
-} else {
-    // === Local XAMPP Database Credentials ===
-    $host = getenv('MYSQL_HOST') ?: '127.0.0.1';
-    $port = getenv('MYSQL_PORT') ?: '3306';
-    $db   = getenv('MYSQL_DATABASE') ?: 'oil_mart';
-    $user = getenv('MYSQL_USER') ?: 'root';
-    $pass = getenv('MYSQL_PASSWORD') ?: '';
+function sendJson($data, $statusCode = 200) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+    header('X-Content-Type-Options: nosniff');
+    if (is_array($data) && isset($data['details'])) unset($data['details']);
+    if (is_array($data) && isset($data['error']) && str_contains((string)$data['error'], 'SQLSTATE[')) {
+        error_log((string)$data['error']);
+        $data['error'] = 'Database operation failed.';
+        $statusCode = 500;
+    }
+    http_response_code($statusCode);
+    echo json_encode($data, JSON_INVALID_UTF8_SUBSTITUTE);
+    exit;
 }
 
-$charset = 'utf8mb4';
-
-$dsn = "mysql:host=$host;port=$port;dbname=$db;charset=$charset";
-$options = [
-    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    PDO::ATTR_EMULATE_PREPARES   => false,
-];
+set_exception_handler(function (Throwable $error) {
+    global $pdo;
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    error_log('Oil Mart API: ' . $error->getMessage());
+    sendJson(['error' => 'Internal server error.'], 500);
+});
 
 try {
-    // If port is default, omit it to allow socket connections on cPanel
-    $dsn_string = ($port == '3306' || empty($port)) 
-        ? "mysql:host=$host;dbname=$db;charset=$charset" 
-        : "mysql:host=$host;port=$port;dbname=$db;charset=$charset";
-        
-    $pdo = new PDO($dsn_string, $user, $pass, $options);
-} catch (\PDOException $e) {
-    header('Content-Type: application/json');
-    http_response_code(500);
-    // Include the actual error message to help debug hosting issues
-    echo json_encode([
-        "error" => "Database connection failed",
-        "details" => $e->getMessage()
-    ]);
-    exit;
+    $jwt_secret = appEnv('JWT_SECRET');
+    if (!$jwt_secret || strlen($jwt_secret) < 64 || $jwt_secret === str_repeat('0', 64)) throw new RuntimeException('Configure a random JWT_SECRET of at least 64 characters.');
+    $pdo = connectDatabase();
+} catch (Throwable $error) {
+    error_log('Oil Mart configuration: ' . $error->getMessage());
+    sendJson(['error' => 'Server configuration or database connection is unavailable.'], 503);
 }
-
-$jwt_secret = getenv('JWT_SECRET') ?: 'super_secret_oil_mart_key_123!';
-
-// Helper function to send JSON response
-function sendJson($data, $statusCode = 200) {
-    header('Content-Type: application/json');
-    http_response_code($statusCode);
-    echo json_encode($data);
-    exit;
-}
-?>
