@@ -31,10 +31,12 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env*
-**/.env*
-!api/.env.example
-api/*.zip
+.env
+.env.*
+.env*.local
+api/.env
+api/.env.*
+
 
 # local Oil Mart MariaDB data
 .oil-mart-db/
