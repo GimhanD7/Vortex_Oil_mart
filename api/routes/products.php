@@ -3,6 +3,20 @@ global $pdo, $inputData, $id, $method;
 requireAuth(); // All product endpoints require authentication
 require_once __DIR__ . '/../product-import.php';
 
+if (in_array($method, ['PUT', 'DELETE'], true) && filter_var($id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
+    sendJson(['error' => 'Invalid product ID. The database record needs repair; no product was changed.', 'code' => 'invalid_product_id'], 409);
+}
+if ($method === 'POST' && $id !== null && $id !== 'import') sendJson(['error' => 'Endpoint not found'], 404);
+if (in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
+    try { assertProductIdentitySchema($pdo); }
+    catch (InvalidArgumentException $e) { sendJson(['error' => $e->getMessage(), 'code' => 'invalid_product_schema'], 409); }
+}
+if (in_array($method, ['PUT', 'DELETE'], true)) {
+    $existingProduct = $pdo->prepare('SELECT id FROM products WHERE id = ?');
+    $existingProduct->execute([$id]);
+    if (!$existingProduct->fetch()) sendJson(['error' => 'Product not found. Refresh the product list.'], 404);
+}
+
 try {
     $pdo->exec("ALTER TABLE products ADD COLUMN sub_category VARCHAR(100) DEFAULT 'General'");
 } catch (PDOException $e) {
@@ -73,7 +87,7 @@ if ($method === 'POST' && $id === 'import') {
     }
 }
 
-if ($method === 'GET' && !$id) {
+if ($method === 'GET' && $id === null) {
     try {
         $stmt = $pdo->query('SELECT * FROM products ORDER BY id DESC');
         $products = $stmt->fetchAll();
@@ -83,7 +97,7 @@ if ($method === 'GET' && !$id) {
     }
 }
 
-if ($method === 'POST' && !$id) {
+if ($method === 'POST' && $id === null) {
     try {
         $name = isset($inputData['name']) ? trim($inputData['name']) : '';
         $price = isset($inputData['price']) ? $inputData['price'] : null;

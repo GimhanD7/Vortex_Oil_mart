@@ -1,5 +1,20 @@
 <?php
 
+function assertProductIdentitySchema(PDO $pdo): void {
+    $columns = $pdo->query('SHOW COLUMNS FROM products')->fetchAll(PDO::FETCH_ASSOC);
+    $idColumn = array_values(array_filter($columns, fn($column) => $column['Field'] === 'id'));
+    $indexes = [];
+    foreach ($pdo->query('SHOW INDEX FROM products')->fetchAll(PDO::FETCH_ASSOC) as $index) {
+        if ((int)$index['Non_unique'] === 0) $indexes[$index['Key_name']][] = $index['Column_name'];
+    }
+    if (!$idColumn || !str_contains(strtolower($idColumn[0]['Extra']), 'auto_increment') || !in_array(['id'], array_values($indexes), true)) {
+        throw new InvalidArgumentException('Product database IDs are not configured correctly. An administrator must repair the unique AUTO_INCREMENT product ID before products can be changed.');
+    }
+    if ($pdo->query('SELECT id FROM products WHERE id IS NULL OR id <= 0 LIMIT 1')->fetch(PDO::FETCH_ASSOC)) {
+        throw new InvalidArgumentException('The product database contains invalid IDs. Back up the database and repair product IDs before changing products.');
+    }
+}
+
 function ensureProductImportTables(PDO $pdo): void {
     foreach (['categories', 'brands'] as $table) {
         $pdo->exec("CREATE TABLE IF NOT EXISTS `$table` (
@@ -62,6 +77,7 @@ function readProductCsv($stream): array {
 
 // The caller owns the transaction so a failed import or local reset rolls back together.
 function importProductRows(PDO $pdo, array $rows, ?int $actorId = null): array {
+    assertProductIdentitySchema($pdo);
     $findSku = $pdo->prepare('SELECT id, price, stock_quantity FROM products WHERE sku = ? FOR UPDATE');
     $findName = $pdo->prepare('SELECT id, price, stock_quantity FROM products WHERE name = ? FOR UPDATE');
     $insert = $pdo->prepare('INSERT INTO products

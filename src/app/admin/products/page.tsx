@@ -141,6 +141,7 @@ export default function ProductsPage() {
           setProducts(
             d.map((p: Product) => ({
               ...p,
+              id: Number(p.id),
               sku: p.sku || `SKU-${String(p.id).padStart(3, "0")}`,
               category: p.category || "General",
               sub_category: p.sub_category || "General",
@@ -192,6 +193,7 @@ export default function ProductsPage() {
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editId !== null && !canChangeProduct(editId)) return;
     setSaving(true);
     
     // Auto-create category, sub-category, and brand if they don't exist
@@ -199,8 +201,8 @@ export default function ProductsPage() {
     if (form.sub_category && isNewSubCat) await apiFetch("/api/sub_categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category_name: form.category, name: form.sub_category }) });
     if (form.brand && isNewBrand) await apiFetch("/api/brands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: form.brand }) });
 
-    const method = editId ? "PUT" : "POST";
-    const url = editId ? `/api/products/${editId}` : "/api/products";
+    const method = editId !== null ? "PUT" : "POST";
+    const url = editId !== null ? `/api/products/${editId}` : "/api/products";
 
     const response = await apiFetch(url, {
       method,
@@ -227,7 +229,7 @@ export default function ProductsPage() {
     setIsNewBrand(false);
     setForm(blankProductForm);
     load();
-    showToast({ type: "success", title: editId ? "Product updated" : "Product created", message: data.message || "Product saved successfully." });
+    showToast({ type: "success", title: editId !== null ? "Product updated" : "Product created", message: data.message || "Product saved successfully." });
   };
 
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -274,7 +276,16 @@ export default function ProductsPage() {
     }
   };
 
+  const canChangeProduct = (id: number) => {
+    if (!Number.isSafeInteger(id) || id <= 0 || products.filter(product => product.id === id).length !== 1) {
+      showToast({ type: "error", title: "Product database needs repair", message: "This product has an invalid or duplicate ID. No changes were made. Ask the administrator to check the hosted database structure." });
+      return false;
+    }
+    return true;
+  };
+
   const openEdit = (p: Product) => {
+    if (!canChangeProduct(p.id)) return;
     setForm({
       name: p.name,
       description: p.description || "",
@@ -294,6 +305,7 @@ export default function ProductsPage() {
   };
 
   const deleteProduct = async (id: number) => {
+    if (!canChangeProduct(id)) return;
     const r = await apiFetch(`/api/products/${id}`, { method: "DELETE" });
     const data = await r.json();
     if (r.ok) {
@@ -305,6 +317,7 @@ export default function ProductsPage() {
   };
 
   const del = (id: number) => {
+    if (!canChangeProduct(id)) return;
     showToast({
       type: "warning",
       title: "Delete product?",
@@ -579,7 +592,7 @@ export default function ProductsPage() {
             <header>
               <h2>
                 <ProductCategoryIcon category={form.category} productName={form.name} className="modal-title-icon" colored />
-                {editId ? "Edit Product" : "Add New Product"}
+                {editId !== null ? "Edit Product" : "Add New Product"}
               </h2>
               <button type="button" onClick={() => { setShow(false); setEditId(null); }}>
                 <X size={22} aria-label="Close" />
@@ -810,7 +823,7 @@ export default function ProductsPage() {
                 Cancel
               </button>
               <button className="gold-btn" disabled={saving}>
-                {saving ? "Saving..." : editId ? "Update Product" : "Save Product"}
+                {saving ? "Saving..." : editId !== null ? "Update Product" : "Save Product"}
               </button>
             </footer>
           </form>
