@@ -45,4 +45,17 @@ check((float)$pdo->query('SELECT price FROM products')->fetchColumn() === 125.5,
 check((int)$pdo->query('SELECT COUNT(*) FROM inventory_movements')->fetchColumn() === 1, 'Repeated import duplicated stock history.');
 $pdo->rollBack();
 check((int)$pdo->query('SELECT COUNT(*) FROM products')->fetchColumn() === 0, 'Import rollback failed.');
+
+// Reproduce a legacy hosting schema with no unique taxonomy indexes.
+foreach (['categories', 'sub_categories', 'brands'] as $table) {
+    $indexes = $pdo->query("SHOW INDEX FROM `$table`")->fetchAll(PDO::FETCH_ASSOC);
+    foreach (array_unique(array_column(array_filter($indexes, fn($index) => (int)$index['Non_unique'] === 0 && $index['Key_name'] !== 'PRIMARY'), 'Key_name')) as $index) {
+        $pdo->exec("ALTER TABLE `$table` DROP INDEX `" . str_replace('`', '``', $index) . "`");
+    }
+}
+$pdo->beginTransaction();
+importProductRows($pdo, $rows);
+importProductRows($pdo, $rows);
+foreach (['categories', 'sub_categories', 'brands'] as $table) check((int)$pdo->query("SELECT COUNT(*) FROM `$table`")->fetchColumn() === 1, "Legacy $table duplicated on repeated import.");
+$pdo->rollBack();
 echo "PASS: CSV quoting, subcategories, validation, duplicate detection, upsert, blank values, stock history, rollback.\n";

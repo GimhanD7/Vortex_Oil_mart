@@ -11,19 +11,13 @@ function ensureBrandsTable() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ");
-    $pdo->exec("
-        INSERT IGNORE INTO brands (name)
-        SELECT DISTINCT brand
-        FROM products
-        WHERE brand IS NOT NULL AND brand != ''
-    ");
     
 }
 
 if ($method === 'GET') {
     try {
         ensureBrandsTable();
-        $stmt = $pdo->query('SELECT * FROM brands ORDER BY name ASC');
+        $stmt = $pdo->query('SELECT MIN(id) AS id, name FROM brands GROUP BY name ORDER BY name ASC');
         $brands = $stmt->fetchAll();
         sendJson($brands);
     } catch (PDOException $e) {
@@ -39,6 +33,9 @@ if ($method === 'POST') {
             sendJson(["error" => "Name is required"], 400);
         }
         
+        $existing = $pdo->prepare('SELECT MIN(id) FROM brands WHERE name = ?');
+        $existing->execute([$name]);
+        if ($existingId = $existing->fetchColumn()) sendJson(["id" => $existingId, "message" => "Brand already exists"], 200);
         $stmt = $pdo->prepare('INSERT IGNORE INTO brands (name) VALUES (?)');
         $stmt->execute([$name]);
         sendJson(["id" => $pdo->lastInsertId(), "message" => "Brand added"], 201);

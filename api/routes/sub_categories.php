@@ -14,9 +14,6 @@ function ensureSubCategoriesTable() {
         )
     ");
     
-    $pdo->exec("INSERT IGNORE INTO sub_categories (category_name, name)
-        SELECT DISTINCT category, sub_category FROM products
-        WHERE category IS NOT NULL AND category != '' AND sub_category IS NOT NULL AND sub_category != ''");
 }
 
 if ($method === 'GET') {
@@ -25,10 +22,10 @@ if ($method === 'GET') {
         $category = isset($_GET['category']) ? $_GET['category'] : '';
         
         if ($category) {
-            $stmt = $pdo->prepare('SELECT * FROM sub_categories WHERE category_name = ? ORDER BY name ASC');
+            $stmt = $pdo->prepare('SELECT MIN(id) AS id, category_name, name FROM sub_categories WHERE category_name = ? GROUP BY category_name, name ORDER BY name ASC');
             $stmt->execute([$category]);
         } else {
-            $stmt = $pdo->query('SELECT * FROM sub_categories ORDER BY category_name ASC, name ASC');
+            $stmt = $pdo->query('SELECT MIN(id) AS id, category_name, name FROM sub_categories GROUP BY category_name, name ORDER BY category_name ASC, name ASC');
         }
         
         $sub_categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -48,6 +45,9 @@ if ($method === 'POST') {
             sendJson(["error" => "Category and Name are required"], 400);
         }
         
+        $existing = $pdo->prepare('SELECT MIN(id) FROM sub_categories WHERE category_name = ? AND name = ?');
+        $existing->execute([$category_name, $name]);
+        if ($existingId = $existing->fetchColumn()) sendJson(["id" => $existingId, "message" => "Sub-Category already exists"], 200);
         $stmt = $pdo->prepare('INSERT IGNORE INTO sub_categories (category_name, name) VALUES (?, ?)');
         $stmt->execute([$category_name, $name]);
         sendJson(["id" => $pdo->lastInsertId(), "message" => "Sub-Category added"], 201);

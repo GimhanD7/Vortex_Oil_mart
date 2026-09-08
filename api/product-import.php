@@ -72,6 +72,9 @@ function importProductRows(PDO $pdo, array $rows, ?int $actorId = null): array {
     $category = $pdo->prepare('INSERT IGNORE INTO categories (name) VALUES (?)');
     $subcategory = $pdo->prepare('INSERT IGNORE INTO sub_categories (category_name, name) VALUES (?, ?)');
     $brand = $pdo->prepare('INSERT IGNORE INTO brands (name) VALUES (?)');
+    $findCategory = $pdo->prepare('SELECT id FROM categories WHERE name = ? LIMIT 1');
+    $findSubcategory = $pdo->prepare('SELECT id FROM sub_categories WHERE category_name = ? AND name = ? LIMIT 1');
+    $findBrand = $pdo->prepare('SELECT id FROM brands WHERE name = ? LIMIT 1');
     $movement = $pdo->prepare("INSERT INTO inventory_movements
         (product_id, movement_type, quantity_change, stock_before, stock_after, unit_price, reference_no, notes, created_by)
         VALUES (?, 'adjustment', ?, ?, ?, ?, 'CSV-IMPORT', 'Product CSV import', ?)");
@@ -107,9 +110,13 @@ function importProductRows(PDO $pdo, array $rows, ?int $actorId = null): array {
             $productId = (int)$pdo->lastInsertId();
             $result['created']++;
         }
-        $category->execute([$cat]);
-        $subcategory->execute([$cat, $sub]);
-        $brand->execute([$brandName]);
+        // Older hosted schemas may lack unique indexes; do not duplicate names per CSV row.
+        $findCategory->execute([$cat]);
+        if ($findCategory->fetchColumn() === false) $category->execute([$cat]);
+        $findSubcategory->execute([$cat, $sub]);
+        if ($findSubcategory->fetchColumn() === false) $subcategory->execute([$cat, $sub]);
+        $findBrand->execute([$brandName]);
+        if ($findBrand->fetchColumn() === false) $brand->execute([$brandName]);
         $before = (float)($existing['stock_quantity'] ?? 0);
         if (abs($stock - $before) >= 0.0005) $movement->execute([$productId, $stock - $before, $before, $stock, $price, $actorId]);
     }
