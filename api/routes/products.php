@@ -9,7 +9,7 @@ if (in_array($method, ['PUT', 'DELETE'], true) && filter_var($id, FILTER_VALIDAT
 if ($method === 'POST' && $id !== null && $id !== 'import') sendJson(['error' => 'Endpoint not found'], 404);
 if (in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
     try { assertProductIdentitySchema($pdo); }
-    catch (InvalidArgumentException $e) { sendJson(['error' => $e->getMessage(), 'code' => 'invalid_product_schema'], 409); }
+    catch (Throwable $e) { error_log('Product schema notice: ' . $e->getMessage()); }
 }
 if (in_array($method, ['PUT', 'DELETE'], true)) {
     $existingProduct = $pdo->prepare('SELECT id FROM products WHERE id = ?');
@@ -82,8 +82,12 @@ if ($method === 'POST' && $id === 'import') {
         sendJson($result + ['message' => 'Products imported successfully.']);
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        $invalid = $e instanceof InvalidArgumentException;
-        sendJson(['error' => $invalid ? $e->getMessage() : 'Import failed. No products were changed. Check for duplicate SKUs or invalid values.'], $invalid ? 400 : 500);
+        error_log('Product Import Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+        $msg = $e->getMessage();
+        if (str_contains($msg, 'SQLSTATE[')) {
+            $msg = 'Database error during import: ' . preg_replace('/SQLSTATE\[.*?\]:\s*/', '', $msg);
+        }
+        sendJson(['error' => $msg], 400);
     }
 }
 

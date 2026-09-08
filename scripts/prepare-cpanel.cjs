@@ -19,4 +19,4 @@ for (const entry of fs.readdirSync(path.join(root, 'api', 'routes'), { withFileT
 }
 if (!fs.existsSync(path.join(destination, '.htaccess'))) throw new Error('The exported Apache configuration is missing.');
 console.log(`cPanel upload folder: ${destination}`);
-console.log('No credentials included. Configure the server api/.env separately and preserve existing production data.');
+console.log('Ready for cPanel upload. Environment settings are configured directly in PHP.');

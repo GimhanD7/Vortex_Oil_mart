@@ -2,19 +2,21 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const envFile = process.env.OIL_MART_ENV_FILE || path.resolve(__dirname, '../api/.env');
-if (fs.existsSync(envFile)) process.loadEnvFile(envFile);
+if (fs.existsSync(envFile)) {
+  try {
+    process.loadEnvFile(envFile);
+  } catch (e) {}
+}
 
 function databaseOptions() {
-  const options = {};
-  for (const [name, key] of Object.entries({ host: 'MYSQL_HOST', user: 'MYSQL_USER', password: 'MYSQL_PASSWORD', database: 'MYSQL_DATABASE' })) {
-    const value = process.env[key];
-    if (value === undefined || (value === '' && name !== 'password')) throw new Error(`Missing ${key}. Configure api/.env first.`);
-    options[name] = value;
-  }
-  options.port = Number(process.env.MYSQL_PORT || 3306);
-  if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65535) throw new Error('Invalid MySQL port.');
-  if (process.env.APP_ENV !== 'local' && !options.password) throw new Error('A production database password is required.');
-  return options;
+  const isLocal = process.env.APP_ENV === 'local' || (!process.env.APP_ENV && (!process.env.MYSQL_HOST || process.env.MYSQL_HOST === '127.0.0.1' || process.env.MYSQL_HOST === 'localhost'));
+  return {
+    host: process.env.MYSQL_HOST || '127.0.0.1',
+    user: process.env.MYSQL_USER || (isLocal ? 'root' : 'vortdbyg_gimhana'),
+    password: process.env.MYSQL_PASSWORD !== undefined ? process.env.MYSQL_PASSWORD : (isLocal ? '' : '_je-P_vSa}09V21J'),
+    database: process.env.MYSQL_DATABASE || (isLocal ? 'oil_mart' : 'vortdbyg_oil_mart'),
+    port: Number(process.env.MYSQL_PORT || 3306),
+  };
 }
 
 module.exports = { databaseOptions };

@@ -297,7 +297,24 @@ CREATE TABLE IF NOT EXISTS `customer_credit_ledger` (
   INDEX idx_credit_ledger_created (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 19. App Settings Table
+-- 19. Auth Sessions Table
+CREATE TABLE IF NOT EXISTS `auth_sessions` (
+  `token_hash` CHAR(64) PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `expires_at` DATETIME NOT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_auth_expiry (`expires_at`),
+  INDEX idx_auth_user (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 20. Auth Login Attempts Table
+CREATE TABLE IF NOT EXISTS `auth_login_attempts` (
+  `attempt_key` CHAR(64) PRIMARY KEY,
+  `attempts` INT NOT NULL DEFAULT 0,
+  `window_started` DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 21. App Settings Table
 CREATE TABLE IF NOT EXISTS `app_settings` (
   `setting_key` VARCHAR(100) PRIMARY KEY,
   `setting_value` TEXT NOT NULL,

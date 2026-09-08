@@ -14,8 +14,8 @@
     "test:security": "node scripts/test_api_security.cjs",
     "package:cpanel": "node scripts/prepare-cpanel.cjs",
     "db:start": "node scripts/start_database.js",
-    "db:setup": "node scripts/setup_db.js",
-    "db:inventory": "node scripts/setup_inventory_db.js"
+    "db:migrate": "php scripts/migrate.php",
+    "db:setup": "php scripts/migrate.php"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
