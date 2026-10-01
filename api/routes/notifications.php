@@ -64,6 +64,7 @@ try {
                 {$productDate} AS alert_time
             FROM products p
             WHERE COALESCE(p.stock_quantity, 0) <= 0
+              AND p.product_type <> 'service'
             ORDER BY alert_time DESC, p.id DESC
             LIMIT 20
         ");
@@ -92,6 +93,7 @@ try {
                 {$productDate} AS alert_time
             FROM products p
             WHERE COALESCE(p.stock_quantity, 0) > 0
+              AND p.product_type <> 'service'
               AND COALESCE(p.stock_quantity, 0) <= COALESCE(p.reorder_level, 10)
             ORDER BY p.stock_quantity ASC, alert_time DESC
             LIMIT 30

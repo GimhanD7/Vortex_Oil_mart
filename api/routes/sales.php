@@ -455,6 +455,10 @@ if ($method === 'POST' && is_numeric($id) && $action === 'returns') {
             $disposition = ($requested['disposition'] ?? 'resellable') === 'damaged' ? 'damaged' : 'resellable';
             if (!isset($availableItems[$saleItemId]) || $quantity <= 0) throw new Exception('Invalid return item or quantity');
             $source = $availableItems[$saleItemId];
+            if ($source['product_type'] === 'service') {
+                if (!is_finite($quantity) || floor($quantity) !== $quantity) throw new Exception('Service quantity must be a whole number');
+                $disposition = 'service';
+            }
             $remaining = (float)$source['quantity'] - (float)$source['returned_quantity'];
             if ($quantity > $remaining + 0.0001) throw new Exception('Return quantity exceeds the quantity available on the original invoice');
             $lineRefund = round($quantity * (float)$source['price_at_time'] * $discountFactor, 2);
@@ -661,14 +665,17 @@ if ($method === 'POST' && !$id) {
                 throw new Exception("Sale items need a positive quantity");
             }
 
-            $stmt = $pdo->prepare('SELECT price, stock_quantity FROM products WHERE id = ? FOR UPDATE');
+            $stmt = $pdo->prepare('SELECT price, stock_quantity, product_type FROM products WHERE id = ? FOR UPDATE');
             $stmt->execute([$item['product_id']]);
             $product = $stmt->fetch();
             
             if (!$product) {
                 throw new Exception("Product {$item['product_id']} not found");
             }
-            if ((float)$product['stock_quantity'] < $quantity) {
+            if ($product['product_type'] === 'service' && (!is_finite($quantity) || floor($quantity) !== $quantity)) {
+                throw new Exception('Service quantity must be a whole number');
+            }
+            if ($product['product_type'] !== 'service' && (float)$product['stock_quantity'] < $quantity) {
                 throw new Exception("Insufficient stock for product ID {$item['product_id']}");
             }
             $subtotalAmount += (float)$product['price'] * $quantity;
@@ -764,7 +771,7 @@ if ($method === 'POST' && !$id) {
 
         foreach ($items as $item) {
             $quantity = isset($item['quantity']) ? (float)$item['quantity'] : 0;
-            $stmt = $pdo->prepare('SELECT price, stock_quantity FROM products WHERE id = ? FOR UPDATE');
+            $stmt = $pdo->prepare('SELECT price, stock_quantity, product_type FROM products WHERE id = ? FOR UPDATE');
             $stmt->execute([$item['product_id']]);
             $product = $stmt->fetch();
             
@@ -772,12 +779,14 @@ if ($method === 'POST' && !$id) {
             $stockBefore = (float)$product['stock_quantity'];
             $stockAfter = $stockBefore - $quantity;
 
-            if ($quantity <= 0 || $stockAfter < 0) {
+            if ($quantity <= 0 || ($product['product_type'] !== 'service' && $stockAfter < 0)) {
                 throw new Exception("Insufficient stock for product ID {$item['product_id']}");
             }
 
             $stmt = $pdo->prepare('INSERT INTO sale_items (sale_id, product_id, quantity, price_at_time) VALUES (?, ?, ?, ?)');
             $stmt->execute([$saleId, $item['product_id'], $quantity, $price_at_time]);
+
+            if ($product['product_type'] === 'service') continue;
 
             $stmt = $pdo->prepare('UPDATE products SET stock_quantity = ? WHERE id = ?');
             $stmt->execute([$stockAfter, $item['product_id']]);
@@ -1187,6 +1196,7 @@ if ($method === 'PATCH' && $id) {
 
         $items = saleItems($id);
         foreach ($items as $item) {
+            if ($item['product_type'] === 'service') continue;
             $stmt = $pdo->prepare('SELECT stock_quantity FROM products WHERE id = ? FOR UPDATE');
             $stmt->execute([$item['product_id']]);
             $product = $stmt->fetch();

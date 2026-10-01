@@ -190,6 +190,7 @@ if ($method === 'POST' && !$id) {
             $product = $stmt->fetch();
             
             if (!$product) throw new Exception("Product {$productId} not found");
+            if ($product['product_type'] === 'service') throw new Exception('Services cannot be added to stock purchases');
 
             $purchaseUnit = $product['unit'] ?: 'Unit';
             if ($product['product_type'] === 'loose_oil') {

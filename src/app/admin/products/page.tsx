@@ -36,7 +36,8 @@ type Product = {
   visual?: string;
 };
 
-function stockBadge(stockQuantity: number | string, reorderLevel: number | string = 10) {
+function stockBadge(stockQuantity: number | string, reorderLevel: number | string = 10, productType?: string) {
+  if (productType === "service") return { className: "", label: "Service" };
   const stock = Number(stockQuantity || 0);
   const reorder = Number(reorderLevel || 10);
   if (stock <= 0) return { className: "out", label: "Out of Stock" };
@@ -149,7 +150,7 @@ export default function ProductsPage() {
               product_type: p.product_type || "packaged",
               unit: p.unit || "Unit",
               stock_quantity: Number(p.stock_quantity || 0),
-              reorder_level: Number(p.reorder_level || 10),
+              reorder_level: Number(p.reorder_level ?? 10),
             }))
           );
         }
@@ -175,11 +176,11 @@ export default function ProductsPage() {
     );
 
     if (statusFilter === "In Stock") {
-      result = result.filter(p => Number(p.stock_quantity || 0) > Number(p.reorder_level || 10));
+      result = result.filter(p => p.product_type !== "service" && Number(p.stock_quantity || 0) > Number(p.reorder_level || 10));
     } else if (statusFilter === "Low Stock") {
-      result = result.filter(p => Number(p.stock_quantity || 0) > 0 && Number(p.stock_quantity || 0) <= Number(p.reorder_level || 10));
+      result = result.filter(p => p.product_type !== "service" && Number(p.stock_quantity || 0) > 0 && Number(p.stock_quantity || 0) <= Number(p.reorder_level || 10));
     } else if (statusFilter === "Out of Stock") {
-      result = result.filter(p => Number(p.stock_quantity || 0) <= 0);
+      result = result.filter(p => p.product_type !== "service" && Number(p.stock_quantity || 0) <= 0);
     }
 
     return result;
@@ -209,11 +210,11 @@ export default function ProductsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...form,
-        unit: form.product_type === "loose_oil" ? "L" : form.unit || "Unit",
+        unit: form.product_type === "service" ? "Service" : form.product_type === "loose_oil" ? "L" : form.unit || "Unit",
         price: Number(form.price),
-        stock_quantity: Number(form.stock_quantity),
+        stock_quantity: form.product_type === "service" ? 0 : Number(form.stock_quantity),
         barrel_capacity_liters: form.product_type === "loose_oil" && form.barrel_capacity_liters ? Number(form.barrel_capacity_liters) : null,
-        reorder_level: Number(form.reorder_level || (form.product_type === "loose_oil" ? 20 : 10)),
+        reorder_level: form.product_type === "service" ? 0 : Number(form.reorder_level || (form.product_type === "loose_oil" ? 20 : 10)),
       }),
     });
     const data = await response.json();
@@ -298,7 +299,7 @@ export default function ProductsPage() {
       product_type: p.product_type || "packaged",
       unit: p.unit || "Unit",
       barrel_capacity_liters: p.barrel_capacity_liters ? String(p.barrel_capacity_liters) : "",
-      reorder_level: String(p.reorder_level || (isLooseOil(p) ? 20 : 10)),
+      reorder_level: String(p.reorder_level ?? (isLooseOil(p) ? 20 : 10)),
     });
     setEditId(p.id);
     setShow(true);
@@ -454,7 +455,7 @@ export default function ProductsPage() {
       )}
         <div>
           {shown.slice(0, 7).map((p) => {
-            const status = stockBadge(p.stock_quantity, Number(p.reorder_level || 10));
+            const status = stockBadge(p.stock_quantity, Number(p.reorder_level ?? 10), p.product_type);
             return (
               <article key={p.id}>
                 {showIcons && <ProductCategoryIcon category={p.category} productName={p.name} className="product-card-icon" colored />}
@@ -556,17 +557,17 @@ export default function ProductsPage() {
                     </td>
                   )}
                   {cols.brand && <td>{p.brand}</td>}
-                  {cols.pack && <td>{isLooseOil(p) ? `Loose Oil / ${p.unit || "L"}` : "1 Unit"}</td>}
+                  {cols.pack && <td>{p.product_type === "service" ? "Service" : isLooseOil(p) ? `Loose Oil / ${p.unit || "L"}` : "1 Unit"}</td>}
                   {cols.price && (
                     <td>
                       Rs. {Number(p.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      {isLooseOil(p) ? " / L" : ""}
+                      {p.product_type === "service" ? " / Service" : isLooseOil(p) ? " / L" : ""}
                     </td>
                   )}
                   {cols.status && (
                     <td className="product-stock-status-cell">
-                      <em className={stockBadge(p.stock_quantity, Number(p.reorder_level || 10)).className}>{stockBadge(p.stock_quantity, Number(p.reorder_level || 10)).label}</em>
-                      <small>{formatQty(p.stock_quantity, p.unit)}</small>
+                      <em className={stockBadge(p.stock_quantity, Number(p.reorder_level ?? 10), p.product_type).className}>{stockBadge(p.stock_quantity, Number(p.reorder_level ?? 10), p.product_type).label}</em>
+                      {p.product_type !== "service" && <small>{formatQty(p.stock_quantity, p.unit)}</small>}
                     </td>
                   )}
                   {cols.actions && (
@@ -738,7 +739,7 @@ export default function ProductsPage() {
                     setForm({
                       ...form,
                       product_type: nextType,
-                      unit: nextType === "loose_oil" ? "L" : "Unit",
+                      unit: nextType === "service" ? "Service" : nextType === "loose_oil" ? "L" : "Unit",
                       reorder_level: nextType === "loose_oil" && form.reorder_level === "10" ? "20" : form.reorder_level,
                       barrel_capacity_liters: nextType === "loose_oil" ? (form.barrel_capacity_liters || "200") : "",
                     });
@@ -747,6 +748,7 @@ export default function ProductsPage() {
                 >
                   <option value="packaged">Packaged Item</option>
                   <option value="loose_oil">Loose Oil</option>
+                  <option value="service">Service</option>
                 </select>
               </label>
               <label>
@@ -755,11 +757,11 @@ export default function ProductsPage() {
                   required
                   value={form.unit}
                   onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                  readOnly={form.product_type === "loose_oil"}
+                  readOnly={form.product_type === "loose_oil" || form.product_type === "service"}
                   placeholder="Unit"
                 />
               </label>
-              <label>
+              {form.product_type !== "service" && <label>
                 Barrel Capacity (L)
                 <input
                   type="number"
@@ -770,7 +772,7 @@ export default function ProductsPage() {
                   disabled={form.product_type !== "loose_oil"}
                   placeholder="200"
                 />
-              </label>
+              </label>}
             </div>
 
             <label>
@@ -784,7 +786,7 @@ export default function ProductsPage() {
 
             <div className="product-form-grid product-form-grid-three">
               <label>
-                {form.product_type === "loose_oil" ? "Selling Price / L (Rs.)" : "Price (Rs.)"}
+                {form.product_type === "service" ? "Price / Service (Rs.)" : form.product_type === "loose_oil" ? "Selling Price / L (Rs.)" : "Price (Rs.)"}
                 <input
                   required
                   type="number"
@@ -794,7 +796,7 @@ export default function ProductsPage() {
                   onChange={(e) => setForm({ ...form, price: e.target.value })}
                 />
               </label>
-              <label>
+              {form.product_type !== "service" && <label>
                 Initial Stock {form.product_type === "loose_oil" ? "(Liters)" : "(Quantity)"}
                 <input
                   required
@@ -804,8 +806,8 @@ export default function ProductsPage() {
                   value={form.stock_quantity}
                   onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })}
                 />
-              </label>
-              <label>
+              </label>}
+              {form.product_type !== "service" && <label>
                 Reorder Level {form.product_type === "loose_oil" ? "(L)" : ""}
                 <input
                   required
@@ -815,7 +817,7 @@ export default function ProductsPage() {
                   value={form.reorder_level}
                   onChange={(e) => setForm({ ...form, reorder_level: e.target.value })}
                 />
-              </label>
+              </label>}
             </div>
             
             <footer>

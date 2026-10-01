@@ -252,6 +252,7 @@ function saleStep(product: Product) {
 }
 
 function normalizeSaleQuantity(product: Product, nextQuantity: number) {
+  if (product.product_type === "service") return Math.max(1, Math.floor(Number.isFinite(nextQuantity) ? nextQuantity : 1));
   const step = saleStep(product);
   const minimum = isLooseOil(product) ? step : 1;
   const clamped = Math.max(minimum, Math.min(Number(product.stock_quantity || 0), nextQuantity));
@@ -660,7 +661,7 @@ export default function PosBilling() {
   }, [cashCycle, summaryRows]);
 
   const add = (product: Product) => {
-    if (product.stock_quantity <= 0) {
+    if (product.product_type !== "service" && product.stock_quantity <= 0) {
       showToast({ type: "warning", title: "Out of stock", message: "This item is out of stock." });
       return;
     }
@@ -1439,7 +1440,7 @@ export default function PosBilling() {
                     <div className="cart-thumb"><ProductCategoryIcon category={item.category} productName={item.name} className="pos-product-icon" /></div>
                     <p>
                       <b>{item.name}</b>
-                      <small>SKU: {item.sku}{isLooseOil(item) ? " / Loose oil" : ""}</small>
+                      <small>SKU: {item.sku}{item.product_type === "service" ? " / Service" : isLooseOil(item) ? " / Loose oil" : ""}</small>
                     </p>
                     <button className="trash" onClick={() => removeCartItem(item)} aria-label={`Remove ${item.name}`}>
                       <Trash2 size={16} aria-hidden="true" />
@@ -2060,6 +2061,7 @@ export default function PosBilling() {
                                   value={sel.quantity}
                                   onChange={(e) => {
                                     let v = Number(e.target.value);
+                                    if (item.product_type === 'service') v = Math.floor(v);
                                     if (v < 0) v = 0;
                                     if (v > remaining) v = remaining;
                                     setReturnSelectedItems(prev => ({ ...prev, [item.sale_item_id]: { ...prev[item.sale_item_id], quantity: v } }));
@@ -2069,7 +2071,8 @@ export default function PosBilling() {
                               ) : <span style={{ color: '#cbd5e1' }}>—</span>}
                             </td>
                             <td style={{ padding: '12px 8px' }}>
-                              {isSel && (
+                              {isSel && item.product_type === 'service' && <span>Service refund</span>}
+                              {isSel && item.product_type !== 'service' && (
                                 <select
                                   value={sel.disposition}
                                   onChange={(e) => setReturnSelectedItems(prev => ({ ...prev, [item.sale_item_id]: { ...prev[item.sale_item_id], disposition: e.target.value } }))}

@@ -28,7 +28,7 @@ export function PosCatalog<T extends CatalogProduct>({ products, onAdd, showIcon
   showIcons: boolean;
   onToggleIcons: () => void;
 }) {
-  const availableProducts = useMemo(() => products.filter(p => Number(p.stock_quantity) > 0), [products]);
+  const availableProducts = useMemo(() => products.filter(p => p.product_type === "service" || Number(p.stock_quantity) > 0), [products]);
   const [category, setCategory] = useState<string | null>(null);
   const [subcategory, setSubcategory] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -63,7 +63,7 @@ export function PosCatalog<T extends CatalogProduct>({ products, onAdd, showIcon
           onKeyDown={event => {
             if (event.key !== "Enter" || !search) return;
             const exact = availableProducts.filter(p => [p.sku, p.barcode].some(value => value?.toLowerCase() === search));
-            if (exact.length === 1 && Number(exact[0].stock_quantity) > 0) {
+            if (exact.length === 1) {
               onAdd(exact[0]);
               setQuery("");
               setPage(1);
@@ -110,15 +110,15 @@ export function PosCatalog<T extends CatalogProduct>({ products, onAdd, showIcon
             type="button"
             className="pos-catalog-product"
             key={product.id}
-            disabled={Number(product.stock_quantity) <= 0}
+            disabled={product.product_type !== "service" && Number(product.stock_quantity) <= 0}
             onClick={() => onAdd(product)}
             aria-label={`Add ${product.name} to cart`}
           >
             {showIcons && <ProductCategoryIcon category={product.category} productName={product.name} className="pos-product-icon" />}
             <b>{product.name}</b>
             <small>SKU: {product.sku}</small>
-            <small>{Number(product.stock_quantity) <= 0 ? "Out of stock" : `Stock: ${Number(product.stock_quantity).toLocaleString("en-IN", { maximumFractionDigits: 3 })} ${product.unit || "Unit"}`}</small>
-            <strong>Rs. {Number(product.price).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{product.product_type === "loose_oil" ? " / L" : ""}</strong>
+            <small>{product.product_type === "service" ? "Service" : Number(product.stock_quantity) <= 0 ? "Out of stock" : `Stock: ${Number(product.stock_quantity).toLocaleString("en-IN", { maximumFractionDigits: 3 })} ${product.unit || "Unit"}`}</small>
+            <strong>Rs. {Number(product.price).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{product.product_type === "service" ? " / Service" : product.product_type === "loose_oil" ? " / L" : ""}</strong>
           </button>)}
           {!filtered.length && <p className="pos-catalog-empty">No matching products found.</p>}
         </div>}

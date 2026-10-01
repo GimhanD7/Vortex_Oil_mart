@@ -1,5 +1,23 @@
 <?php
 
+function assertServiceTypeChange(PDO $pdo, array $existing, string $nextType): void {
+    if (($existing['product_type'] === 'service') === ($nextType === 'service')) return;
+    if ((float)$existing['stock_quantity'] != 0) {
+        throw new InvalidArgumentException('An item with stock cannot be converted to or from a service. Create a separate service item.');
+    }
+    // Historical invoices use the product type when reversing stock.
+    foreach (['sale_items', 'purchase_items', 'inventory_movements'] as $table) {
+        $exists = $pdo->prepare('SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?');
+        $exists->execute([$table]);
+        if (!$exists->fetchColumn()) continue;
+        $check = $pdo->prepare("SELECT 1 FROM `$table` WHERE product_id = ? LIMIT 1");
+        $check->execute([$existing['id']]);
+        if ($check->fetchColumn()) {
+            throw new InvalidArgumentException('An item with transaction history cannot be converted to or from a service. Create a separate service item.');
+        }
+    }
+}
+
 function assertProductIdentitySchema(PDO $pdo): void {
     try {
         // Fix zero or null IDs first if any exist
@@ -230,7 +248,7 @@ function readProductCsv($stream): array {
         $row['barrel capacity liters'] = $barrelRaw !== '' && (float)$barrelRaw > 0 ? (float)$barrelRaw : null;
 
         $type = strtolower(str_replace('_', ' ', $row['product type'] ?? ''));
-        $row['product type'] = ($type === 'loose oil' || $type === 'loose_oil') ? 'loose_oil' : 'packaged';
+        $row['product type'] = $type === '' ? null : ($type === 'service' ? 'service' : ($type === 'loose oil' ? 'loose_oil' : 'packaged'));
 
         $rows[] = $row;
     }
@@ -243,8 +261,7 @@ function readProductCsv($stream): array {
 }
 
 function importProductRows(PDO $pdo, array $rows, ?int $actorId = null): array {
-    assertProductIdentitySchema($pdo);
-    ensureProductImportTables($pdo);
+    // Schema setup belongs before beginTransaction; MySQL DDL implicitly commits.
 
     // Verify actor exists to avoid foreign key errors on inventory_movements
     $validActor = null;
@@ -258,8 +275,8 @@ function importProductRows(PDO $pdo, array $rows, ?int $actorId = null): array {
         } catch (Throwable $t) {}
     }
 
-    $findSku = $pdo->prepare('SELECT id, price, stock_quantity FROM products WHERE sku = ? FOR UPDATE');
-    $findName = $pdo->prepare('SELECT id, price, stock_quantity FROM products WHERE name = ? FOR UPDATE');
+    $findSku = $pdo->prepare('SELECT id, price, stock_quantity, product_type FROM products WHERE sku = ? FOR UPDATE');
+    $findName = $pdo->prepare('SELECT id, price, stock_quantity, product_type FROM products WHERE name = ? FOR UPDATE');
     $insert = $pdo->prepare('INSERT INTO products
         (name, sku, category, sub_category, brand, description, product_type, unit, barrel_capacity_liters, price, stock_quantity, reorder_level)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -283,11 +300,12 @@ function importProductRows(PDO $pdo, array $rows, ?int $actorId = null): array {
         $matches = $find->fetchAll(PDO::FETCH_ASSOC);
         $existing = $matches[0] ?? null;
 
-        $type = $row['product type'];
+        $type = $row['product type'] ?? $existing['product_type'] ?? 'packaged';
+        if ($existing) assertServiceTypeChange($pdo, $existing, $type);
         $cat = !empty($row['category']) ? $row['category'] : 'Uncategorized';
         $sub = !empty($row['sub category']) ? $row['sub category'] : 'General';
         $brandName = !empty($row['brand']) ? $row['brand'] : 'Generic';
-        $stock = (float)($row['stock quantity'] ?? 0);
+        $stock = $type === 'service' ? 0 : (float)($row['stock quantity'] ?? 0);
         $price = (float)($row['price'] ?? 0);
 
         $payload = [
@@ -298,11 +316,11 @@ function importProductRows(PDO $pdo, array $rows, ?int $actorId = null): array {
             $brandName,
             $row['description'] ?? '',
             $type,
-            $type === 'loose_oil' ? 'L' : (!empty($row['unit']) ? $row['unit'] : 'Unit'),
+            $type === 'service' ? 'Service' : ($type === 'loose_oil' ? 'L' : (!empty($row['unit']) ? $row['unit'] : 'Unit')),
             $type === 'loose_oil' && !empty($row['barrel capacity liters']) ? (float)$row['barrel capacity liters'] : null,
             $price,
             $stock,
-            !empty($row['reorder level']) ? (float)$row['reorder level'] : ($type === 'loose_oil' ? 20 : 10),
+            $type === 'service' ? 0 : (!empty($row['reorder level']) ? (float)$row['reorder level'] : ($type === 'loose_oil' ? 20 : 10)),
         ];
 
         if ($existing) {

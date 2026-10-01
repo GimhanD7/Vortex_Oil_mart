@@ -112,7 +112,7 @@ if ($method === 'POST' && $id === null) {
         $category = isset($inputData['category']) ? $inputData['category'] : 'Uncategorized';
         $sub_category = isset($inputData['sub_category']) ? $inputData['sub_category'] : 'General';
         $brand = isset($inputData['brand']) ? $inputData['brand'] : 'Generic';
-        $product_type = isset($inputData['product_type']) && $inputData['product_type'] === 'loose_oil' ? 'loose_oil' : 'packaged';
+        $product_type = in_array($inputData['product_type'] ?? '', ['loose_oil', 'service'], true) ? $inputData['product_type'] : 'packaged';
         $unit = isset($inputData['unit']) ? trim($inputData['unit']) : ($product_type === 'loose_oil' ? 'L' : 'Unit');
         if ($unit === '') $unit = $product_type === 'loose_oil' ? 'L' : 'Unit';
         $barrel_capacity_liters = isset($inputData['barrel_capacity_liters']) && $inputData['barrel_capacity_liters'] !== '' ? (float)$inputData['barrel_capacity_liters'] : null;
@@ -120,6 +120,12 @@ if ($method === 'POST' && $id === null) {
         $location = isset($inputData['location']) ? $inputData['location'] : 'Main Store';
         $batch_no = isset($inputData['batch_no']) ? $inputData['batch_no'] : null;
         $supplier = isset($inputData['supplier']) ? $inputData['supplier'] : 'Not Assigned';
+        if ($product_type === 'service') {
+            $unit = 'Service';
+            $stock_quantity = 0;
+            $reorder_level = 0;
+            $barrel_capacity_liters = null;
+        }
 
         if (empty($name) || $price === null) {
             sendJson(["error" => "Name and price are required"], 400);
@@ -178,7 +184,7 @@ if ($method === 'PUT' && $id) {
         $category = isset($inputData['category']) ? $inputData['category'] : 'Uncategorized';
         $sub_category = isset($inputData['sub_category']) ? $inputData['sub_category'] : 'General';
         $brand = isset($inputData['brand']) ? $inputData['brand'] : 'Generic';
-        $product_type = isset($inputData['product_type']) && $inputData['product_type'] === 'loose_oil' ? 'loose_oil' : 'packaged';
+        $product_type = in_array($inputData['product_type'] ?? '', ['loose_oil', 'service'], true) ? $inputData['product_type'] : 'packaged';
         $unit = isset($inputData['unit']) ? trim($inputData['unit']) : ($product_type === 'loose_oil' ? 'L' : 'Unit');
         if ($unit === '') $unit = $product_type === 'loose_oil' ? 'L' : 'Unit';
         $barrel_capacity_liters = isset($inputData['barrel_capacity_liters']) && $inputData['barrel_capacity_liters'] !== '' ? (float)$inputData['barrel_capacity_liters'] : null;
@@ -192,6 +198,19 @@ if ($method === 'PUT' && $id) {
             sendJson(["error" => "Price, stock, reorder level, and barrel capacity must be valid numbers"], 400);
         }
 
+        if ($product_type === 'service') {
+            $unit = 'Service';
+            $stock_quantity = 0;
+            $reorder_level = 0;
+            $barrel_capacity_liters = null;
+        }
+        $pdo->beginTransaction();
+        $current = $pdo->prepare('SELECT id, product_type, stock_quantity FROM products WHERE id = ? FOR UPDATE');
+        $current->execute([$id]);
+        $existing = $current->fetch();
+        if (!$existing) throw new InvalidArgumentException('Product not found. Refresh the product list.');
+        assertServiceTypeChange($pdo, $existing, $product_type);
+
         $stmt = $pdo->prepare('
             UPDATE products
             SET name = ?, description = ?, price = ?, stock_quantity = ?, sku = ?, category = ?, sub_category = ?,
@@ -203,8 +222,13 @@ if ($method === 'PUT' && $id) {
             $brand, $product_type, $unit, $barrel_capacity_liters, $reorder_level, $id
         ]);
 
+        $pdo->commit();
         sendJson(["message" => "Product updated successfully"]);
+    } catch (InvalidArgumentException $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        sendJson(["error" => $e->getMessage()], 400);
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
         sendJson(["error" => "Internal server error"], 500);
     }
 }

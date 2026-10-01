@@ -73,6 +73,7 @@ if ($method === 'GET' && !$id) {
                    (p.stock_quantity - COALESCE(SUM(m.quantity_change), 0)) AS monthly_start_stock
             FROM products p
             LEFT JOIN inventory_movements m ON p.id = m.product_id AND m.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+            WHERE p.product_type <> 'service'
             GROUP BY p.id
             ORDER BY p.name ASC
         ");
@@ -85,6 +86,7 @@ if ($method === 'GET' && !$id) {
                    SUM(CASE WHEN stock_quantity = 0 THEN 1 ELSE 0 END) AS out_of_stock,
                    4 AS locations
             FROM products
+            WHERE product_type <> \'service\'
         ');
         $summary = $stmt->fetch();
 
@@ -122,7 +124,7 @@ if ($method === 'POST' && !$id) {
 
         $pdo->beginTransaction();
 
-        $stmt = $pdo->prepare('SELECT id, price, stock_quantity FROM products WHERE id = ? FOR UPDATE');
+        $stmt = $pdo->prepare('SELECT id, price, stock_quantity, product_type FROM products WHERE id = ? FOR UPDATE');
         $stmt->execute([$product_id]);
         $product = $stmt->fetch();
 
@@ -131,6 +133,10 @@ if ($method === 'POST' && !$id) {
             sendJson(["error" => "Product not found"], 404);
         }
 
+        if ($product['product_type'] === 'service') {
+            $pdo->rollBack();
+            sendJson(['error' => 'Services do not have inventory stock.'], 400);
+        }
         $stock_before = (float)$product['stock_quantity'];
         $stock_after = $stock_before + $quantity_change;
 

@@ -86,6 +86,7 @@ if ($method === 'GET') {
                    SUM(CASE WHEN stock_quantity > 0 AND stock_quantity <= reorder_level THEN 1 ELSE 0 END) AS low_stock,
                    COALESCE(SUM(price * stock_quantity), 0) AS stock_value
             FROM products
+            WHERE product_type <> 'service'
         ");
         $inventory = $inventoryResult ? $inventoryResult[0] : null;
 
@@ -105,6 +106,7 @@ if ($method === 'GET') {
             SELECT id, name, sku, category, stock_quantity
             FROM products
             WHERE stock_quantity > 0 AND stock_quantity <= reorder_level
+              AND product_type <> 'service'
             ORDER BY stock_quantity ASC, name ASC
             LIMIT 5
         ");

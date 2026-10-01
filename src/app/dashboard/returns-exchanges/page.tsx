@@ -471,7 +471,7 @@ export default function CashierReturnsExchanges() {
                             min={1}
                             max={remaining}
                             value={sel.quantity}
-                            onChange={e => updateQuantity(item.sale_item_id, Number(e.target.value), remaining)}
+                            onChange={e => updateQuantity(item.sale_item_id, item.product_type === "service" ? Math.floor(Number(e.target.value)) : Number(e.target.value), remaining)}
                             style={{ width: 72, textAlign: "center", border: "1.5px solid #f0ab00", borderRadius: 8, padding: "5px 4px", fontSize: 13, fontWeight: 700, color: "#92400e", outline: "none" }}
                           />
                         ) : (
@@ -479,7 +479,8 @@ export default function CashierReturnsExchanges() {
                         )}
                       </td>
                       <td style={{ padding: "13px 16px" }}>
-                        {isSelected && (
+                        {isSelected && item.product_type === "service" && <span>Service refund</span>}
+                        {isSelected && item.product_type !== "service" && (
                           <select
                             value={sel.disposition}
                             onChange={e => updateDisposition(item.sale_item_id, e.target.value)}

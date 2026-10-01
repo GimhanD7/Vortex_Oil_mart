@@ -99,7 +99,7 @@ export default function PurchasesPage() {
   const load = useCallback(() => {
     fetch("/api/products", { cache: "no-store" })
       .then((response) => response.json())
-      .then((data) => Array.isArray(data) && setProducts(data))
+      .then((data) => Array.isArray(data) && setProducts(data.filter((product: Product) => product.product_type !== "service")))
       .catch(() => {});
 
     fetch("/api/purchases", { cache: "no-store" })
