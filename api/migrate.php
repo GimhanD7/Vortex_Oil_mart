@@ -1,10 +1,6 @@
 <?php
 // Unified Database Migration & Setup Script for Vortex Oil Mart
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    echo "Forbidden: CLI execution only.\n";
-    exit(1);
-}
+// Execution allowed from web browser
 
 require_once __DIR__ . '/../api/environment.php';
 
@@ -410,35 +406,43 @@ try {
         }
     }
 
-    // Verify and auto-repair products table AUTO_INCREMENT and primary key
+    // Verify and auto-repair AUTO_INCREMENT and primary key for all tables with an 'id' column
     try {
-        $productCols = $pdo->query("SHOW COLUMNS FROM `products`")->fetchAll(PDO::FETCH_ASSOC);
-        $idCol = array_values(array_filter($productCols, fn($c) => $c['Field'] === 'id'));
-        $indexes = [];
-        foreach ($pdo->query("SHOW INDEX FROM `products`")->fetchAll(PDO::FETCH_ASSOC) as $idx) {
-            if ((int)$idx['Non_unique'] === 0) $indexes[$idx['Key_name']][] = $idx['Column_name'];
-        }
-        $hasPrimaryId = in_array(['id'], array_values($indexes), true);
-        $isAutoInc = $idCol && str_contains(strtolower($idCol[0]['Extra'] ?? ''), 'auto_increment');
+        $dbTables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($dbTables as $tableName) {
+            $cols = $pdo->query("SHOW COLUMNS FROM `{$tableName}`")->fetchAll(PDO::FETCH_ASSOC);
+            $idCol = array_values(array_filter($cols, fn($c) => $c['Field'] === 'id'));
+            
+            if (empty($idCol)) continue; // Skip tables without an 'id' column
 
-        // Fix any zero or NULL product IDs
-        $hasZeroId = (int)$pdo->query("SELECT COUNT(*) FROM `products` WHERE `id` IS NULL OR `id` <= 0")->fetchColumn();
-        if ($hasZeroId > 0) {
-            $pdo->exec("SET @max_id = IFNULL((SELECT MAX(id) FROM products WHERE id > 0), 0);
-                        UPDATE products SET id = (@max_id := @max_id + 1) WHERE id IS NULL OR id <= 0;");
-            echo "  [+] Fixed {$hasZeroId} zero/invalid product ID(s).\n";
-        }
-
-        if (!$hasPrimaryId || !$isAutoInc) {
-            if (!$hasPrimaryId) {
-                $pdo->exec("ALTER TABLE `products` ADD PRIMARY KEY (`id`), MODIFY COLUMN `id` INT AUTO_INCREMENT;");
-            } else {
-                $pdo->exec("ALTER TABLE `products` MODIFY COLUMN `id` INT AUTO_INCREMENT;");
+            $indexes = [];
+            foreach ($pdo->query("SHOW INDEX FROM `{$tableName}`")->fetchAll(PDO::FETCH_ASSOC) as $idx) {
+                if ((int)$idx['Non_unique'] === 0) $indexes[$idx['Key_name']][] = $idx['Column_name'];
             }
-            echo "  [✓] Repaired `products` AUTO_INCREMENT PRIMARY KEY.\n";
+            
+            $hasPrimaryId = in_array(['id'], array_values($indexes), true);
+            $isAutoInc = str_contains(strtolower($idCol[0]['Extra'] ?? ''), 'auto_increment');
+
+            // Fix any zero or NULL IDs before altering the table
+            $hasZeroId = (int)$pdo->query("SELECT COUNT(*) FROM `{$tableName}` WHERE `id` IS NULL OR `id` <= 0")->fetchColumn();
+            if ($hasZeroId > 0) {
+                $pdo->exec("SET @max_id = IFNULL((SELECT MAX(id) FROM `{$tableName}` WHERE id > 0), 0);
+                            UPDATE `{$tableName}` SET id = (@max_id := @max_id + 1) WHERE id IS NULL OR id <= 0;");
+                echo "  [+] Fixed {$hasZeroId} zero/invalid ID(s) in `{$tableName}`.\n";
+            }
+
+            // Restore primary key and auto_increment if missing
+            if (!$hasPrimaryId || !$isAutoInc) {
+                if (!$hasPrimaryId) {
+                    $pdo->exec("ALTER TABLE `{$tableName}` ADD PRIMARY KEY (`id`), MODIFY COLUMN `id` INT NOT NULL AUTO_INCREMENT;");
+                } else {
+                    $pdo->exec("ALTER TABLE `{$tableName}` MODIFY COLUMN `id` INT NOT NULL AUTO_INCREMENT;");
+                }
+                echo "  [✓] Repaired `{$tableName}` AUTO_INCREMENT PRIMARY KEY.\n";
+            }
         }
     } catch (Throwable $e) {
-        echo "  [!] Note on product IDs: " . $e->getMessage() . "\n";
+        echo "  [!] Note on AUTO_INCREMENT repair: " . $e->getMessage() . "\n";
     }
 
     $pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
@@ -469,8 +473,8 @@ try {
     $userCount = (int)$pdo->query("SELECT COUNT(*) FROM `users` WHERE `employment_status` = 'active'")->fetchColumn();
     if ($userCount === 0) {
         echo "  [+] No existing users found. Creating default accounts...\n";
-        $adminPass = password_hash('Admin@12345', PASSWORD_BCRYPT);
-        $cashierPass = password_hash('Cashier@12345', PASSWORD_BCRYPT);
+        $adminPass = password_hash('Admin123', PASSWORD_BCRYPT);
+        $cashierPass = password_hash('Cashier123', PASSWORD_BCRYPT);
 
         $adminPerms = json_encode(['view_sales', 'manage_inventory', 'manage_products', 'manage_customers', 'view_reports', 'manage_users', 'manage_settings', 'pos_billing', 'view_inventory']);
         $cashierPerms = json_encode(['pos_billing', 'view_inventory']);

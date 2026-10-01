@@ -15,7 +15,7 @@ function ensureEmployeeUserColumns() {
 }
 ensureEmployeeUserColumns();
 
-if ($method === 'GET' && !$id) {
+if ($method === 'GET' && $id === null) {
     try {
         $stmt = $pdo->query('SELECT id, username, role, permissions, full_name, address, phone, id_number, employment_start_date, employment_end_date, employment_status, employee_notes, created_at FROM users ORDER BY id DESC');
         $users = $stmt->fetchAll();
@@ -25,7 +25,7 @@ if ($method === 'GET' && !$id) {
     }
 }
 
-if ($method === 'POST' && !$id) {
+if ($method === 'POST' && $id === null) {
     try {
         $username = isset($inputData['username']) ? trim($inputData['username']) : '';
         $password = isset($inputData['password']) ? $inputData['password'] : '';
@@ -67,7 +67,7 @@ if ($method === 'POST' && !$id) {
     }
 }
 
-if ($method === 'PUT' && $id) {
+if ($method === 'PUT' && $id !== null) {
     try {
         $username = isset($inputData['username']) ? trim($inputData['username']) : '';
         $password = isset($inputData['password']) ? $inputData['password'] : '';
@@ -119,7 +119,7 @@ if ($method === 'PUT' && $id) {
     }
 }
 
-if ($method === 'POST' && $id && isset($action) && $action === 'logout') {
+if ($method === 'POST' && $id !== null && isset($action) && $action === 'logout') {
     try {
         ensureAuthTables();
         $pdo->prepare('DELETE FROM auth_sessions WHERE user_id = ?')->execute([$id]);
@@ -129,7 +129,7 @@ if ($method === 'POST' && $id && isset($action) && $action === 'logout') {
     }
 }
 
-if ($method === 'DELETE' && $id && empty($action)) {
+if ($method === 'DELETE' && $id !== null && empty($action)) {
     try {
         $stmt = $pdo->prepare('SELECT role FROM users WHERE id = ?');
         $stmt->execute([$id]);

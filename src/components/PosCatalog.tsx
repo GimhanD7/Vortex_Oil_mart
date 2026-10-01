@@ -28,17 +28,18 @@ export function PosCatalog<T extends CatalogProduct>({ products, onAdd, showIcon
   showIcons: boolean;
   onToggleIcons: () => void;
 }) {
+  const availableProducts = useMemo(() => products.filter(p => Number(p.stock_quantity) > 0), [products]);
   const [category, setCategory] = useState<string | null>(null);
   const [subcategory, setSubcategory] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const search = query.trim().toLowerCase();
-  const categories = useMemo(() => sorted(products.map(categoryName)), [products]);
-  const categoryProducts = useMemo(() => products.filter(p => categoryName(p) === category), [products, category]);
+  const categories = useMemo(() => sorted(availableProducts.map(categoryName)), [availableProducts]);
+  const categoryProducts = useMemo(() => availableProducts.filter(p => categoryName(p) === category), [availableProducts, category]);
   const subcategories = useMemo(() => sorted(categoryProducts.map(subcategoryName)), [categoryProducts]);
   const filtered = useMemo(() => search
-    ? products.filter(p => `${p.name} ${p.sku || ""} ${p.barcode || ""}`.toLowerCase().includes(search))
-    : categoryProducts.filter(p => subcategoryName(p) === subcategory), [products, categoryProducts, subcategory, search]);
+    ? availableProducts.filter(p => `${p.name} ${p.sku || ""} ${p.barcode || ""}`.toLowerCase().includes(search))
+    : categoryProducts.filter(p => subcategoryName(p) === subcategory), [availableProducts, categoryProducts, subcategory, search]);
   const showProducts = Boolean(search || (category && subcategory));
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const activePage = Math.min(page, pageCount);
@@ -61,7 +62,7 @@ export function PosCatalog<T extends CatalogProduct>({ products, onAdd, showIcon
           onChange={event => { setQuery(event.target.value); setPage(1); }}
           onKeyDown={event => {
             if (event.key !== "Enter" || !search) return;
-            const exact = products.filter(p => [p.sku, p.barcode].some(value => value?.toLowerCase() === search));
+            const exact = availableProducts.filter(p => [p.sku, p.barcode].some(value => value?.toLowerCase() === search));
             if (exact.length === 1 && Number(exact[0].stock_quantity) > 0) {
               onAdd(exact[0]);
               setQuery("");
@@ -88,7 +89,7 @@ export function PosCatalog<T extends CatalogProduct>({ products, onAdd, showIcon
           {categories.map(name => <button type="button" key={name} onClick={() => navigate(name)}>
             <ProductCategoryIcon category={name} className="catalog-icon" colored />
             <span>{name}</span>
-            <small>{products.filter(p => categoryName(p) === name).length} items</small>
+            <small>{availableProducts.filter(p => categoryName(p) === name).length} items</small>
             <ChevronRight size={16} aria-hidden="true" />
           </button>)}
           {!categories.length && <p className="pos-catalog-empty">No products available.</p>}
