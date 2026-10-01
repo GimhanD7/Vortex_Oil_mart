@@ -106,13 +106,13 @@ if ($method === 'PUT' && $id) {
             $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
             $stmt = $pdo->prepare('UPDATE users SET username=?, role=?, password=?, permissions=?, full_name=?, address=?, phone=?, id_number=?, employment_start_date=?, employment_end_date=?, employment_status=?, employee_notes=? WHERE id=?');
             $stmt->execute([$username,$role,$hashedPassword,$permsJson,$fullName?:null,$address?:null,$phone?:null,$idNumber?:null,$startDate,$endDate,$employmentStatus,$notes?:null,$id]);
+            ensureAuthTables();
+            $pdo->prepare('DELETE FROM auth_sessions WHERE user_id = ?')->execute([$id]);
         } else {
             $stmt = $pdo->prepare('UPDATE users SET username=?, role=?, permissions=?, full_name=?, address=?, phone=?, id_number=?, employment_start_date=?, employment_end_date=?, employment_status=?, employee_notes=? WHERE id=?');
             $stmt->execute([$username,$role,$permsJson,$fullName?:null,$address?:null,$phone?:null,$idNumber?:null,$startDate,$endDate,$employmentStatus,$notes?:null,$id]);
         }
 
-        ensureAuthTables();
-        $pdo->prepare('DELETE FROM auth_sessions WHERE user_id = ?')->execute([$id]);
         sendJson(["message" => "User updated successfully"]);
     } catch (PDOException $e) {
         sendJson(["error" => "Internal server error"], 500);

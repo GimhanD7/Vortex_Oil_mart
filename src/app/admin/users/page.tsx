@@ -174,14 +174,9 @@ export default function UsersPage() {
   };
 
   const remove = (u: User) => {
-    showToast({
-      type: "warning",
-      title: "Archive user?",
-      message: `${u.username} will lose login access, but their employee and sales history will be preserved.`,
-      duration: 0,
-      actionLabel: "Archive",
-      onAction: () => void deleteUser(u),
-    });
+    if (window.confirm(`${u.username} will lose login access, but their employee and sales history will be preserved. Archive user?`)) {
+      void deleteUser(u);
+    }
   };
 
   return (
@@ -358,18 +353,20 @@ export default function UsersPage() {
               />
             </label>
 
-            <label>
-              {modal === "edit" ? "New Password (leave blank to keep current)" : "Password"}
-              <input
-                type="password"
-                required={modal === "add"}
-                minLength={12}
-                maxLength={72}
-                autoComplete="new-password"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-              />
-            </label>
+            {modal === "add" && (
+              <label>
+                Password
+                <input
+                  type="password"
+                  required
+                  minLength={12}
+                  maxLength={72}
+                  autoComplete="new-password"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                />
+              </label>
+            )}
 
             <label>
               Role

@@ -10,7 +10,7 @@ function sendJson($data, $statusCode = 200) {
     if (is_array($data) && isset($data['details'])) unset($data['details']);
     if (is_array($data) && isset($data['error']) && str_contains((string)$data['error'], 'SQLSTATE[')) {
         error_log((string)$data['error']);
-        $data['error'] = 'Database operation failed.';
+        // $data['error'] = 'Database operation failed.';
         $statusCode = 500;
     }
     http_response_code($statusCode);
@@ -22,7 +22,7 @@ set_exception_handler(function (Throwable $error) {
     global $pdo;
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
     error_log('Oil Mart API: ' . $error->getMessage());
-    sendJson(['error' => 'Internal server error.'], 500);
+    sendJson(['error' => 'Internal server error: ' . $error->getMessage()], 500);
 });
 
 try {
