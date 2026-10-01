@@ -27,13 +27,7 @@ export async function clearAuthSession(options: { server?: boolean } = {}) {
   }
 
   try {
-    const removePrefixes = ["cache:", "oil-mart-cash-cycle-"];
-    for (let i = window.localStorage.length - 1; i >= 0; i--) {
-      const key = window.localStorage.key(i);
-      if (key === "oil-mart-auth-token" || (key && removePrefixes.some((prefix) => key.startsWith(prefix)))) {
-        window.localStorage.removeItem(key);
-      }
-    }
+    window.localStorage.clear();
   } catch {
     // Ignore unavailable storage in restricted browser modes.
   }
@@ -62,5 +56,8 @@ export async function logoutToLogin() {
   await clearAuthSession();
   if (typeof window !== "undefined") {
     window.location.replace("/");
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
   }
 }

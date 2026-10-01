@@ -67,7 +67,7 @@ export default function UsersPage() {
   const [, setError] = useState("");
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
-  const [modal, setModal] = useState<"add" | "edit" | null>(null);
+  const [modal, setModal] = useState<"add" | "edit" | "reset_password" | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
 
@@ -132,24 +132,33 @@ export default function UsersPage() {
     setModal("edit");
   };
 
+  const openResetPassword = (u: User) => {
+    setForm({ username: u.username, password: "", role: u.role, permissions: u.permissions || [], full_name: u.full_name || "", address: u.address || "", phone: u.phone || "", id_number: u.id_number || "", employment_start_date: u.employment_start_date || "", employment_end_date: u.employment_end_date || "", employment_status: u.employment_status || "active", employee_notes: u.employee_notes || "" });
+    setEditingId(u.id);
+    setError("");
+    setModal("reset_password");
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError("");
     try {
-      const url = modal === "edit" ? `/api/users/${editingId}` : "/api/users";
+      const isPut = modal === "edit" || modal === "reset_password";
+      const url = isPut ? `/api/users/${editingId}` : "/api/users";
       const res = await fetch(url, {
-        method: modal === "edit" ? "PUT" : "POST",
+        method: isPut ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not save user");
       
+      const successTitle = modal === "add" ? "User created" : modal === "reset_password" ? "Password reset" : "User updated";
       setModal(null);
       setForm(emptyForm);
       await loadUsers();
-      showToast({ type: "success", title: modal === "edit" ? "User updated" : "User created", message: data.message || "User saved successfully." });
+      showToast({ type: "success", title: successTitle, message: data.message || "User saved successfully." });
     } catch (e) {
       const message = e instanceof Error ? e.message : "Could not save user";
       setError(message);
@@ -171,6 +180,19 @@ export default function UsersPage() {
     }
     await loadUsers();
     showToast({ type: "success", title: "User archived", message: "Login was disabled and the employee history was preserved." });
+  };
+
+  const forceLogout = async (u: User) => {
+    if (window.confirm(`Are you sure you want to force log out ${u.username} from all their active devices?`)) {
+      setError("");
+      const res = await fetch(`/api/users/${u.id}/logout`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast({ type: "error", title: "Logout failed", message: data.error || "Could not log out user" });
+        return;
+      }
+      showToast({ type: "success", title: "User logged out", message: `${u.username} has been logged out from all active sessions.` });
+    }
   };
 
   const remove = (u: User) => {
@@ -314,6 +336,12 @@ export default function UsersPage() {
                       <button onClick={() => openEdit(u)} title="Edit user">
                         ✎
                       </button>
+                      <button onClick={() => openResetPassword(u)} title="Reset password">
+                        🔑
+                      </button>
+                      <button onClick={() => void forceLogout(u)} title="Force logout">
+                        🚪
+                      </button>
                       <button className="delete" onClick={() => void remove(u)} title="Archive user" disabled={u.employment_status === "inactive"}>
                         ♲
                       </button>
@@ -335,84 +363,104 @@ export default function UsersPage() {
         <div className="management-modal">
           <form className="user-employee-form" onSubmit={submit}>
             <header>
-              <h2>{modal === "add" ? "Add Database User" : "Edit Database User"}</h2>
+              <h2>{modal === "add" ? "Add Database User" : modal === "edit" ? "Edit Database User" : "Reset Password"}</h2>
               <button type="button" onClick={() => setModal(null)}>
                 ×
               </button>
             </header>
 
-            <label>
-              Username
-              <input
-                required
-                minLength={3}
-                maxLength={255}
-                autoComplete="off"
-                value={form.username}
-                onChange={(e) => setForm({ ...form, username: e.target.value })}
-              />
-            </label>
+            {modal === "reset_password" ? (
+              <>
+                <label>
+                  New Password for {form.username}
+                  <input
+                    type="password"
+                    required
+                    minLength={12}
+                    maxLength={72}
+                    autoComplete="new-password"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder="Must be at least 12 characters"
+                  />
+                </label>
+              </>
+            ) : (
+              <>
+                <label>
+                  Username
+                  <input
+                    required
+                    minLength={3}
+                    maxLength={255}
+                    autoComplete="off"
+                    value={form.username}
+                    onChange={(e) => setForm({ ...form, username: e.target.value })}
+                  />
+                </label>
 
-            {modal === "add" && (
-              <label>
-                Password
-                <input
-                  type="password"
-                  required
-                  minLength={12}
-                  maxLength={72}
-                  autoComplete="new-password"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                />
-              </label>
-            )}
-
-            <label>
-              Role
-              <select
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value as FormState["role"] })}
-              >
-                <option value="cashier">Cashier</option>
-                <option value="admin">Admin</option>
-              </select>
-            </label>
-
-            <h3 className="employee-details-title">Employee Details {form.role === "cashier" && <small>Required for cashier accounts</small>}</h3>
-            <div className="employee-form-grid">
-              <label>Full Name<input required={form.role === "cashier"} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></label>
-              <label>Phone Number<input required={form.role === "cashier"} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
-              <label>National ID / ID Number<input required={form.role === "cashier"} value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} /></label>
-              <label>Employment Start Date<input type="date" required={form.role === "cashier"} value={form.employment_start_date} onChange={(e) => setForm({ ...form, employment_start_date: e.target.value })} /></label>
-              <label className="employee-address">Home Address<textarea required={form.role === "cashier"} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></label>
-              {modal === "edit" && <label>Employment Status<select value={form.employment_status} onChange={(e) => setForm({ ...form, employment_status: e.target.value as FormState["employment_status"] })}><option value="active">Active</option><option value="inactive">Inactive</option></select></label>}
-              {modal === "edit" && <label>Employment End Date<input type="date" value={form.employment_end_date} onChange={(e) => setForm({ ...form, employment_end_date: e.target.value })} /></label>}
-              <label className="employee-address">Notes<textarea value={form.employee_notes} onChange={(e) => setForm({ ...form, employee_notes: e.target.value })} placeholder="Optional employment or identification notes" /></label>
-            </div>
-
-            <div style={{ marginTop: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <strong style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#334155' }}>Specific Permissions</strong>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                {AVAILABLE_PERMISSIONS.map(p => (
-                  <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'normal', margin: 0, padding: 0 }}>
-                    <input 
-                      type="checkbox" 
-                      checked={form.permissions.includes(p.id)} 
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setForm({ ...form, permissions: [...form.permissions, p.id] });
-                        } else {
-                          setForm({ ...form, permissions: form.permissions.filter(x => x !== p.id) });
-                        }
-                      }}
-                      style={{ margin: 0, width: 'auto' }}
+                {modal === "add" && (
+                  <label>
+                    Password
+                    <input
+                      type="password"
+                      required
+                      minLength={12}
+                      maxLength={72}
+                      autoComplete="new-password"
+                      value={form.password}
+                      onChange={(e) => setForm({ ...form, password: e.target.value })}
                     />
-                    {p.label}
                   </label>
-                ))}
-              </div>
-            </div>
+                )}
+
+                <label>
+                  Role
+                  <select
+                    value={form.role}
+                    onChange={(e) => setForm({ ...form, role: e.target.value as FormState["role"] })}
+                  >
+                    <option value="cashier">Cashier</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </label>
+
+                <h3 className="employee-details-title">Employee Details {form.role === "cashier" && <small>Required for cashier accounts</small>}</h3>
+                <div className="employee-form-grid">
+                  <label>Full Name<input required={form.role === "cashier"} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></label>
+                  <label>Phone Number<input required={form.role === "cashier"} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
+                  <label>National ID / ID Number<input required={form.role === "cashier"} value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} /></label>
+                  <label>Employment Start Date<input type="date" required={form.role === "cashier"} value={form.employment_start_date} onChange={(e) => setForm({ ...form, employment_start_date: e.target.value })} /></label>
+                  <label className="employee-address">Home Address<textarea required={form.role === "cashier"} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></label>
+                  {modal === "edit" && <label>Employment Status<select value={form.employment_status} onChange={(e) => setForm({ ...form, employment_status: e.target.value as FormState["employment_status"] })}><option value="active">Active</option><option value="inactive">Inactive</option></select></label>}
+                  {modal === "edit" && <label>Employment End Date<input type="date" value={form.employment_end_date} onChange={(e) => setForm({ ...form, employment_end_date: e.target.value })} /></label>}
+                  <label className="employee-address">Notes<textarea value={form.employee_notes} onChange={(e) => setForm({ ...form, employee_notes: e.target.value })} placeholder="Optional employment or identification notes" /></label>
+                </div>
+
+                <div style={{ marginTop: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <strong style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#334155' }}>Specific Permissions</strong>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    {AVAILABLE_PERMISSIONS.map(p => (
+                      <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'normal', margin: 0, padding: 0 }}>
+                        <input 
+                          type="checkbox" 
+                          checked={form.permissions.includes(p.id)} 
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setForm({ ...form, permissions: [...form.permissions, p.id] });
+                            } else {
+                              setForm({ ...form, permissions: form.permissions.filter(x => x !== p.id) });
+                            }
+                          }}
+                          style={{ margin: 0, width: 'auto' }}
+                        />
+                        {p.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
 
             <footer>
               <button type="button" onClick={() => setModal(null)}>
@@ -423,6 +471,8 @@ export default function UsersPage() {
                   ? "Saving to database…"
                   : modal === "add"
                   ? "Create User"
+                  : modal === "reset_password"
+                  ? "Update Password"
                   : "Update User"}
               </button>
             </footer>

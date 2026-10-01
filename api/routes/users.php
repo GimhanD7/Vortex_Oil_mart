@@ -1,5 +1,5 @@
 <?php
-global $pdo, $inputData, $id, $method;
+global $pdo, $inputData, $id, $action, $method;
 $currentUser = requireAuth();
 if ($currentUser['role'] !== 'admin') sendJson(["error" => "Administrator access required"], 403);
 
@@ -119,7 +119,17 @@ if ($method === 'PUT' && $id) {
     }
 }
 
-if ($method === 'DELETE' && $id) {
+if ($method === 'POST' && $id && isset($action) && $action === 'logout') {
+    try {
+        ensureAuthTables();
+        $pdo->prepare('DELETE FROM auth_sessions WHERE user_id = ?')->execute([$id]);
+        sendJson(["message" => "User logged out successfully"]);
+    } catch (PDOException $e) {
+        sendJson(["error" => "Internal server error"], 500);
+    }
+}
+
+if ($method === 'DELETE' && $id && empty($action)) {
     try {
         $stmt = $pdo->prepare('SELECT role FROM users WHERE id = ?');
         $stmt->execute([$id]);
